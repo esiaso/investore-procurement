@@ -21,6 +21,7 @@ export function toSessionUser(user: User): SessionUser {
     roles: (user.roles ?? []).map((r) => ({ code: r.code, name: r.name })),
     permissions: [...permissions].sort(),
     storeIds: permissions.has(Permissions.STORE_ALL) ? null : (user.stores ?? []).map((s) => s.id),
+    departmentId: user.departmentId,
     totpEnabled: user.totpEnabled,
     mustChangePassword: user.mustChangePassword,
   };

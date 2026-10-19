@@ -13,6 +13,10 @@ export const PERMISSIONS_KEY = 'permissions';
 /** All listed permissions are required. */
 export const RequirePermissions = (...permissions: PermissionCode[]) => SetMetadata(PERMISSIONS_KEY, permissions);
 
+export const ANY_PERMISSIONS_KEY = 'anyPermissions';
+/** At least one of the listed permissions is required. */
+export const RequireAnyPermission = (...permissions: PermissionCode[]) => SetMetadata(ANY_PERMISSIONS_KEY, permissions);
+
 export const STORE_SCOPE_KEY = 'storeScope';
 /**
  * Request locations ("params.id", "query.storeId", "body.storeId") holding a

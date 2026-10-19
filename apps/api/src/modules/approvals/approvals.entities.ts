@@ -112,6 +112,10 @@ export class ApprovalRequest extends AppBaseEntity {
   @Column({ type: 'uuid' })
   requestedBy: string;
 
+  /** Department of the document; DEPARTMENT_ROLE steps are limited to its members. */
+  @Column({ type: 'uuid', nullable: true })
+  departmentId: string | null;
+
   @Column({ type: 'varchar', length: 300, nullable: true })
   summary: string | null;
 

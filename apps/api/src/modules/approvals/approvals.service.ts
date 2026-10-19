@@ -75,6 +75,7 @@ export class ApprovalsService {
         currentStep: first.sequence,
         amount: input.amount,
         requestedBy: input.requestedBy,
+        departmentId: input.departmentId ?? null,
         summary: input.summary ?? null,
         link: input.link ?? null,
       }),
@@ -86,19 +87,29 @@ export class ApprovalsService {
     return request;
   }
 
-  /** Users who may act on a step: role members or the named user, plus their active delegates. */
-  async approversFor(m: EntityManager, step: ApprovalStep): Promise<{ userId: string; onBehalfOf: string | null }[]> {
-    const direct: string[] =
-      step.approverType === ApproverType.USER
-        ? step.userId
-          ? [step.userId]
-          : []
-        : (
+  /**
+   * Users who may act on a step: role members (only those in the document's
+   * department for DEPARTMENT_ROLE steps) or the named user, plus their active delegates.
+   */
+  async approversFor(m: EntityManager, step: ApprovalStep, request: Pick<ApprovalRequest, 'departmentId'>): Promise<{ userId: string; onBehalfOf: string | null }[]> {
+    let direct: string[];
+    if (step.approverType === ApproverType.USER) {
+      direct = step.userId ? [step.userId] : [];
+    } else if (step.approverType === ApproverType.DEPARTMENT_ROLE) {
+      direct = request.departmentId
+        ? (
             await m.query(
-              `SELECT ur.user_id FROM user_role ur JOIN app_user u ON u.id = ur.user_id WHERE ur.role_id = $1 AND u.is_active`,
-              [step.roleId],
+              `SELECT ur.user_id FROM user_role ur JOIN app_user u ON u.id = ur.user_id
+                WHERE ur.role_id = $1 AND u.is_active AND u.department_id = $2`,
+              [step.roleId, request.departmentId],
             )
-          ).map((r: { user_id: string }) => r.user_id);
+          ).map((r: { user_id: string }) => r.user_id)
+        : [];
+    } else {
+      direct = (
+        await m.query(`SELECT ur.user_id FROM user_role ur JOIN app_user u ON u.id = ur.user_id WHERE ur.role_id = $1 AND u.is_active`, [step.roleId])
+      ).map((r: { user_id: string }) => r.user_id);
+    }
     if (!direct.length) return [];
     const today = await this.settings.today(m);
     const delegations = await m.query(
@@ -113,7 +124,7 @@ export class ApprovalsService {
   }
 
   private async eligibility(m: EntityManager, request: ApprovalRequest, step: ApprovalStep, actor: SessionUser): Promise<Eligibility> {
-    const approvers = await this.approversFor(m, step);
+    const approvers = await this.approversFor(m, step, request);
     const direct = approvers.find((a) => a.userId === actor.id && a.onBehalfOf === null);
     if (direct) return { eligible: true, onBehalfOf: null };
     const delegated = approvers.find((a) => a.userId === actor.id);
@@ -121,7 +132,7 @@ export class ApprovalsService {
   }
 
   private async notifyStep(m: EntityManager, request: ApprovalRequest, step: ApprovalStep): Promise<void> {
-    const approvers = (await this.approversFor(m, step)).map((a) => a.userId).filter((id) => id !== request.requestedBy);
+    const approvers = (await this.approversFor(m, step, request)).map((a) => a.userId).filter((id) => id !== request.requestedBy);
     await this.notifications.notify(m, [...new Set(approvers)], {
       title: `Approval needed: ${request.documentNo}`,
       body: `${step.name}${request.summary ? ` · ${request.summary}` : ''}`,
@@ -246,9 +257,10 @@ export class ApprovalsService {
           AND NOT EXISTS (SELECT 1 FROM approval_action a WHERE a.request_id = r.id AND a.user_id = $1 AND a.action = 'APPROVE')
           AND (
             (s.approver_type = 'USER' AND (s.user_id = $1 OR s.user_id IN (SELECT from_user_id FROM delegators)))
-            OR (s.approver_type = 'ROLE' AND EXISTS (
+            OR (s.approver_type IN ('ROLE', 'DEPARTMENT_ROLE') AND EXISTS (
                   SELECT 1 FROM user_role ur JOIN app_user au ON au.id = ur.user_id
                    WHERE ur.role_id = s.role_id AND au.is_active
+                     AND (s.approver_type = 'ROLE' OR au.department_id = r.department_id)
                      AND (ur.user_id = $1 OR ur.user_id IN (SELECT from_user_id FROM delegators))))
           )
         ORDER BY r.created_at`,
@@ -265,7 +277,9 @@ export class ApprovalsService {
   async saveWorkflow(id: string | null, dto: Omit<Partial<ApprovalWorkflow>, 'steps'> & { steps: Partial<ApprovalStep>[] }): Promise<ApprovalWorkflow> {
     if (!dto.steps?.length) throw new BadRequestException('A workflow needs at least one step');
     for (const s of dto.steps) {
-      if (s.approverType === ApproverType.ROLE && !s.roleId) throw new BadRequestException('Role steps need a role');
+      if ((s.approverType === ApproverType.ROLE || s.approverType === ApproverType.DEPARTMENT_ROLE) && !s.roleId) {
+        throw new BadRequestException('Role steps need a role');
+      }
       if (s.approverType === ApproverType.USER && !s.userId) throw new BadRequestException('User steps need a user');
     }
     if (dto.minAmount != null && dto.maxAmount != null && dto.maxAmount <= dto.minAmount) {
@@ -290,7 +304,7 @@ export class ApprovalsService {
             sequence: i + 1,
             name: s.name ?? `Step ${i + 1}`,
             approverType: s.approverType!,
-            roleId: s.approverType === ApproverType.ROLE ? s.roleId! : null,
+            roleId: s.approverType === ApproverType.USER ? null : s.roleId!,
             userId: s.approverType === ApproverType.USER ? s.userId! : null,
           }),
         ),

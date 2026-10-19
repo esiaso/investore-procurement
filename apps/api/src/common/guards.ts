@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import type { SessionUser } from '@sil/shared';
 import {
   ALLOW_PENDING_PASSWORD_KEY,
+  ANY_PERMISSIONS_KEY,
   IS_PUBLIC_KEY,
   PERMISSIONS_KEY,
   STORE_SCOPE_KEY,
@@ -36,15 +37,15 @@ export class PermissionsGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (!required?.length) return true;
+    const targets = [context.getHandler(), context.getClass()];
+    const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, targets);
+    const any = this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY, targets);
+    if (!required?.length && !any?.length) return true;
     const user = context.switchToHttp().getRequest<Request>().user as SessionUser | undefined;
     const held = new Set(user?.permissions ?? []);
-    const missing = required.filter((p) => !held.has(p));
+    const missing = (required ?? []).filter((p) => !held.has(p));
     if (missing.length) throw new ForbiddenException(`Missing permission: ${missing.join(', ')}`);
+    if (any?.length && !any.some((p) => held.has(p))) throw new ForbiddenException(`Missing permission: one of ${any.join(', ')}`);
     return true;
   }
 }
