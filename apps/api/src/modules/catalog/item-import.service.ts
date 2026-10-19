@@ -4,7 +4,9 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import ExcelJS from 'exceljs';
 import { DataSource } from 'typeorm';
 import {
+  AttributeType,
   AuditAction,
+  type AttributeDefinition,
   ControlledSchedule,
   DocumentType,
   ImportIssue,
@@ -12,6 +14,7 @@ import {
   ITEM_IMPORT_COLUMNS,
   ItemImportRow,
   itemImportRowSchema,
+  validateAttributes,
 } from '@sil/shared';
 import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
@@ -21,9 +24,12 @@ import { Generic, Item, ItemCategory, UnitOfMeasure } from './catalog.entities';
 
 type RawRow = Record<string, unknown>;
 
+type AttributeValues = Record<string, string | number | boolean | null>;
+
 interface PlannedRow {
   row: number;
   data: ItemImportRow;
+  attributes: AttributeValues;
   category: ItemCategory;
   uom: UnitOfMeasure;
   taxCategory: TaxCategory;
@@ -32,6 +38,38 @@ interface PlannedRow {
 }
 
 const REQUIRED_COLUMNS = ['name', 'category_code', 'base_uom', 'unit_price', 'tax_category'];
+
+/** Category attributes come from columns named attr_<key> (case-insensitive), e.g. attr_size. */
+export const ATTR_PREFIX = 'attr_';
+
+/** Reads attr_* columns and coerces them to the category's attribute types. */
+export function extractAttributes(raw: RawRow, defs: AttributeDefinition[]): AttributeValues {
+  const out: AttributeValues = {};
+  const byKey = new Map(defs.map((d) => [d.key.toLowerCase(), d]));
+  for (const [column, value] of Object.entries(raw)) {
+    if (!column.startsWith(ATTR_PREFIX)) continue;
+    const text = String(value ?? '').trim();
+    if (text === '') continue;
+    const lowerKey = column.slice(ATTR_PREFIX.length);
+    const def = byKey.get(lowerKey);
+    if (!def) {
+      out[lowerKey] = text; // reported as unknown by validateAttributes
+      continue;
+    }
+    if (def.type === AttributeType.NUMBER) {
+      const n = Number(text.replace(/,/g, ''));
+      out[def.key] = Number.isNaN(n) ? text : n;
+    } else if (def.type === AttributeType.BOOLEAN) {
+      const s = text.toLowerCase();
+      out[def.key] = ['y', 'yes', 'true', '1'].includes(s) ? true : ['n', 'no', 'false', '0'].includes(s) ? false : text;
+    } else if (def.type === AttributeType.ENUM) {
+      out[def.key] = def.options?.find((o) => o.toLowerCase() === text.toLowerCase()) ?? text;
+    } else {
+      out[def.key] = text;
+    }
+  }
+  return out;
+}
 
 export const normaliseHeader = (h: string) =>
   h
@@ -68,7 +106,9 @@ export class ItemImportService {
       '', 'Examination gloves nitrile M (box 100)', 'SUP-PPE', '', '', '', '', '', '', '', 'Sample Medical Ltd', '',
       'Box of 100', '', 'PCS', '9.00', '', 'STANDARD', 'N', 'N', 'N', 'N',
     ];
-    return [ITEM_IMPORT_COLUMNS.join(','), example1.join(','), example2.join(',')].join('\n') + '\n';
+    // Category attributes go in attr_<key> columns (see each category's attribute schema).
+    const header = [...ITEM_IMPORT_COLUMNS, 'attr_size', 'attr_sterile'];
+    return [header.join(','), [...example1, '', ''].join(','), [...example2, 'M', 'N'].join(',')].join('\n') + '\n';
   }
 
   async parseFile(buffer: Buffer, filename: string): Promise<RawRow[]> {
@@ -183,6 +223,12 @@ export class ItemImportService {
       if (category && !category.isDrug && data.generic_inn) {
         rowErrors.push({ row, field: 'generic_inn', message: 'Non-drug category items must not have a generic' });
       }
+      const attributes = category ? extractAttributes(raw, category.attributeSchema ?? []) : {};
+      if (category) {
+        for (const [key, message] of Object.entries(validateAttributes(category.attributeSchema ?? [], attributes))) {
+          rowErrors.push({ row, field: `${ATTR_PREFIX}${key.toLowerCase()}`, message });
+        }
+      }
       if (rowErrors.length) {
         errors.push(...rowErrors);
         return;
@@ -220,6 +266,7 @@ export class ItemImportService {
       planned.push({
         row,
         data,
+        attributes,
         category: category!,
         uom: uom!,
         taxCategory: taxCategory!,
@@ -281,7 +328,7 @@ export class ItemImportService {
             isBatchTracked: d.batch_tracked ?? p.category.isDrug,
             isColdChain: d.cold_chain ?? false,
             isControlled: d.controlled ?? false,
-            attributes: {},
+            attributes: p.attributes,
           }),
         );
       }

@@ -61,8 +61,8 @@ export class NumberingService {
       (await repo.findOne({ where: { documentType, storeId: IsNull(), isActive: true } }));
     if (!scheme) throw new BadRequestException(`No numbering scheme configured for ${documentType}`);
 
-    const date = options.date ?? (await this.settings.today());
-    const fy = financialYearOf(date, await this.settings.get('finance.fyStartMonth'));
+    const date = options.date ?? (await this.settings.today(manager));
+    const fy = financialYearOf(date, await this.settings.get('finance.fyStartMonth', manager));
     const period = scheme.resetEachYear ? fy.label : 'ALL';
 
     // Make sure the counter row exists, then lock it for the rest of the transaction.

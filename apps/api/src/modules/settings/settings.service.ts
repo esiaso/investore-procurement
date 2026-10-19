@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import type { PublicSettings } from '@sil/shared';
 import { SettingKey, SettingTypes } from './setting-keys';
 import { SystemSetting } from './system-setting.entity';
@@ -9,8 +9,10 @@ import { SystemSetting } from './system-setting.entity';
 export class SettingsService {
   constructor(@InjectRepository(SystemSetting) private readonly repo: Repository<SystemSetting>) {}
 
-  async get<K extends SettingKey>(key: K): Promise<SettingTypes[K]> {
-    const row = await this.repo.findOneBy({ key });
+  /** Pass the caller's manager inside a transaction so no second pool connection is needed. */
+  async get<K extends SettingKey>(key: K, manager?: EntityManager): Promise<SettingTypes[K]> {
+    const repo = manager ? manager.getRepository(SystemSetting) : this.repo;
+    const row = await repo.findOneBy({ key });
     if (!row) throw new Error(`System setting "${key}" is not configured`);
     return row.value as SettingTypes[K];
   }
@@ -38,8 +40,8 @@ export class SettingsService {
   }
 
   /** Today's calendar date (YYYY-MM-DD) in the configured timezone. */
-  async today(): Promise<string> {
-    return dateInTimezone(new Date(), await this.get('locale.timezone'));
+  async today(manager?: EntityManager): Promise<string> {
+    return dateInTimezone(new Date(), await this.get('locale.timezone', manager));
   }
 }
 
