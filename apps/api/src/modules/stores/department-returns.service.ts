@@ -208,6 +208,7 @@ export class DepartmentReturnsService implements OnModuleInit {
       ret.totalValue = round2(lines.reduce((s, l) => s + l.value, 0));
       await m.save(ret);
     });
+    await this.inventory.stockArrived(pre.storeId, pre.lines!.filter((l) => l.condition === ReturnCondition.RESALEABLE).map((l) => l.itemId));
     return this.get(id, actor);
   }
 

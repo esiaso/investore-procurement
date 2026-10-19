@@ -87,6 +87,7 @@ export class ReceiptsService {
       );
       return receipt.id;
     });
+    await this.inventory.stockArrived(dto.storeId, dto.lines.map((l) => l.itemId));
     return this.get(id);
   }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager } from 'typeorm';
 import { AuditAction, BatchHoldStatus, Paginated, Permissions, SessionUser, ValuationMethod } from '@sil/shared';
@@ -81,6 +81,8 @@ export const addDays = (date: string, days: number) => {
 
 @Injectable()
 export class InventoryService {
+  private readonly log = new Logger('Inventory');
+
   constructor(
     @InjectDataSource() readonly dataSource: DataSource,
     private readonly settings: SettingsService,
@@ -88,6 +90,24 @@ export class InventoryService {
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
   ) {}
+
+  // ------------------------------------------------------------------ stock-arrival listeners
+
+  private readonly arrivalListeners: ((storeId: string, itemIds: string[]) => Promise<void>)[] = [];
+
+  /** Other modules react to stock arriving in a store (e.g. re-plan back-order reservations). */
+  onStockArrived(listener: (storeId: string, itemIds: string[]) => Promise<void>): void {
+    this.arrivalListeners.push(listener);
+  }
+
+  /** Call after the posting transaction has committed. Listener failures never fail the posting. */
+  async stockArrived(storeId: string, itemIds: string[]): Promise<void> {
+    const ids = [...new Set(itemIds)];
+    if (!ids.length) return;
+    for (const l of this.arrivalListeners) {
+      await l(storeId, ids).catch((e) => this.log.warn(`stock-arrival listener failed: ${(e as Error).message}`));
+    }
+  }
 
   // ------------------------------------------------------------------ posting helpers
 

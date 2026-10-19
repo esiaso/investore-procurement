@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InventoryModule } from '../inventory/inventory.module';
 import { NumberingModule } from '../numbering/numbering.module';
+import { BackorderReplanService } from './backorder-replan.service';
 import { ConsumptionService } from './consumption.service';
 import { DepartmentReturnsService } from './department-returns.service';
 import { IssuesService } from './issues.service';
@@ -32,7 +33,7 @@ import {
     InventoryModule,
   ],
   controllers: [StoreRequisitionsController, IssuesController, DepartmentReturnsController, ReturnReasonsController, ConsumptionController],
-  providers: [ReservationsService, StoreRequisitionsService, IssuesService, DepartmentReturnsService, ConsumptionService, ReturnReasonsService],
+  providers: [ReservationsService, StoreRequisitionsService, IssuesService, DepartmentReturnsService, ConsumptionService, ReturnReasonsService, BackorderReplanService],
   exports: [StoreRequisitionsService, IssuesService, DepartmentReturnsService, ReservationsService],
 })
 export class StoresModule {}

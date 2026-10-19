@@ -286,6 +286,7 @@ export class GrnsService implements OnModuleInit {
       await m.save(grn);
       await this.refreshSupplierPerformance(m, grn.supplierId);
     });
+    await this.inventory.stockArrived(pre.storeId, (pre.lines ?? []).filter((l) => l.acceptedBaseQty > 0).map((l) => l.itemId));
     return this.get(id);
   }
 
