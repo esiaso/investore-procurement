@@ -20,6 +20,7 @@ import { TransfersPage } from './inventory/TransfersPage';
 import { ValuationPage } from './inventory/ValuationPage';
 import { AppLayout } from './layout/AppLayout';
 import { STORES_SEE } from './layout/nav';
+import { AlertsPage, ExpiryPage, JobsPage, ReorderPage, StockLevelsPage } from './planning/PlanningPages';
 import { IssueFormPage, IssueVoucherDetailPage, IssueVouchersPage } from './stores/IssuePages';
 import { BatchTracePage, ConsumptionPage } from './stores/ReportPages';
 import { BackordersPage, StoreRequisitionDetailPage, StoreRequisitionFormPage, StoreRequisitionsPage } from './stores/RequisitionPages';
@@ -108,6 +109,11 @@ export function App() {
         <Route path="supplier-returns/:id" element={guardedAny([Permissions.PURCHASING_READ, Permissions.INVENTORY_SUPPLIER_RETURN], <SupplierReturnDetailPage />)} />
         <Route path="consumption" element={guarded([Permissions.INVENTORY_CONSUMPTION], <ConsumptionPage />)} />
         <Route path="batches/:id/trace" element={guarded([Permissions.INVENTORY_READ], <BatchTracePage />)} />
+        <Route path="stock-planning/reorder" element={guarded([Permissions.INVENTORY_READ], <ReorderPage />)} />
+        <Route path="stock-planning/expiry" element={guarded([Permissions.INVENTORY_READ], <ExpiryPage />)} />
+        <Route path="stock-planning/settings" element={guarded([Permissions.INVENTORY_READ], <StockLevelsPage />)} />
+        <Route path="stock-planning/alerts" element={guardedAny([Permissions.INVENTORY_READ, Permissions.INVENTORY_ALERTS], <AlertsPage />)} />
+        <Route path="jobs" element={guarded([Permissions.JOBS_RUN], <JobsPage />)} />
         <Route path="stock" element={guarded([Permissions.INVENTORY_READ], <StockPage />)} />
         <Route path="receipts" element={guarded([Permissions.INVENTORY_READ], <ReceiptsPage />)} />
         <Route path="transfers" element={guarded([Permissions.INVENTORY_READ], <TransfersPage />)} />

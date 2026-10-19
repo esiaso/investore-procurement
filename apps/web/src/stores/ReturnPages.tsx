@@ -16,7 +16,7 @@ import {
 import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DepartmentReturnStatus, Paginated, Permissions, ReturnCondition, SupplierReturnStatus } from '@sil/shared';
 import { api } from '../api/client';
 import { useAll, useApiMutation, useList, usePaged } from '../api/hooks';
@@ -270,8 +270,9 @@ export function SupplierReturnFormPage() {
   const navigate = useNavigate();
   const suppliers = useAll<Supplier>('/suppliers');
   const reasons = useList<ReturnReason>('/return-reasons', { for: 'SUPPLIER' });
+  const [params] = useSearchParams();
   const [supplierId, setSupplierId] = useState('');
-  const [storeId, setStoreId] = useState('');
+  const [storeId, setStoreId] = useState(params.get('storeId') ?? '');
   const [reasonCode, setReasonCode] = useState('');
   const [notes, setNotes] = useState('');
   const [search, setSearch] = useState('');

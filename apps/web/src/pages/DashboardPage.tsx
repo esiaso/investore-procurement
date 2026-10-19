@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Paginated, Permissions, type PermissionCode } from '@sil/shared';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { PlanningWidgets } from '../planning/PlanningPages';
 
 function CountCard({ label, path, apiPath, permission }: { label: string; path: string; apiPath: string; permission: PermissionCode }) {
   const { can } = useAuth();
@@ -43,6 +44,7 @@ export function DashboardPage() {
         {user?.roles.map((r) => r.name).join(', ')}
         {user?.storeIds ? ` · ${user.storeIds.length} assigned store(s)` : ' · all stores'}
       </Typography>
+      <PlanningWidgets />
       <Grid container spacing={2}>
         <CountCard label="Catalog items" path="/items" apiPath="/items" permission={Permissions.CATALOG_READ} />
         <CountCard label="Generics" path="/generics" apiPath="/generics" permission={Permissions.CATALOG_READ} />

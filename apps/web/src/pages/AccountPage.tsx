@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -193,7 +194,69 @@ export function AccountPage() {
         </Typography>
         <TwoFactorSection />
       </Paper>
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Notifications
+        </Typography>
+        <NotificationPreferences />
+      </Paper>
     </Stack>
+  );
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  REORDER: 'Items at reorder level',
+  STOCKOUT: 'Stock-outs',
+  EXPIRY: 'Near-expiry and expired stock',
+  JOBS: 'Background job problems (e.g. reconciliation)',
+};
+
+interface Preference {
+  category: string;
+  inApp: boolean;
+  email: boolean;
+  sms: boolean;
+}
+
+/** Channels per alert category; SMS is recorded but not sent until a provider is set up. */
+export function NotificationPreferences() {
+  const qc = useQueryClient();
+  const notify = useNotify();
+  const { data } = useQuery({ queryKey: ['/notifications/preferences'], queryFn: () => api<Preference[]>('/notifications/preferences') });
+  const save = async (next: Preference[]) => {
+    try {
+      qc.setQueryData(['/notifications/preferences'], await api<Preference[]>('/notifications/preferences', { method: 'PUT', body: { preferences: next } }));
+      notify.success('Notification preferences saved');
+    } catch (e) {
+      notify.error((e as Error).message);
+    }
+  };
+  if (!data) return null;
+  const toggle = (category: string, channel: 'inApp' | 'email' | 'sms') =>
+    save(data.map((p) => (p.category === category ? { ...p, [channel]: !p[channel] } : p)));
+  return (
+    <Table size="small" aria-label="Notification preferences">
+      <TableHead>
+        <TableRow>
+          <TableCell>Alert</TableCell>
+          <TableCell align="center">In app</TableCell>
+          <TableCell align="center">Email</TableCell>
+          <TableCell align="center">SMS (not yet available)</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {data.map((p) => (
+          <TableRow key={p.category}>
+            <TableCell>{CATEGORY_LABELS[p.category] ?? p.category}</TableCell>
+            {(['inApp', 'email', 'sms'] as const).map((ch) => (
+              <TableCell key={ch} align="center">
+                <Checkbox checked={p[ch]} onChange={() => toggle(p.category, ch)} slotProps={{ input: { 'aria-label': `${CATEGORY_LABELS[p.category] ?? p.category}: ${ch}` } }} />
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 

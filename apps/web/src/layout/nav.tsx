@@ -1,4 +1,9 @@
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
+import EventBusyIcon from '@mui/icons-material/EventBusy';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import StackedLineChartIcon from '@mui/icons-material/StackedLineChart';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
@@ -63,6 +68,10 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Department returns', path: '/department-returns', icon: <AssignmentReturnIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
   { label: 'Consumption', path: '/consumption', icon: <InsightsIcon />, permissions: [P.INVENTORY_CONSUMPTION], section: 'Wards & issues' },
   { label: 'Supplier returns', path: '/supplier-returns', icon: <KeyboardReturnIcon />, permissions: [], anyOf: [P.PURCHASING_READ, P.INVENTORY_SUPPLIER_RETURN], section: 'Procurement' },
+  { label: 'Suggested reorder', path: '/stock-planning/reorder', icon: <AddShoppingCartIcon />, permissions: [P.INVENTORY_READ], section: 'Planning' },
+  { label: 'Near expiry', path: '/stock-planning/expiry', icon: <EventBusyIcon />, permissions: [P.INVENTORY_READ], section: 'Planning' },
+  { label: 'Stock levels', path: '/stock-planning/settings', icon: <StackedLineChartIcon />, permissions: [P.INVENTORY_READ], section: 'Planning' },
+  { label: 'Stock alerts', path: '/stock-planning/alerts', icon: <NotificationsActiveIcon />, permissions: [], anyOf: [P.INVENTORY_READ, P.INVENTORY_ALERTS], section: 'Planning' },
   { label: 'Stock on hand', path: '/stock', icon: <WarehouseIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Receipts', path: '/receipts', icon: <MoveToInboxIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Transfers', path: '/transfers', icon: <SwapHorizIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
@@ -77,6 +86,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Departments', path: '/departments', icon: <CategoryIcon />, permissions: [Permissions.ORG_READ], section: 'Organisation' },
   { label: 'Users', path: '/users', icon: <GroupIcon />, permissions: [Permissions.USERS_READ], section: 'Administration' },
   { label: 'Roles', path: '/roles', icon: <SecurityIcon />, permissions: [Permissions.ROLES_READ], section: 'Administration' },
+  { label: 'Background jobs', path: '/jobs', icon: <ScheduleIcon />, permissions: [P.JOBS_RUN], section: 'Administration' },
   { label: 'Audit log', path: '/audit', icon: <HistoryIcon />, permissions: [Permissions.AUDIT_READ], section: 'Administration' },
   { label: 'My account', path: '/account', icon: <AssignmentIcon />, permissions: [], section: 'Administration' },
 ];

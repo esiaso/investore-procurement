@@ -55,6 +55,9 @@ const STATUS_COLOURS: Record<string, 'default' | 'info' | 'warning' | 'success' 
   ISSUED: 'success',
   CLOSED: 'default',
   CREDITED: 'success',
+  SUCCEEDED: 'success',
+  FAILED: 'error',
+  RUNNING: 'info',
 };
 
 export function StatusChip({ status }: { status: string }) {

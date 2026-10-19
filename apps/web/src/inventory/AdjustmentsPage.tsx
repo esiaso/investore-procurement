@@ -23,7 +23,7 @@ import { useState } from 'react';
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { AdjustmentStatus, Paginated, Permissions } from '@sil/shared';
-import { api } from '../api/client';
+import { api, buildUrl } from '../api/client';
 import { useApiMutation, useList, usePaged } from '../api/hooks';
 import type { AdjustmentReason, StockAdjustment, StockRow } from '../api/inventory-types';
 import type { Item } from '../api/types';
@@ -190,6 +190,11 @@ function AdjustmentDetails({ id, onClose }: { id: string; onClose(): void }) {
         {canApprove && (
           <Button variant="contained" color="success" disabled={approve.isPending} onClick={() => approve.mutate()}>
             {adj.status === AdjustmentStatus.PARTIALLY_APPROVED || !adj.requiresSecondApproval ? 'Approve and post' : 'Approve (first of two)'}
+          </Button>
+        )}
+        {adj.status === AdjustmentStatus.POSTED && (adj.lines ?? []).every((l) => l.quantity < 0) && (
+          <Button variant="outlined" href={buildUrl(`/stock-planning/disposal-certificate/${adj.id}`)} target="_blank" rel="noopener">
+            Disposal certificate (PDF)
           </Button>
         )}
         {pending && adj.submittedBy === user?.id && <Typography variant="body2" color="text.secondary">Waiting for another user to approve.</Typography>}
