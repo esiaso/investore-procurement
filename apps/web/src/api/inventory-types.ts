@@ -17,6 +17,7 @@ export interface StockRow {
   storeName: string;
   binId?: string | null;
   binCode?: string | null;
+  inQuarantine?: boolean;
   itemId: string;
   itemCode: string;
   itemName: string;
@@ -57,6 +58,11 @@ export interface LedgerRow {
   counterpartStore: string | null;
   user: string | null;
   secondSigner: string | null;
+  batchId: string;
+  department: string | null;
+  patientRef: string | null;
+  from: string | null;
+  to: string | null;
   balance: number;
 }
 

@@ -40,6 +40,7 @@ export interface Bin extends Base {
   code: string;
   name: string;
   zone: string | null;
+  isQuarantine?: boolean;
   isActive: boolean;
 }
 

@@ -4,6 +4,7 @@ import {
   Chip,
   Drawer,
   IconButton,
+  Link,
   MenuItem,
   Paper,
   Stack,
@@ -14,6 +15,7 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { BatchHoldStatus, Permissions } from '@sil/shared';
 import { usePaged } from '../api/hooks';
 import type { LedgerRow, StockRow } from '../api/inventory-types';
@@ -33,8 +35,18 @@ export function BinCard({ storeId, itemId, title, onClose }: { storeId: string; 
     { field: 'effectiveDate', headerName: 'Date', width: 105, valueFormatter: (v: string) => formatDate(`${v}T12:00:00Z`, dateFormat, timezone) },
     { field: 'txnType', headerName: 'Type', width: 150, valueFormatter: (v: string) => humanise(v) },
     { field: 'sourceDocNo', headerName: 'Document', width: 170 },
-    { field: 'batchNo', headerName: 'Batch', width: 110 },
-    { field: 'binCode', headerName: 'Bin', width: 90 },
+    {
+      field: 'batchNo',
+      headerName: 'Batch',
+      width: 110,
+      renderCell: ({ row }) => (
+        <Link component={RouterLink} to={`/batches/${row.batchId}/trace`} onClick={onClose}>
+          {row.batchNo}
+        </Link>
+      ),
+    },
+    { field: 'from', headerName: 'From', width: 170 },
+    { field: 'to', headerName: 'To', width: 170 },
     { field: 'quantity', headerName: 'Qty', type: 'number', width: 90 },
     { field: 'inTransitDelta', headerName: 'In transit', type: 'number', width: 90, valueFormatter: (v: number) => (v ? v : '') },
     { field: 'balance', headerName: 'Balance', type: 'number', width: 100 },
@@ -48,13 +60,13 @@ export function BinCard({ storeId, itemId, title, onClose }: { storeId: string; 
       minWidth: 200,
       sortable: false,
       valueGetter: (_v, r) =>
-        [r.counterpartStore && `↔ ${r.counterpartStore}`, r.reasonCode, r.fefoOverrideReason && `FEFO override: ${r.fefoOverrideReason}`, r.user, r.secondSigner && `witness ${r.secondSigner}`]
+        [r.patientRef && `patient ${r.patientRef}`, r.reasonCode, r.fefoOverrideReason && `FEFO override: ${r.fefoOverrideReason}`, r.user, r.secondSigner && `witness ${r.secondSigner}`]
           .filter(Boolean)
           .join(' · '),
     },
   ];
   return (
-    <Box sx={{ width: { xs: '100vw', md: 1100 }, p: 2 }} role="region" aria-label="Bin card">
+    <Box sx={{ width: { xs: '100vw', md: 1300 }, p: 2 }} role="region" aria-label="Bin card">
       <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
         <Typography variant="h6" sx={{ flexGrow: 1 }}>
           Bin card · {title}
@@ -122,7 +134,17 @@ export function StockPage() {
     ...(groupBy === 'batch'
       ? ([
           { field: 'batchNo', headerName: 'Batch', width: 120 },
-          { field: 'binCode', headerName: 'Bin', width: 90 },
+          {
+            field: 'binCode',
+            headerName: 'Bin',
+            width: 130,
+            renderCell: ({ row }) => (
+              <Stack direction="row" spacing={0.5} alignItems="center" sx={{ height: '100%' }}>
+                <span>{row.binCode}</span>
+                {row.inQuarantine && <Chip size="small" color="warning" label="Quarantine" />}
+              </Stack>
+            ),
+          },
           { field: 'expiryDate', headerName: 'Expiry', width: 170, renderCell: ({ value }) => <ExpiryChip date={value} /> },
           { field: 'holdStatus', headerName: 'Hold', width: 110, renderCell: ({ value }) => <HoldChip status={value} /> },
         ] as GridColDef<StockRow>[])
@@ -132,6 +154,7 @@ export function StockPage() {
           { field: 'usable', headerName: 'Usable', type: 'number', width: 90 },
         ] as GridColDef<StockRow>[])),
     { field: 'onHand', headerName: 'On hand', type: 'number', width: 100 },
+    { field: 'reserved', headerName: 'Reserved', type: 'number', width: 90, valueFormatter: (v: number) => (v ? v : '') },
     { field: 'inTransit', headerName: 'In transit', type: 'number', width: 90 },
     { field: 'uom', headerName: 'Unit', width: 70 },
     ...(showValue

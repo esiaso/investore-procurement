@@ -114,6 +114,7 @@ const DOC_TYPES = [
   ['PR', 'Purchase requisition'],
   ['PO', 'Purchase order'],
   ['INV', 'Supplier invoice'],
+  ['SR', 'Internal requisition'],
 ] as const;
 
 function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onClose(): void }) {
@@ -129,7 +130,9 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
     itemCategoryId: isNew ? '' : (workflow.itemCategoryId ?? ''),
     priority: isNew ? 0 : workflow.priority,
     isActive: isNew ? true : workflow.isActive,
-    steps: isNew ? [{ name: 'Approval', roleId: '' }] : (workflow.steps ?? []).sort((a, b) => a.sequence - b.sequence).map((s) => ({ name: s.name, roleId: s.roleId ?? '' })),
+    steps: isNew
+      ? [{ name: 'Approval', roleId: '', approverType: 'ROLE' }]
+      : (workflow.steps ?? []).sort((a, b) => a.sequence - b.sequence).map((s) => ({ name: s.name, roleId: s.roleId ?? '', approverType: s.approverType === 'DEPARTMENT_ROLE' ? 'DEPARTMENT_ROLE' : 'ROLE' })),
   });
   const save = useApiMutation<void>(
     () => [
@@ -141,7 +144,7 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
           minAmount: form.minAmount === '' ? null : Number(form.minAmount),
           maxAmount: form.maxAmount === '' ? null : Number(form.maxAmount),
           itemCategoryId: form.itemCategoryId || null,
-          steps: form.steps.map((s) => ({ name: s.name, approverType: 'ROLE', roleId: s.roleId })),
+          steps: form.steps.map((s) => ({ name: s.name, approverType: s.approverType, roleId: s.roleId })),
         },
       },
     ],
@@ -172,13 +175,17 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
           <TextField select label="Approver role" value={s.roleId} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, roleId: e.target.value } : x)) })} sx={{ minWidth: 240 }}>
             {(roles.data ?? []).map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
           </TextField>
+          <TextField select label="Who" value={s.approverType} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, approverType: e.target.value } : x)) })} sx={{ minWidth: 220 }}>
+            <MenuItem value="ROLE">Anyone with the role</MenuItem>
+            <MenuItem value="DEPARTMENT_ROLE">Role holder in the document's department</MenuItem>
+          </TextField>
           <IconButton aria-label={`Remove step ${i + 1}`} disabled={form.steps.length === 1} onClick={() => setForm({ ...form, steps: form.steps.filter((_, j) => j !== i) })}>
             <DeleteIcon />
           </IconButton>
         </Stack>
       ))}
       <Box>
-        <Button startIcon={<AddIcon />} onClick={() => setForm({ ...form, steps: [...form.steps, { name: `Step ${form.steps.length + 1}`, roleId: '' }] })}>
+        <Button startIcon={<AddIcon />} onClick={() => setForm({ ...form, steps: [...form.steps, { name: `Step ${form.steps.length + 1}`, roleId: '', approverType: 'ROLE' }] })}>
           Add step
         </Button>
       </Box>
@@ -195,7 +202,7 @@ function Workflows() {
     { field: 'name', headerName: 'Name', flex: 1, minWidth: 220 },
     { field: 'documentType', headerName: 'Document', width: 100 },
     { field: 'band', headerName: 'Amount band', width: 220, valueGetter: (_v, r) => `${money(r.minAmount ?? 0)} – ${r.maxAmount == null ? '∞' : money(r.maxAmount)}` },
-    { field: 'steps', headerName: 'Steps', flex: 1, minWidth: 260, valueGetter: (_v, r) => (r.steps ?? []).sort((a, b) => a.sequence - b.sequence).map((s) => s.role?.name ?? s.name).join(' → ') },
+    { field: 'steps', headerName: 'Steps', flex: 1, minWidth: 260, valueGetter: (_v, r) => (r.steps ?? []).sort((a, b) => a.sequence - b.sequence).map((s) => `${s.role?.name ?? s.name}${s.approverType === 'DEPARTMENT_ROLE' ? ' (own department)' : ''}`).join(' → ') },
     { field: 'isActive', headerName: 'Active', type: 'boolean', width: 80 },
   ];
   return (

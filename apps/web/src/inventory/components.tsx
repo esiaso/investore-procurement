@@ -47,6 +47,14 @@ const STATUS_COLOURS: Record<string, 'default' | 'info' | 'warning' | 'success' 
   CANCELLED: 'default',
   COUNTING: 'warning',
   REVIEW: 'info',
+  PENDING_APPROVAL: 'info',
+  PENDING: 'info',
+  APPROVED: 'success',
+  RETURNED: 'warning',
+  PARTIALLY_ISSUED: 'warning',
+  ISSUED: 'success',
+  CLOSED: 'default',
+  CREDITED: 'success',
 };
 
 export function StatusChip({ status }: { status: string }) {
