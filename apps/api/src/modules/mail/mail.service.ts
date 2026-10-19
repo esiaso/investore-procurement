@@ -53,7 +53,10 @@ export class MailService implements OnApplicationBootstrap, OnModuleDestroy {
       return;
     }
     this.transporter = nodemailer.createTransport(env.smtpUrl);
-    this.timer = setInterval(() => void this.processOutbox(), env.mailPollSeconds * 1000);
+    this.timer = setInterval(() => {
+      // A failing tick (e.g. database not seeded yet) must never take the process down.
+      this.processOutbox().catch((e) => this.log.warn(`outbox tick failed: ${(e as Error).message}`));
+    }, env.mailPollSeconds * 1000);
   }
 
   onModuleDestroy() {
