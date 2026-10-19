@@ -74,10 +74,11 @@ sample items are illustrative and must be confirmed by Finance.
 ### Running the tests
 
 ```bash
-docker compose --profile test run --rm test
+docker compose --profile test run --build --rm test
 ```
 
-This builds the test image, waits for Postgres and Redis, then runs:
+This (re)builds the test image from the current code (without `--build`, an image left
+over from an earlier run is reused), waits for Postgres and Redis, then runs:
 
 * **API** (Jest + Supertest) against the real Postgres (`silp_test` database, wiped and
   re-migrated on every run) and Redis (DB 1). It covers auth (CSRF, lockout, forced
