@@ -1,0 +1,49 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import type { PublicSettings } from '@sil/shared';
+import { SettingKey, SettingTypes } from './setting-keys';
+import { SystemSetting } from './system-setting.entity';
+
+@Injectable()
+export class SettingsService {
+  constructor(@InjectRepository(SystemSetting) private readonly repo: Repository<SystemSetting>) {}
+
+  async get<K extends SettingKey>(key: K): Promise<SettingTypes[K]> {
+    const row = await this.repo.findOneBy({ key });
+    if (!row) throw new Error(`System setting "${key}" is not configured`);
+    return row.value as SettingTypes[K];
+  }
+
+  list(): Promise<SystemSetting[]> {
+    return this.repo.find({ order: { key: 'ASC' } });
+  }
+
+  async update(key: string, value: unknown): Promise<SystemSetting> {
+    const row = await this.repo.findOneBy({ key });
+    if (!row) throw new NotFoundException(`Unknown setting ${key}`);
+    row.value = value;
+    return this.repo.save(row);
+  }
+
+  async publicSettings(): Promise<PublicSettings> {
+    const [currency, timezone, dateFormat, financialYearStartMonth, passwordPolicy] = await Promise.all([
+      this.get('locale.currency'),
+      this.get('locale.timezone'),
+      this.get('locale.dateFormat'),
+      this.get('finance.fyStartMonth'),
+      this.get('security.passwordPolicy'),
+    ]);
+    return { currency, timezone, dateFormat, financialYearStartMonth, passwordPolicy };
+  }
+
+  /** Today's calendar date (YYYY-MM-DD) in the configured timezone. */
+  async today(): Promise<string> {
+    return dateInTimezone(new Date(), await this.get('locale.timezone'));
+  }
+}
+
+export function dateInTimezone(date: Date, timeZone: string): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
