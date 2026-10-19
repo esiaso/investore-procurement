@@ -79,6 +79,10 @@ export class UsersService {
     return paginate(qb, query);
   }
 
+  directory(): Promise<{ id: string; username: string; fullName: string }[]> {
+    return this.users.find({ select: { id: true, username: true, fullName: true }, where: { isActive: true }, order: { fullName: 'ASC' } });
+  }
+
   async get(id: string): Promise<User> {
     const user = await this.users.findOne({ where: { id }, relations: { roles: true, stores: true } });
     if (!user) throw new NotFoundException('User not found');

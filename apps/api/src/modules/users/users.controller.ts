@@ -15,6 +15,12 @@ export class UsersController {
     return this.users.list(query);
   }
 
+  /** Active users' names (for picking a delegate etc.); any signed-in user. */
+  @Get('directory')
+  directory() {
+    return this.users.directory();
+  }
+
   @Get(':id') @RequirePermissions(Permissions.USERS_READ)
   get(@Param('id', ParseUUIDPipe) id: string) {
     return this.users.get(id);
