@@ -1,19 +1,5 @@
+import { esc, fmtDate, money } from '../../common/html';
 import type { PurchaseOrder } from './purchasing.entities';
-
-const esc = (s: unknown) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-
-function fmtDate(value: string | Date | null | undefined, pattern: string, timeZone: string): string {
-  if (!value) return '';
-  const d = typeof value === 'string' ? new Date(value.length === 10 ? `${value}T12:00:00Z` : value) : value;
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d).map((x) => [x.type, x.value]),
-  );
-  return pattern.replace('YYYY', p.year).replace('MM', p.month).replace('DD', p.day);
-}
-
-const money = (n: number, currency: string) =>
-  new Intl.NumberFormat('en-KE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n);
 
 /** Printable purchase order (A4). The logo box is a placeholder until a logo is uploaded. */
 export function renderPurchaseOrderHtml(

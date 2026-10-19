@@ -19,6 +19,7 @@ import { NumberingModule } from './modules/numbering/numbering.module';
 import { OrgModule } from './modules/org/org.module';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { StoresModule } from './modules/stores/stores.module';
 import { TaxModule } from './modules/tax/tax.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -42,6 +43,7 @@ import { UsersModule } from './modules/users/users.module';
     SuppliersModule,
     BudgetsModule,
     PurchasingModule,
+    StoresModule,
   ],
   controllers: [HealthController],
   providers: [
