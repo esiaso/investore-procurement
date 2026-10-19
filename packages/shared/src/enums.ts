@@ -353,3 +353,37 @@ export enum SupplierReturnStatus {
   CREDITED = 'CREDITED',
   CANCELLED = 'CANCELLED',
 }
+
+// ------------------------------------------------------------------ stock planning, alerts, jobs
+
+/** AUTO: the AMC job recalculates levels; MANUAL: levels entered by hand are kept (AMC still updated). */
+export enum StockSettingMode {
+  AUTO = 'AUTO',
+  MANUAL = 'MANUAL',
+}
+
+export enum StockAlertType {
+  REORDER = 'REORDER',
+  STOCKOUT = 'STOCKOUT',
+  NEAR_EXPIRY = 'NEAR_EXPIRY',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum StockAlertStatus {
+  OPEN = 'OPEN',
+  RESOLVED = 'RESOLVED',
+}
+
+/** Categories users can switch notification channels for. */
+export enum NotificationCategory {
+  REORDER = 'REORDER',
+  STOCKOUT = 'STOCKOUT',
+  EXPIRY = 'EXPIRY',
+  JOBS = 'JOBS',
+}
+
+export enum JobRunStatus {
+  RUNNING = 'RUNNING',
+  SUCCEEDED = 'SUCCEEDED',
+  FAILED = 'FAILED',
+}

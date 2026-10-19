@@ -51,6 +51,12 @@ export const Permissions = {
   INVENTORY_SUPPLIER_RETURN: 'inventory.supplier_return',
   /** Departmental consumption reports (own department only without store.all). */
   INVENTORY_CONSUMPTION: 'inventory.consumption',
+  /** Store item settings (min/max/reorder), reorder and expiry reports, draft requisitions from them. */
+  INVENTORY_PLANNING: 'inventory.planning',
+  /** Receive reorder, stock-out and expiry alerts for accessible stores. */
+  INVENTORY_ALERTS: 'inventory.alerts',
+  /** See and run background jobs. */
+  JOBS_RUN: 'jobs.run',
   /** Configure approval workflows and see everyone's delegations. */
   APPROVALS_MANAGE: 'approvals.manage',
   SUPPLIERS_READ: 'suppliers.read',
@@ -113,6 +119,9 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'inventory.dept_return': 'Receive and post department returns',
   'inventory.supplier_return': 'Return stock to suppliers and record credit notes',
   'inventory.consumption': 'View departmental consumption',
+  'inventory.planning': 'Manage reorder settings; reorder and expiry reports and actions',
+  'inventory.alerts': 'Receive reorder, stock-out and expiry alerts',
+  'jobs.run': 'View and run background jobs',
   'approvals.manage': 'Configure approval workflows and delegations',
   'suppliers.read': 'View suppliers',
   'suppliers.manage': 'Create and edit suppliers, documents and contract prices',
