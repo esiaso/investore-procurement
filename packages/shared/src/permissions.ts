@@ -41,6 +41,24 @@ export const Permissions = {
   INVENTORY_BATCH_HOLD: 'inventory.batch_hold',
   INVENTORY_PERIOD_LOCK: 'inventory.period_lock',
   INVENTORY_RECONCILE: 'inventory.reconcile',
+  /** Configure approval workflows and see everyone's delegations. */
+  APPROVALS_MANAGE: 'approvals.manage',
+  SUPPLIERS_READ: 'suppliers.read',
+  SUPPLIERS_MANAGE: 'suppliers.manage',
+  /** See full (decrypted) supplier bank details. */
+  SUPPLIERS_BANK: 'suppliers.bank',
+  BUDGETS_READ: 'budgets.read',
+  BUDGETS_MANAGE: 'budgets.manage',
+  PURCHASING_READ: 'purchasing.read',
+  PURCHASING_REQUISITION: 'purchasing.requisition',
+  PURCHASING_RFQ: 'purchasing.rfq',
+  PURCHASING_PO: 'purchasing.po',
+  PURCHASING_RECEIVE: 'purchasing.receive',
+  /** Member of the goods inspection committee. */
+  PURCHASING_INSPECT: 'purchasing.inspect',
+  PURCHASING_EMERGENCY_RECEIPT: 'purchasing.emergency_receipt',
+  PURCHASING_INVOICE: 'purchasing.invoice',
+  PURCHASING_PAYMENT: 'purchasing.payment',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -80,6 +98,21 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'inventory.batch_hold': 'Quarantine, recall and release batches',
   'inventory.period_lock': 'Set store period lock dates',
   'inventory.reconcile': 'Run and repair ledger reconciliation',
+  'approvals.manage': 'Configure approval workflows and delegations',
+  'suppliers.read': 'View suppliers',
+  'suppliers.manage': 'Create and edit suppliers, documents and contract prices',
+  'suppliers.bank': 'View supplier bank account details',
+  'budgets.read': 'View budgets and commitments',
+  'budgets.manage': 'Create and edit budgets',
+  'purchasing.read': 'View requisitions, RFQs, purchase orders, GRNs and invoices',
+  'purchasing.requisition': 'Raise purchase requisitions',
+  'purchasing.rfq': 'Run RFQs, capture quotations and award',
+  'purchasing.po': 'Create, amend, send and cancel purchase orders',
+  'purchasing.receive': 'Receive goods (GRN)',
+  'purchasing.inspect': 'Sign off goods inspection',
+  'purchasing.emergency_receipt': 'Receive goods without a purchase order (emergency)',
+  'purchasing.invoice': 'Capture and match supplier invoices',
+  'purchasing.payment': 'Record payment vouchers',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

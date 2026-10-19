@@ -295,6 +295,16 @@ export function validateAttributes(
   return errors;
 }
 
+// ---------------------------------------------------------------- suppliers
+
+/** KRA PIN: A (individual) or P (non-individual), 9 digits, a check letter. */
+export const KRA_PIN_PATTERN = /^[AP]\d{9}[A-Z]$/;
+export const kraPinSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(KRA_PIN_PATTERN, 'KRA PIN looks like P051234567X');
+
 // ---------------------------------------------------------------- import
 
 /** Columns accepted by the item bulk import (CSV header / first Excel row). */
