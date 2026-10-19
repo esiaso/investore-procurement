@@ -20,6 +20,13 @@ export interface Env {
   seedDefaultPassword: string | null;
   importMaxFileMb: number;
   dbLogging: boolean;
+  /** AES-256 key for sensitive columns (supplier bank details). */
+  dataEncryptionKey: Buffer;
+  /** e.g. smtp://mailpit:1025; empty disables the outbox sender. */
+  smtpUrl: string | null;
+  mailPollSeconds: number;
+  /** Chromium for PDF rendering; default: Playwright's bundled browser. */
+  chromiumPath: string | null;
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -36,6 +43,7 @@ function int(v: string | undefined, def: number): number {
 
 const DEV_SECRET = 'dev-only-session-secret-change-me-0123456789';
 const DEV_TOTP_KEY = '0'.repeat(64);
+const DEV_DATA_KEY = 'a'.repeat(64);
 
 let cached: Env | null = null;
 
@@ -52,8 +60,12 @@ export function loadEnv(): Env {
   if (!/^[0-9a-fA-F]{64}$/.test(totpHex)) {
     throw new Error('TOTP_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
   }
+  const dataHex = e.DATA_ENCRYPTION_KEY ?? (isProd ? '' : DEV_DATA_KEY);
+  if (!/^[0-9a-fA-F]{64}$/.test(dataHex)) {
+    throw new Error('DATA_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+  }
   // Placeholder values (dev defaults, docker-compose defaults) are refused in production.
-  if (isProd && (sessionSecret.startsWith('dev-only') || /^(.)\1+$/.test(totpHex))) {
+  if (isProd && (sessionSecret.startsWith('dev-only') || /^(.)\1+$/.test(totpHex) || /^(.)\1+$/.test(dataHex))) {
     throw new Error('Development secrets must not be used in production');
   }
 
@@ -77,6 +89,10 @@ export function loadEnv(): Env {
     seedDefaultPassword: e.SEED_DEFAULT_PASSWORD || null,
     importMaxFileMb: int(e.IMPORT_MAX_FILE_MB, 10),
     dbLogging: bool(e.DB_LOGGING, false),
+    dataEncryptionKey: Buffer.from(dataHex, 'hex'),
+    smtpUrl: e.SMTP_URL || null,
+    mailPollSeconds: int(e.MAIL_POLL_SECONDS, 10),
+    chromiumPath: e.CHROMIUM_PATH || null,
   };
   return cached;
 }

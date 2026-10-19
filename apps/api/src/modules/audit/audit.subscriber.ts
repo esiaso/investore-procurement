@@ -13,12 +13,22 @@ import { RequestContext } from '../../common/request-context';
 import { AuditLog } from './audit-log.entity';
 
 /** Never written to the audit trail in clear. */
-const REDACTED_FIELDS = new Set(['passwordHash', 'totpSecretEnc']);
+const REDACTED_FIELDS = new Set(['passwordHash', 'totpSecretEnc', 'bankAccountEnc']);
 /** Bookkeeping columns not worth diffing. */
 const IGNORED_FIELDS = new Set(['updatedAt', 'updatedBy']);
 /** Tables that are not audited row-by-row (the audit log itself, counters). */
 // The stock ledger is its own append-only trail; balances are derived from it.
-const SKIPPED_ENTITIES = new Set(['AuditLog', 'DocumentSequence', 'StockTransaction', 'StockBalance', 'ItemStoreCost']);
+// Notifications and the mail outbox are delivery plumbing; budget entries are an append-only ledger.
+const SKIPPED_ENTITIES = new Set([
+  'AuditLog',
+  'DocumentSequence',
+  'StockTransaction',
+  'StockBalance',
+  'ItemStoreCost',
+  'Notification',
+  'EmailOutbox',
+  'BudgetEntry',
+]);
 
 function normalise(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
