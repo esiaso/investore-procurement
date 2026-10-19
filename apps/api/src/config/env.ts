@@ -27,6 +27,11 @@ export interface Env {
   mailPollSeconds: number;
   /** Chromium for PDF rendering; default: Playwright's bundled browser. */
   chromiumPath: string | null;
+  /**
+   * Background jobs: `queue` = BullMQ on Redis, processed by the worker process;
+   * `inline` = run immediately in the calling process (tests, development); `off`.
+   */
+  jobsMode: 'queue' | 'inline' | 'off';
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -39,6 +44,12 @@ function int(v: string | undefined, def: number): number {
   const n = Number(v);
   if (!Number.isFinite(n)) throw new Error(`Invalid number in environment: ${v}`);
   return n;
+}
+
+function jobsMode(v: string | undefined): Env['jobsMode'] {
+  const mode = (v || 'inline').toLowerCase();
+  if (mode !== 'queue' && mode !== 'inline' && mode !== 'off') throw new Error(`JOBS_MODE must be queue, inline or off (got ${v})`);
+  return mode;
 }
 
 const DEV_SECRET = 'dev-only-session-secret-change-me-0123456789';
@@ -93,6 +104,7 @@ export function loadEnv(): Env {
     smtpUrl: e.SMTP_URL || null,
     mailPollSeconds: int(e.MAIL_POLL_SECONDS, 10),
     chromiumPath: e.CHROMIUM_PATH || null,
+    jobsMode: jobsMode(e.JOBS_MODE),
   };
   return cached;
 }

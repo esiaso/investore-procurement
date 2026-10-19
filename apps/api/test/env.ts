@@ -12,3 +12,4 @@ process.env.SEED_ON_START = 'false';
 process.env.SEED_DEFAULT_PASSWORD = process.env.TEST_SEED_PASSWORD ?? 'Test#Passw0rd!2026';
 
 export const TEST_PASSWORD = process.env.SEED_DEFAULT_PASSWORD;
+process.env.JOBS_MODE = 'inline';

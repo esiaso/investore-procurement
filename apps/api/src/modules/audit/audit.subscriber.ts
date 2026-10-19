@@ -28,6 +28,8 @@ const SKIPPED_ENTITIES = new Set([
   'Notification',
   'EmailOutbox',
   'BudgetEntry',
+  // Job runs are themselves the log of background work.
+  'JobRun',
 ]);
 
 function normalise(value: unknown): unknown {

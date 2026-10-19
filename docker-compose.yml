@@ -3,7 +3,7 @@ name: silp
 # One command from a clean checkout:   docker compose up --build
 #   web  http://localhost:8080        (nginx: SPA + /api proxy)
 #   api  http://localhost:3000/api/v1 (OpenAPI UI at /api/v1/docs)
-# Tests:                               docker compose --profile test run --rm test
+# Tests:                               docker compose --profile test run --build --rm test
 # Every variable has a development default; override in .env (see .env.example).
 
 x-api-env: &api-env
@@ -26,6 +26,8 @@ x-api-env: &api-env
   DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-2222222222222222222222222222222222222222222222222222222222222222}
   SMTP_URL: ${SMTP_URL:-smtp://mailpit:1025}
   MAIL_POLL_SECONDS: ${MAIL_POLL_SECONDS:-10}
+  # Background jobs go to BullMQ (Redis) and run in the worker service.
+  JOBS_MODE: ${JOBS_MODE:-queue}
 
 services:
   postgres:
@@ -74,6 +76,18 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+    restart: unless-stopped
+
+  # Background worker: runs queued and scheduled jobs (reconciliation, AMC, reorder and expiry alerts, back-order re-planning).
+  worker:
+    build: { context: ., target: api }
+    command: ["node", "dist/worker.js"]
+    environment:
+      <<: *api-env
+      DB_MIGRATIONS_RUN: "false"
+      SEED_ON_START: "false"
+    depends_on:
+      api: { condition: service_healthy }
     restart: unless-stopped
 
   web:
