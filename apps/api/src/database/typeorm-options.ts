@@ -4,6 +4,19 @@ import { loadEnv } from '../config/env';
 import { AuditSubscriber } from '../modules/audit/audit.subscriber';
 import { AuditLog } from '../modules/audit/audit-log.entity';
 import { Generic, Item, ItemCategory, UnitConversion, UnitOfMeasure } from '../modules/catalog/catalog.entities';
+import {
+  AdjustmentReason,
+  StockAdjustment,
+  StockAdjustmentLine,
+  StockReceipt,
+  StockReceiptLine,
+  StockTake,
+  StockTakeLine,
+  StockTransfer,
+  StockTransferAllocation,
+  StockTransferLine,
+} from '../modules/inventory/documents.entities';
+import { Batch, ItemStoreCost, StockBalance, StockTransaction, StorePeriodLock } from '../modules/inventory/inventory.entities';
 import { DocumentSequence, NumberingScheme } from '../modules/numbering/numbering.entities';
 import { Bin, Department, Facility, Store } from '../modules/org/org.entities';
 import { Permission, Role } from '../modules/rbac/rbac.entities';
@@ -31,6 +44,21 @@ export const ENTITIES = [
   ItemCategory,
   UnitOfMeasure,
   UnitConversion,
+  Batch,
+  StockBalance,
+  StockTransaction,
+  ItemStoreCost,
+  StorePeriodLock,
+  AdjustmentReason,
+  StockReceipt,
+  StockReceiptLine,
+  StockAdjustment,
+  StockAdjustmentLine,
+  StockTransfer,
+  StockTransferLine,
+  StockTransferAllocation,
+  StockTake,
+  StockTakeLine,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

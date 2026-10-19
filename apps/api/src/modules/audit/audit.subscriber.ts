@@ -17,7 +17,8 @@ const REDACTED_FIELDS = new Set(['passwordHash', 'totpSecretEnc']);
 /** Bookkeeping columns not worth diffing. */
 const IGNORED_FIELDS = new Set(['updatedAt', 'updatedBy']);
 /** Tables that are not audited row-by-row (the audit log itself, counters). */
-const SKIPPED_ENTITIES = new Set(['AuditLog', 'DocumentSequence']);
+// The stock ledger is its own append-only trail; balances are derived from it.
+const SKIPPED_ENTITIES = new Set(['AuditLog', 'DocumentSequence', 'StockTransaction', 'StockBalance', 'ItemStoreCost']);
 
 function normalise(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
