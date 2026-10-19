@@ -58,6 +58,8 @@ export const SAMPLE_USERS: { username: string; fullName: string; role: string; s
   { username: 'quality', fullName: 'Chebet Quality', role: RoleCodes.QUALITY_OFFICER, stores: [] },
   { username: 'ward.incharge', fullName: 'Akinyi Ward Sister', role: RoleCodes.WARD_IN_CHARGE, stores: [], department: 'IPD-MED' },
   { username: 'finance', fullName: 'Mwangi Finance', role: RoleCodes.FINANCE, stores: [], department: 'ADMIN' },
+  // A second finance user so invoices can be captured and approved by different people.
+  { username: 'accountant', fullName: 'Atieno Accountant', role: RoleCodes.FINANCE, stores: [], department: 'ADMIN' },
   { username: 'tender', fullName: 'Hassan Committee', role: RoleCodes.TENDER_COMMITTEE, stores: [] },
   { username: 'scm', fullName: 'Wafula Supply Chain', role: RoleCodes.SUPPLY_CHAIN_MANAGER, stores: [] },
   { username: 'supplier', fullName: 'Sample Supplier Ltd', role: RoleCodes.SUPPLIER, stores: [] },

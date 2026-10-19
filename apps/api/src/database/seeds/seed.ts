@@ -10,8 +10,11 @@ import { Permission, Role } from '../../modules/rbac/rbac.entities';
 import { SystemSetting } from '../../modules/settings/system-setting.entity';
 import { TaxCategory, TaxRate } from '../../modules/tax/tax.entities';
 import { User } from '../../modules/users/user.entity';
+import { ApproverType } from '@sil/shared';
+import { ApprovalStep, ApprovalWorkflow } from '../../modules/approvals/approvals.entities';
 import { AdjustmentReason } from '../../modules/inventory/documents.entities';
 import { seedSampleStock } from './sample-stock';
+import { seedSampleSuppliers } from './sample-suppliers';
 import {
   DEFAULT_ADJUSTMENT_REASONS,
   DEFAULT_CATEGORIES,
@@ -21,6 +24,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_TAX,
   DEFAULT_UOMS,
+  DEFAULT_WORKFLOWS,
 } from './reference-data';
 import {
   SAMPLE_DEPARTMENTS,
@@ -57,6 +61,10 @@ export async function seedDatabase(dataSource: DataSource, options: SeedOptions)
       if (options.sample) {
         if (await m.exists(Facility)) {
           log('sample data already present, skipping');
+          if (options.defaultPassword) {
+            const added = await seedSampleUsers(m, options.defaultPassword);
+            if (added) log(`added ${added} new sample user(s)`);
+          }
         } else {
           if (!options.defaultPassword) throw new Error('SEED_DEFAULT_PASSWORD is required to create sample users');
           await seedSample(m, options.defaultPassword, log);
@@ -64,10 +72,11 @@ export async function seedDatabase(dataSource: DataSource, options: SeedOptions)
         // Sample stock arrived in a later release: add it once to sample databases without stock.
         const [{ n }] = await m.query(`SELECT count(*)::int AS n FROM stock_transaction`);
         const [{ sample }] = await m.query(`SELECT count(*)::int AS sample FROM facility WHERE code = $1`, [SAMPLE_FACILITY.code]);
-        if (n === 0 && sample > 0) {
-          const [{ value: tz }] = await m.query(`SELECT value FROM system_setting WHERE key = 'locale.timezone'`);
-          await seedSampleStock(m, tz, log);
-        }
+        const [{ value: tz }] = await m.query(`SELECT value FROM system_setting WHERE key = 'locale.timezone'`);
+        if (n === 0 && sample > 0) await seedSampleStock(m, tz, log);
+        // Suppliers and budgets arrived with slice 3.
+        const [{ s }] = await m.query(`SELECT count(*)::int AS s FROM supplier`);
+        if (s === 0 && sample > 0) await seedSampleSuppliers(m, tz, log);
       }
     }),
   );
@@ -138,7 +147,54 @@ async function seedReference(m: EntityManager, log: (msg: string) => void): Prom
       m.create(ItemCategory, { code: c.code, name: c.name, isDrug: c.isDrug, attributeSchema: c.attributeSchema, parentId: parent?.id ?? null }),
     );
   }
+  const roleIds = new Map((await m.find(Role)).map((r) => [r.code, r.id]));
+  for (const w of DEFAULT_WORKFLOWS) {
+    if (await m.existsBy(ApprovalWorkflow, { code: w.code })) continue;
+    const category = w.itemCategoryCode ? await m.findOneBy(ItemCategory, { code: w.itemCategoryCode }) : null;
+    await m.save(
+      m.create(ApprovalWorkflow, {
+        code: w.code,
+        name: w.name,
+        documentType: w.documentType,
+        minAmount: w.minAmount,
+        maxAmount: w.maxAmount,
+        itemCategoryId: category?.id ?? null,
+        priority: w.priority ?? 0,
+        steps: w.steps.map(([name, roleCode], i) =>
+          m.create(ApprovalStep, { sequence: i + 1, name, approverType: ApproverType.ROLE, roleId: roleIds.get(roleCode)! }),
+        ),
+      }),
+    );
+  }
+
   log('reference data ready');
+}
+
+/** Creates sample users that do not exist yet (new ones arrive with later releases). */
+async function seedSampleUsers(m: EntityManager, password: string): Promise<number> {
+  const existing = new Set((await m.find(User)).map((u) => u.username));
+  const missing = SAMPLE_USERS.filter((u) => !existing.has(u.username));
+  if (!missing.length) return 0;
+  const roles = new Map((await m.find(Role)).map((r) => [r.code, r]));
+  const stores = new Map((await m.find(Store)).map((s) => [s.code, s]));
+  const departments = new Map((await m.find(Department)).map((d) => [d.code, d]));
+  const passwordHash = await argon2.hash(password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
+  for (const u of missing) {
+    await m.save(
+      m.create(User, {
+        username: u.username,
+        fullName: u.fullName,
+        email: `${u.username}@hospital.example`,
+        passwordHash,
+        mustChangePassword: false,
+        passwordChangedAt: new Date(),
+        roles: [roles.get(u.role)!],
+        stores: u.stores.map((c) => stores.get(c)!),
+        departmentId: u.department ? departments.get(u.department)!.id : null,
+      }),
+    );
+  }
+  return missing.length;
 }
 
 async function seedSample(m: EntityManager, password: string, log: (msg: string) => void): Promise<void> {
@@ -167,23 +223,7 @@ async function seedSample(m: EntityManager, password: string, log: (msg: string)
     departments.set(code, await m.save(m.create(Department, { facilityId: facility.id, code, name, costCentreCode })));
   }
 
-  const roles = new Map((await m.find(Role)).map((r) => [r.code, r]));
-  const passwordHash = await argon2.hash(password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
-  for (const u of SAMPLE_USERS) {
-    await m.save(
-      m.create(User, {
-        username: u.username,
-        fullName: u.fullName,
-        email: `${u.username}@hospital.example`,
-        passwordHash,
-        mustChangePassword: false,
-        passwordChangedAt: new Date(),
-        roles: [roles.get(u.role)!],
-        stores: u.stores.map((c) => stores.get(c)!),
-        departmentId: u.department ? departments.get(u.department)!.id : null,
-      }),
-    );
-  }
+  await seedSampleUsers(m, password);
 
   const uoms = new Map((await m.find(UnitOfMeasure)).map((u) => [u.code, u]));
   const categories = new Map((await m.find(ItemCategory)).map((c) => [c.code, c]));

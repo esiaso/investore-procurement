@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 import { API_PREFIX, configureApp, createRedisClient } from './bootstrap';
 import { loadEnv } from './config/env';
+import { seedSamplePurchasing } from './database/seeds/sample-purchasing';
 import { seedDatabase } from './database/seeds/seed';
 
 async function main() {
@@ -16,6 +17,7 @@ async function main() {
 
   if (env.seedOnStart) {
     await seedDatabase(app.get(DataSource), { defaultPassword: env.seedDefaultPassword, sample: true });
+    await seedSamplePurchasing(app);
   }
 
   await app.listen(env.port);
