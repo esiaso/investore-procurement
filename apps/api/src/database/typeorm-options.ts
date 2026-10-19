@@ -9,7 +9,10 @@ import {
   ApprovalWorkflow,
   DocumentLink,
   Notification,
+  NotificationPreference,
 } from '../modules/approvals/approvals.entities';
+import { JobRun } from '../modules/jobs/jobs.entities';
+import { StockAlert, StoreItemSetting } from '../modules/planning/planning.entities';
 import { AuditSubscriber } from '../modules/audit/audit.subscriber';
 import { Budget, BudgetEntry } from '../modules/budgets/budgets.entities';
 import { EmailOutbox } from '../modules/mail/mail.entities';
@@ -136,6 +139,10 @@ export const ENTITIES = [
   IssueVoucherLine,
   DepartmentReturn,
   DepartmentReturnLine,
+  NotificationPreference,
+  JobRun,
+  StoreItemSetting,
+  StockAlert,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

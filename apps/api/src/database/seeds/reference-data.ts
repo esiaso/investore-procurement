@@ -54,6 +54,27 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
     isPublic: true,
   },
   { key: 'inventory.quarantineBinCode', value: 'QUARANTINE', description: 'Bin (created per store when first needed) that receives damaged/expired returns', isPublic: false },
+  { key: 'stock.amcWindowDays', value: 90, description: 'Average monthly consumption: days of ledger history used', isPublic: false },
+  {
+    key: 'stock.amcTxnTypes',
+    value: ['ISSUE', 'TRANSFER_DISPATCH'],
+    description: 'Ledger movements counted as consumption for AMC (issues to departments, transfers to other stores; returns from departments are netted off)',
+    isPublic: false,
+  },
+  { key: 'stock.amcExcludeStockoutDays', value: true, description: 'Leave days with no stock out of the AMC so stock-outs do not understate demand', isPublic: false },
+  { key: 'stock.amcMinDays', value: 14, description: 'AMC is averaged over at least this many days even when most of the window was a stock-out', isPublic: false },
+  { key: 'stock.defaultLeadTimeDays', value: 14, description: 'Lead time for items without their own store setting', isPublic: false },
+  { key: 'stock.defaultReviewPeriodDays', value: 30, description: 'Review period (days between orders) for items without their own setting', isPublic: false },
+  { key: 'stock.safetyStockDays', value: 7, description: 'AUTO mode: safety stock = AMC per day × this many days', isPublic: false },
+  { key: 'stock.reorderIncludeOnOrder', value: true, description: 'Reorder check counts open purchase orders and stock in transit on top of available stock', isPublic: false },
+  { key: 'stock.disposalReasonCode', value: 'EXPIRY', description: 'Adjustment reason used to write off / dispose of expired stock', isPublic: false },
+  { key: 'notify.emailDefault', value: true, description: 'Stock alerts are emailed unless the user switched email off for that category', isPublic: false },
+  {
+    key: 'jobs.schedules',
+    value: { 'inventory.reconcile': '0 2 * * *', 'stock.amc': '30 2 * * *', 'stock.expiry': '15 0 * * *', 'stock.reorder': '0 6-20 * * *' },
+    description: 'Background job schedules (cron, in locale.timezone). Remove a job to stop scheduling it.',
+    isPublic: false,
+  },
 ];
 
 /** Configurable reason codes for department returns and returns to suppliers. */
@@ -202,6 +223,7 @@ const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGET
 const STORE_OPS: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_RECEIVE, P.INVENTORY_ADJUST, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_DISPATCH,
   P.INVENTORY_TRANSFER_RECEIVE, P.INVENTORY_STOCKTAKE, P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_SUPPLIER_RETURN,
+  P.INVENTORY_PLANNING, P.INVENTORY_ALERTS,
 ];
 
 /** Default permission sets per built-in role. Editable at runtime. */
@@ -212,7 +234,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     name: 'Procurement Officer',
     description: 'Raises requisitions and purchase orders; maintains the catalog',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.INVENTORY_READ, P.INVENTORY_VALUATION,
-      ...BUYING, P.PURCHASING_REQUISITION],
+      P.INVENTORY_PLANNING, ...BUYING, P.PURCHASING_REQUISITION],
   },
   {
     code: RoleCodes.PROCUREMENT_MANAGER,
@@ -248,7 +270,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [
       P.ORG_READ, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_RECEIVE,
       P.INVENTORY_STOCKTAKE, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.PURCHASING_READ,
-      P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN,
+      P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_ALERTS,
     ],
   },
   { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ] },
@@ -296,7 +318,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ, P.NUMBERING_MANAGE, P.USERS_READ, ...STORE_OPS,
       P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_OVERRIDE_FEFO,
       P.INVENTORY_HANDLE_CONTROLLED, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_BATCH_HOLD, P.INVENTORY_PERIOD_LOCK,
-      P.INVENTORY_RECONCILE, P.INVENTORY_CONSUMPTION, ...BUYING, P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
+      P.INVENTORY_RECONCILE, P.INVENTORY_CONSUMPTION, P.JOBS_RUN, ...BUYING, P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
       P.PURCHASING_EMERGENCY_RECEIPT, P.APPROVALS_MANAGE,
     ],
   },

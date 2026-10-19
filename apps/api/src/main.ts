@@ -8,6 +8,7 @@ import { loadEnv } from './config/env';
 import { seedSamplePurchasing } from './database/seeds/sample-purchasing';
 import { seedDatabase } from './database/seeds/seed';
 import { seedSampleStores } from './database/seeds/sample-stores';
+import { seedSamplePlanning } from './database/seeds/sample-planning';
 
 async function main() {
   const env = loadEnv();
@@ -22,6 +23,7 @@ async function main() {
     await seedDatabase(app.get(DataSource), { defaultPassword: env.seedDefaultPassword, sample: true });
     await seedSamplePurchasing(app);
     await seedSampleStores(app);
+    await seedSamplePlanning(app);
   }
 
   await app.listen(env.port);
