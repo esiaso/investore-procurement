@@ -24,6 +24,7 @@ docker compose up --build
 | Web app | http://localhost:8080 |
 | API | http://localhost:3000/api/v1 |
 | OpenAPI (Swagger UI) | http://localhost:3000/api/v1/docs (JSON at `/api/v1/openapi.json`) |
+| Mailpit (every email the system sends) | http://localhost:8025 |
 
 Host ports are configurable in `.env` (`WEB_PORT`, `API_PORT`, `POSTGRES_PORT`,
 `REDIS_PORT`). On Windows with WSL, `localhost:3000` may already be taken by WSL's
@@ -51,6 +52,7 @@ value is in [`.env.example`](.env.example) and in the `docker-compose.yml` defau
 | `quality` | Cold-chain / Quality Officer | all |
 | `ward.incharge` | Department / Ward In-charge | – |
 | `finance` | Finance / Accounts | all |
+| `accountant` | Finance / Accounts (second user, so capture ≠ approval) | all |
 | `tender` | Tender / Evaluation Committee Member | – |
 | `scm` | Supply Chain Manager | all |
 | `supplier` | Supplier (portal) | – |
@@ -127,6 +129,10 @@ Other scripts:
 | `SEED_ON_START` | `false` (`true` in compose) | seed reference + sample data on boot (idempotent) |
 | `SEED_DEFAULT_PASSWORD` | – | password for sample users; required when seeding sample data |
 | `IMPORT_MAX_FILE_MB` | `10` | upload size limit (the row limit is a DB setting) |
+| `DATA_ENCRYPTION_KEY` | dev placeholder | 64 hex chars; encrypts supplier bank accounts |
+| `SMTP_URL` | – (`smtp://mailpit:1025` in compose) | empty = mail stays queued in `email_outbox` |
+| `MAIL_POLL_SECONDS` | `10` | outbox sender interval |
+| `CHROMIUM_PATH` | – | Chromium for PDFs; default is Playwright's bundled browser (installed in the Docker image) |
 | `DB_LOGGING` | `false` | log SQL |
 | `TEST_DATABASE_URL`, `TEST_REDIS_URL` | `…/silp_test`, `redis://…/1` | used by the API tests |
 
@@ -305,13 +311,145 @@ on a developer laptop (Docker Desktop on Windows), median of 3:
 | Valuation by category, 1 year ago | 332 |
 | Reconciliation (full ledger scan) | 1051 |
 
+## Procurement (slice 3)
+
+Modules: `approvals` (core: workflows, requests, delegations, notifications and document
+links), `suppliers`, `budgets`, `mail` (outbox + PDF) and `purchasing` (requisitions,
+RFQs, POs, GRNs, invoices and payment vouchers).
+
+### Approval engine
+
+A workflow is matched on document type, amount band `[min, max)`, and optionally
+department and item category. The most specific match wins (department + category >
+one of them > neither), then priority. Its ordered steps are approved by a role or a
+named user. Each step can approve, reject, or return for amendment; reject and return
+need a comment. Documents register handlers (`onApproved/onRejected/onReturned`) that
+run inside the approval transaction, so a handler can still stop an approval (for
+example a BLOCK budget).
+
+Rules:
+
+* the requester can never approve their own document;
+* each step must be approved by a different person;
+* delegations (from, to, date window) let a delegate act **on behalf of** an approver,
+  and that is recorded on the action.
+
+Approvers are notified in-app; the bell in the header polls every 30 s. Email
+notifications come later.
+
+Default workflows (KES, VAT inclusive; edit them under **Approvals → Workflows**):
+
+| Code | Document | Band | Steps |
+|---|---|---|---|
+| PR-1 | Requisition | < 100,000 | Procurement Manager |
+| PR-2 | Requisition | 100,000 – 1,000,000 | Procurement Manager → Supply Chain Manager |
+| PR-3 | Requisition | ≥ 1,000,000 | Procurement Manager → Supply Chain Manager → Hospital Management |
+| PR-CD | Requisition containing CNS/controlled category items | any | Pharmacist → Procurement Manager |
+| PO-1 | Purchase order | < 500,000 | Procurement Manager |
+| PO-2 | Purchase order | 500,000 – 5,000,000 | Procurement Manager → Finance |
+| PO-3 | Purchase order | ≥ 5,000,000 | Procurement Manager → Finance → Hospital Management |
+| INV-1 | Supplier invoice | any | Finance |
+
+Stock adjustments (slice 2) keep their own two-level approval; they are **not yet**
+moved onto this engine. That needs a data migration of open adjustments and is left as
+a follow-up.
+
+### Suppliers and budgets
+
+* **Suppliers**:
+  * KRA PIN validated (`A|P` + 9 digits + letter);
+  * contacts, categories supplied, prequalification status and expiry,
+    active / suspended / blacklisted with a reason;
+  * licence and certificate metadata with expiry dates (`GET /suppliers/documents/expiring?days=60`);
+  * bank account number stored **AES-256-GCM encrypted** (`DATA_ENCRYPTION_KEY`),
+    shown masked, decrypted only for `suppliers.bank`, redacted in the audit log;
+  * performance (on-time delivery, quality rejects, price variance) recomputed from
+    every posted GRN.
+
+  Only active suppliers whose prequalification has not expired can be invited or
+  ordered from. A simple contract price list (supplier × item × validity) backs
+  contract-price POs; full contracts come in slice 7.
+* **Budgets** per department × vote head × financial year:
+  * PO approval commits (or, for amendments, adjusts) the commitment;
+  * cancellation or closing releases what is still open;
+  * an approved invoice releases the matching commitment and books the actual;
+  * each budget is either WARN (a warning is returned) or BLOCK (submission and
+    approval are refused) when exceeded.
+
+  Entries are an append-only ledger (`budget_entry`).
+
+### Documents
+
+* **Requisition**: lines from the item master in base units, justification, priority
+  (routine/urgent/emergency), required-by date and optional budget. Only the requester
+  edits or submits it.
+* **RFQ**: raised from an approved PR, sent to eligible suppliers (email queued).
+  Quotations are captured per line. The comparative sheet ranks quotes compliant
+  first, then price, then delivery. Awarding anything but the lowest compliant quote
+  needs a justification. The award creates one draft PO per winning supplier.
+* **Purchase order**:
+  * created from an approved PR (prices from the contract list, or the PR estimate),
+    from an RFQ award, or directly from the contract price list;
+  * lines in an ordering unit (e.g. BOX) with its conversion to base units; VAT per
+    line from the item's tax category;
+  * approval by amount band, then **send** queues an email to the supplier with the
+    **PDF** attached (Playwright/Chromium HTML→PDF, logo placeholder, approval stamps;
+    `GET /purchase-orders/:id/pdf`);
+  * **amendments** create a new version that needs re-approval, with every version's
+    snapshot kept; a rejected amendment restores the previous version;
+  * cancel (with reason, only if nothing was received) or close (releases the
+    remaining commitment); partial deliveries are tracked per line.
+* **GRN**:
+  * against a PO, or an **emergency receipt** without one (`purchasing.emergency_receipt`
+    + reason, flagged until regularised by linking a PO);
+  * per line: quantity in the delivery unit, converted to base units, batch,
+    mfg/expiry (required for batch-tracked items, expired goods refused), bin;
+  * over-receipt beyond `purchasing.overReceiptTolerancePct` is refused;
+  * the **inspection committee** records accepted and rejected quantities with
+    reasons; posting needs `purchasing.inspectionCommitteeMinMembers` distinct
+    inspectors, and the receiver cannot inspect their own GRN;
+  * posting sends accepted quantities to stock through `postMovements()` (RECEIPT at
+    base cost, VAT added when `purchasing.costIncludesVat`) and creates a
+    return-to-supplier note for rejects;
+  * the receiver must not be the PR requester or a PO approver.
+* **Supplier invoice**: captured against a PO and **three-way matched**
+  per line, with tolerances `purchasing.matchQtyTolerancePct` /
+  `purchasing.matchPriceTolerancePct`. Flags: not received, invoiced > received
+  (including earlier invoices), invoiced > ordered, price variance. Supplier invoice
+  numbers are unique per supplier. Approval goes through the engine. **eTIMS status is
+  `NOT_CHECKED`**, the hook for KRA eTIMS verification in slice 6. Paying records a
+  payment voucher (simple record for now).
+* **Document chain**: PR → RFQ → PO → GRN → return / invoice → payment voucher are
+  linked (`document_link`). `GET /documents/chain?type=&id=` walks the links both ways
+  from any document; every detail screen shows the chain.
+
+New settings: `mail.fromAddress`, `purchasing.matchQtyTolerancePct` (0),
+`purchasing.matchPriceTolerancePct` (2), `purchasing.overReceiptTolerancePct` (0),
+`purchasing.inspectionCommitteeMinMembers` (2) and `purchasing.costIncludesVat` (true).
+
+Mail is written to an outbox in the same transaction as the business change. A poller
+in the API sends it over SMTP (Mailpit in development), retrying with back-off. Leave
+`SMTP_URL` empty to keep mail queued.
+
+Sample data: 15 fictional suppliers (labelled "Sample"; one suspended, one blacklisted,
+one with expired prequalification), 70 contract prices, 7 budgets for the current FY,
+and documents at every stage:
+
+* a draft and a pending requisition;
+* a full PR → RFQ (3 quotes) → PO → GRN (with a rejection and a return note) →
+  invoice → payment chain;
+* a part-delivered contract PO with an invoice flagged for a price variance;
+* an emergency receipt awaiting regularisation.
+
 ## Known limitations / next slices
 
-* Redis is only the session store for now; BullMQ jobs, Mailpit and MinIO arrive with
-  the slices that need them (notifications, attachments).
-* Requisitions, purchasing, GRNs (replacing the temporary receipts), issues to
-  departments and patients, POS and the supplier portal are later slices. `reserved`
-  exists on balances but nothing reserves stock yet.
+* Redis is only the session store for now. The mail outbox and reconciliation run as
+  in-process pollers or scripts; BullMQ and MinIO arrive with the slices that need them.
+* Issues to departments and patients, POS, full contracts, eTIMS verification and the
+  supplier portal are later slices. `reserved` exists on balances but nothing reserves
+  stock yet. The slice-2 stock receipt is still available for opening balances; normal
+  purchases go through GRNs.
+* Supplier documents are metadata only; file uploads arrive with MinIO.
 * The `uq_stock_balance_location` constraint (`UNIQUE NULLS NOT DISTINCT`) and the
   ledger trigger are hand-written in the inventory migration; TypeORM cannot express
   them. Review any future `migration:generate` output so it does not drop them.
