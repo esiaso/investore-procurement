@@ -9,6 +9,7 @@ import { HealthController } from './health.controller';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { NumberingModule } from './modules/numbering/numbering.module';
 import { OrgModule } from './modules/org/org.module';
 import { RbacModule } from './modules/rbac/rbac.module';
@@ -30,6 +31,7 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     AuthModule,
     CatalogModule,
+    InventoryModule,
   ],
   controllers: [HealthController],
   providers: [
