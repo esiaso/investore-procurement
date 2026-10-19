@@ -1,4 +1,13 @@
-import { AttributeType, DocumentType, Permissions, RoleCodes, TaxTreatment, type AttributeDefinition, type PermissionCode } from '@sil/shared';
+import {
+  AdjustmentDirection,
+  AttributeType,
+  DocumentType,
+  Permissions,
+  RoleCodes,
+  TaxTreatment,
+  type AttributeDefinition,
+  type PermissionCode,
+} from '@sil/shared';
 
 /**
  * Default configuration for a private hospital in Kenya. Everything here is
@@ -20,6 +29,26 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'security.totpIssuer', value: 'SIL Hospital', description: 'Issuer name shown in authenticator apps', isPublic: false },
   { key: 'security.pending2faTtlSeconds', value: 300, description: 'Time allowed to enter the 2FA code', isPublic: false },
   { key: 'import.maxRows', value: 5000, description: 'Maximum rows per bulk import file', isPublic: false },
+  { key: 'inventory.valuationMethod', value: 'WAC', description: 'Stock valuation: WAC (weighted average per item per store) or FIFO (batch cost)', isPublic: false },
+  {
+    key: 'inventory.adjustmentSecondApprovalThreshold',
+    value: 50000,
+    description: 'Adjustments above this value need a second, different approver',
+    isPublic: false,
+  },
+  { key: 'inventory.expiryWarningDays', value: [30, 60, 90, 180], description: 'Expiry warning buckets (days)', isPublic: true },
+];
+
+export const DEFAULT_ADJUSTMENT_REASONS: { code: string; name: string; direction: AdjustmentDirection }[] = [
+  { code: 'DAMAGE', name: 'Damaged', direction: AdjustmentDirection.DECREASE },
+  { code: 'LOSS', name: 'Lost / unaccounted', direction: AdjustmentDirection.DECREASE },
+  { code: 'THEFT', name: 'Theft', direction: AdjustmentDirection.DECREASE },
+  { code: 'BREAKAGE', name: 'Breakage', direction: AdjustmentDirection.DECREASE },
+  { code: 'EXPIRY', name: 'Expiry write-off', direction: AdjustmentDirection.DECREASE },
+  { code: 'FOUND', name: 'Stock found', direction: AdjustmentDirection.INCREASE },
+  { code: 'CORRECTION', name: 'Data correction', direction: AdjustmentDirection.BOTH },
+  { code: 'TRANSIT_LOSS', name: 'Lost or damaged in transit', direction: AdjustmentDirection.DECREASE },
+  { code: 'COUNT_VARIANCE', name: 'Stock-take variance', direction: AdjustmentDirection.BOTH },
 ];
 
 /**
@@ -48,6 +77,8 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.ISSUE_NOTE, prefix: 'ISS', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.TRANSFER, prefix: 'TRF', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.STOCK_ADJUSTMENT, prefix: 'ADJ', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.STOCK_RECEIPT, prefix: 'RCPT', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.STOCK_TAKE, prefix: 'STK', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
 ];
 
 export const DEFAULT_UOMS: [code: string, name: string][] = [
@@ -126,6 +157,12 @@ const P = Permissions;
 const ALL = Object.values(P) as PermissionCode[];
 const READ_ALL: PermissionCode[] = [
   P.SETTINGS_READ, P.AUDIT_READ, P.USERS_READ, P.ROLES_READ, P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.NUMBERING_READ,
+  P.INVENTORY_READ, P.INVENTORY_VALUATION,
+];
+/** Day-to-day store operations in assigned stores. */
+const STORE_OPS: PermissionCode[] = [
+  P.INVENTORY_READ, P.INVENTORY_RECEIVE, P.INVENTORY_ADJUST, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_DISPATCH,
+  P.INVENTORY_TRANSFER_RECEIVE, P.INVENTORY_STOCKTAKE,
 ];
 
 /** Default permission sets per built-in role. Editable at runtime. */
@@ -135,38 +172,49 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     code: RoleCodes.PROCUREMENT_OFFICER,
     name: 'Procurement Officer',
     description: 'Raises requisitions and purchase orders; maintains the catalog',
-    permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ],
+    permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.INVENTORY_READ, P.INVENTORY_VALUATION],
   },
   {
     code: RoleCodes.PROCUREMENT_MANAGER,
     name: 'Procurement Manager / Approver',
     description: 'Approves procurement documents',
-    permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ],
+    permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ,
+      P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE],
   },
   {
     code: RoleCodes.STOREKEEPER,
     name: 'Storekeeper',
     description: 'Receives, stores and issues stock in assigned stores',
-    permissions: [P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ],
+    permissions: [P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, ...STORE_OPS, P.INVENTORY_HANDLE_COLD_CHAIN],
   },
   {
     code: RoleCodes.PHARMACIST,
     name: 'Pharmacist',
     description: 'Manages pharmacy stock and formulary in assigned pharmacies',
-    permissions: [P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, P.CATALOG_MANAGE],
+    permissions: [
+      P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, P.CATALOG_MANAGE, ...STORE_OPS, P.INVENTORY_VALUATION,
+      P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_OVERRIDE_FEFO,
+      P.INVENTORY_HANDLE_CONTROLLED, P.INVENTORY_HANDLE_COLD_CHAIN,
+    ],
   },
   {
     code: RoleCodes.PHARMACY_TECHNICIAN,
     name: 'Pharmacy Technician',
     description: 'Dispenses and handles pharmacy stock in assigned pharmacies',
-    permissions: [P.ORG_READ, P.CATALOG_READ],
+    permissions: [
+      P.ORG_READ, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_RECEIVE,
+      P.INVENTORY_STOCKTAKE, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED,
+    ],
   },
-  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ] },
+  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ] },
   {
     code: RoleCodes.QUALITY_OFFICER,
     name: 'Cold-chain / Quality Officer',
     description: 'Monitors cold chain, recalls and quality',
-    permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ],
+    permissions: [
+      P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_BATCH_HOLD,
+      P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED,
+    ],
   },
   {
     code: RoleCodes.WARD_IN_CHARGE,
@@ -178,7 +226,8 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     code: RoleCodes.FINANCE,
     name: 'Finance / Accounts',
     description: 'Tax configuration, invoices and payments',
-    permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ],
+    permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
+      P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE],
   },
   {
     code: RoleCodes.TENDER_COMMITTEE,
@@ -192,7 +241,10 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     description: 'Oversees stores, catalog and numbering',
     permissions: [
       P.ORG_READ, P.ORG_MANAGE, P.BINS_MANAGE, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT,
-      P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ, P.NUMBERING_MANAGE, P.USERS_READ,
+      P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ, P.NUMBERING_MANAGE, P.USERS_READ, ...STORE_OPS,
+      P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_OVERRIDE_FEFO,
+      P.INVENTORY_HANDLE_CONTROLLED, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_BATCH_HOLD, P.INVENTORY_PERIOD_LOCK,
+      P.INVENTORY_RECONCILE,
     ],
   },
   { code: RoleCodes.SUPPLIER, name: 'Supplier (portal)', description: 'External supplier portal user', permissions: [] },

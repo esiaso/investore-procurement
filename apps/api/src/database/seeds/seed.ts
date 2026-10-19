@@ -10,7 +10,10 @@ import { Permission, Role } from '../../modules/rbac/rbac.entities';
 import { SystemSetting } from '../../modules/settings/system-setting.entity';
 import { TaxCategory, TaxRate } from '../../modules/tax/tax.entities';
 import { User } from '../../modules/users/user.entity';
+import { AdjustmentReason } from '../../modules/inventory/documents.entities';
+import { seedSampleStock } from './sample-stock';
 import {
+  DEFAULT_ADJUSTMENT_REASONS,
   DEFAULT_CATEGORIES,
   DEFAULT_CONVERSIONS,
   DEFAULT_NUMBERING,
@@ -54,10 +57,17 @@ export async function seedDatabase(dataSource: DataSource, options: SeedOptions)
       if (options.sample) {
         if (await m.exists(Facility)) {
           log('sample data already present, skipping');
-          return;
+        } else {
+          if (!options.defaultPassword) throw new Error('SEED_DEFAULT_PASSWORD is required to create sample users');
+          await seedSample(m, options.defaultPassword, log);
         }
-        if (!options.defaultPassword) throw new Error('SEED_DEFAULT_PASSWORD is required to create sample users');
-        await seedSample(m, options.defaultPassword, log);
+        // Sample stock arrived in a later release: add it once to sample databases without stock.
+        const [{ n }] = await m.query(`SELECT count(*)::int AS n FROM stock_transaction`);
+        const [{ sample }] = await m.query(`SELECT count(*)::int AS sample FROM facility WHERE code = $1`, [SAMPLE_FACILITY.code]);
+        if (n === 0 && sample > 0) {
+          const [{ value: tz }] = await m.query(`SELECT value FROM system_setting WHERE key = 'locale.timezone'`);
+          await seedSampleStock(m, tz, log);
+        }
       }
     }),
   );
@@ -68,14 +78,34 @@ async function seedReference(m: EntityManager, log: (msg: string) => void): Prom
     if (!(await m.existsBy(SystemSetting, { key: s.key }))) await m.save(m.create(SystemSetting, s));
   }
 
+  const knownPermissions = new Set((await m.find(Permission)).map((p) => p.code));
+  const newPermissions = new Set<string>();
   for (const [code, description] of Object.entries(PERMISSION_DESCRIPTIONS)) {
+    if (!knownPermissions.has(code)) newPermissions.add(code);
     await m.upsert(Permission, { code, description }, ['code']);
   }
 
   for (const r of DEFAULT_ROLES) {
-    if (await m.existsBy(Role, { code: r.code })) continue;
-    const permissions = r.permissions.map((code: PermissionCode) => ({ code }) as Permission);
-    await m.save(m.create(Role, { code: r.code, name: r.name, description: r.description, isSystem: true, permissions }));
+    const existing = await m.findOne(Role, { where: { code: r.code }, relations: { permissions: true } });
+    if (!existing) {
+      const permissions = r.permissions.map((code: PermissionCode) => ({ code }) as Permission);
+      await m.save(m.create(Role, { code: r.code, name: r.name, description: r.description, isSystem: true, permissions }));
+      continue;
+    }
+    // Permissions introduced by a newer release are granted to built-in roles once;
+    // permissions an admin removed earlier are not re-added.
+    const grant = r.permissions.filter((code) => newPermissions.has(code) && !existing.permissions!.some((p) => p.code === code));
+    if (existing.isSystem && grant.length) {
+      await m.query(
+        `INSERT INTO role_permission (role_id, permission_code) SELECT $1, unnest($2::varchar[]) ON CONFLICT DO NOTHING`,
+        [existing.id, grant],
+      );
+      log(`granted ${grant.length} new permission(s) to ${r.code}`);
+    }
+  }
+
+  for (const reason of DEFAULT_ADJUSTMENT_REASONS) {
+    if (!(await m.existsBy(AdjustmentReason, { code: reason.code }))) await m.save(m.create(AdjustmentReason, reason));
   }
 
   for (const t of DEFAULT_TAX) {
