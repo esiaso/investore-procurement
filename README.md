@@ -7,7 +7,8 @@ audit trail, configuration (tax, numbering, locale) and the product catalog
 transfers, adjustments, stock takes), **slice 3** procurement (approvals, suppliers,
 budgets, PR → RFQ → PO → GRN → invoice), and **slice 4** internal requisitions from
 wards, reservations, issues, back-orders, department and supplier returns and
-departmental consumption.
+departmental consumption. **Slice 5** adds background jobs (BullMQ worker), AMC and
+reorder levels, reorder and expiry alerts, and reorder/near-expiry reports.
 
 Defaults are KES, VAT 16% with zero-rated and exempt categories, Africa/Nairobi time,
 DD/MM/YYYY dates and a January financial-year start. **All of these live in database
@@ -140,6 +141,7 @@ Other scripts:
 | `DATA_ENCRYPTION_KEY` | dev placeholder | 64 hex chars; encrypts supplier bank accounts |
 | `SMTP_URL` | – (`smtp://mailpit:1025` in compose) | empty = mail stays queued in `email_outbox` |
 | `MAIL_POLL_SECONDS` | `10` | outbox sender interval |
+| `JOBS_MODE` | `inline` (`queue` in compose) | `queue` = BullMQ + the worker service; `inline` = run jobs in the calling process; `off` |
 | `CHROMIUM_PATH` | – | Chromium for PDFs; default is Playwright's bundled browser (installed in the Docker image) |
 | `DB_LOGGING` | `false` | log SQL |
 | `TEST_DATABASE_URL`, `TEST_REDIS_URL` | `…/silp_test`, `redis://…/1` | used by the API tests |
@@ -561,16 +563,107 @@ rejected, approved and reserved, fully issued with a patient line, and partly is
 with a back-order), a posted department return (resaleable + damaged to quarantine)
 and a draft one, and a supplier return of the damaged stock with a credit note.
 
+## Stock planning, alerts and background jobs (slice 5)
+
+### Background jobs (BullMQ)
+
+Jobs are named handlers registered by modules (`JobsService`). With `JOBS_MODE=queue`
+(the compose default), the API puts work on a BullMQ queue in Redis. The **`worker`**
+compose service (`node dist/worker.js`) runs it and keeps the schedules from the
+setting `jobs.schedules` (cron, in `locale.timezone`):
+
+| Job | Default schedule | Does |
+|---|---|---|
+| `inventory.reconcile` | 02:00 daily | Checks balances and reservations against the ledger and notifies reconcilers of any problem. It only reports; repairs stay a manual, audited action. |
+| `stock.amc` | 02:30 daily | Recalculates AMC and AUTO levels. |
+| `stock.expiry` | 00:15 daily | Puts expired batches on hold (`EXPIRED`) and raises near-expiry alerts. |
+| `stock.reorder` | hourly 06:00–20:00 | Raises and resolves reorder and stock-out alerts. |
+| `stores.replan` | on stock arrival | Re-reserves stock for open back-orders. |
+
+Every run is recorded in `job_run`. **Background jobs** (`jobs.run`, `GET /jobs`,
+`POST /jobs/:name/run`) shows the schedules and last results, and lets you run a
+job now. In tests and the local dev server, `JOBS_MODE=inline` runs jobs in-process;
+`off` disables them. All jobs are safe to re-run.
+
+### Store item settings and AMC
+
+* `store_item_setting` per item per store holds min, max, reorder level, reorder qty,
+  safety stock, lead time, review period, and the mode **AUTO** or **MANUAL**.
+* **AMC** (average monthly consumption) comes from the ledger over
+  `stock.amcWindowDays` (90). It counts the movements in `stock.amcTxnTypes`: issues to
+  departments, plus transfers out for stores that supply others. Returns from
+  departments are netted off. Days with no stock are left out
+  (`stock.amcExcludeStockoutDays`), with a floor of `stock.amcMinDays` (14), so
+  stock-outs don't understate demand.
+* **AUTO levels**: daily use = AMC / 30.
+  - Safety stock = daily use × `stock.safetyStockDays` (7). Min is the safety stock.
+  - Reorder level = daily use × lead time + safety stock.
+  - Max = reorder level + daily use × review period.
+  - Reorder qty = max − reorder level.
+  - Lead time and review period are per item, defaulting to `stock.defaultLeadTimeDays` (14) and `stock.defaultReviewPeriodDays` (30).
+* **MANUAL** keeps the levels you enter; only the AMC is refreshed. Editing a level on
+  the **Stock levels** screen switches the row to MANUAL.
+
+### Reorder engine and alerts
+
+* Position = available (on hand − reserved, usable stock only), plus open PO
+  quantities and stock in transit when `stock.reorderIncludeOnOrder` is on. An item is
+  flagged at or below its reorder level. The suggestion tops up to max (or adds the
+  reorder qty when there's no max).
+* Each item also shows a stock-out flag and days of stock remaining.
+* **Alerts** (`stock_alert`) are de-duplicated:
+  - A reorder or stock-out alert stays open while the condition holds and resolves when it clears. A later crossing raises a new one.
+  - A near-expiry alert fires **once per batch × store × horizon**. Horizons come from the item category (`expiryAlertDays`), or else from `inventory.expiryWarningDays` (30/60/90/180). A batch first seen inside several horizons records all of them but is announced once, at the tightest.
+  - Expired batches are put on hold automatically, with one alert each.
+* Alerts go to users with `inventory.alerts` who can access the store. They arrive in
+  the notification bell and by **email** (Mailpit in dev), grouped into one message per
+  store and alert type. **My account → Notifications** lets each user switch in-app,
+  email or SMS on or off per category. SMS goes through a `Notifier` adapter, which is
+  a stub that logs and sends nothing until a provider is chosen. Email follows
+  `notify.emailDefault` until the user changes it.
+
+### Reports and actions
+
+* **Suggested reorder** (`GET /stock-planning/reorder`, with CSV/Excel export).
+  Select items, adjust the quantities, then press one button:
+  - for stores that buy (no parent store), a **draft purchase requisition**, which then follows the slice 3 approval workflow;
+  - for satellite stores, a **transfer request** to the parent store.
+* **Near expiry** (`GET /stock-planning/expiry`, with CSV/Excel export) shows the value,
+  the days needed to use the batch up at this store's AMC, an "at risk" flag, and the
+  store with the highest AMC as a redistribution target. Actions:
+  - **redistribute**: a transfer raised by the sending store;
+  - **return to supplier**: the slice 4 flow;
+  - **write off**: an adjustment with the reason `stock.disposalReasonCode` (EXPIRY), approved as usual. Once posted, it has a **disposal certificate** PDF (`GET /stock-planning/disposal-certificate/:adjustmentId`, or the button on the adjustment).
+* **Dashboard widgets** for stock roles: items at reorder level, stock-outs, expired
+  stock value, new expiry alerts, and near-expiry value by horizon.
+
+### Back-orders follow the stock
+
+When stock arrives (GRN posted, transfer received, receipt, or resaleable department
+return), `stores.replan` reserves it for open requisitions at that store, most
+urgent and oldest first. It tells the issuing store which back-orders can now be
+filled. This removes the slice 4 limitation.
+
+New permissions: `inventory.planning`, `inventory.alerts`, `jobs.run`. Sample data: the
+jobs run once on a fresh database. A few Main Store and Main Pharmacy items get
+MANUAL levels just above their stock, so the reorder report has suggestions despite
+the short sample history.
+
 ## Known limitations / next slices
 
-* Redis is only the session store for now. The mail outbox and reconciliation run as
-  in-process pollers or scripts; BullMQ and MinIO arrive with the slices that need them.
+* Redis holds sessions and the BullMQ job queue. The mail outbox is still sent by a
+  poller in the API process. MinIO arrives with the slice that needs file uploads.
+* Schedule changes in `jobs.schedules` apply when the worker restarts.
+* The reorder engine evaluates items that have a store item setting. The AMC job
+  creates these for every item with ledger history in a store; add one by hand
+  (Stock levels → PUT `/stock-planning/settings/:storeId/:itemId`) for a new item with
+  no history.
 * Dispensing to patients (POS), full contracts, eTIMS verification and the supplier
   portal are later slices. Patient references on requisitions are free text until the
   HMIS link (slice 9). The slice-2 stock receipt is still available for opening
   balances; normal purchases go through GRNs.
-* Reservations are re-planned on issue, cancellation and on demand, not automatically
-  when new stock is received. An adjustment or count that removes reserved stock leaves
+* Reservations are re-planned on issue, cancellation, on demand and (slice 5) when
+  stock arrives. An adjustment or count that removes reserved stock leaves
   the reservation in place until the next issue re-plans it (reconciliation reports
   such rows as `overReservedCount`).
 * Supplier documents are metadata only; file uploads arrive with MinIO.
