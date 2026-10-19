@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
-import { ApprovalActionType, ApprovalStatus, ApproverType } from '@sil/shared';
+import { ApprovalActionType, ApprovalStatus, ApproverType, NotificationCategory } from '@sil/shared';
 import { AppBaseEntity } from '../../common/entities/base.entity';
 import { MONEY } from '../../common/entities/transformers';
 import { Role } from '../rbac/rbac.entities';
@@ -240,4 +240,25 @@ export class DocumentLink {
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
+}
+
+/** Per-user channel choice for a notification category (missing row = defaults). */
+@Entity('notification_preference')
+@Index(['userId', 'category'], { unique: true })
+export class NotificationPreference extends AppBaseEntity {
+  @Column({ type: 'uuid' })
+  userId: string;
+
+  @Column({ type: 'enum', enum: NotificationCategory, enumName: 'notification_category' })
+  category: NotificationCategory;
+
+  @Column({ type: 'boolean', default: true })
+  inApp: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  email: boolean;
+
+  /** Goes through the SMS notifier (a stub until a provider is chosen). */
+  @Column({ type: 'boolean', default: false })
+  sms: boolean;
 }

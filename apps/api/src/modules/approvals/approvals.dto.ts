@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
-import { ApproverType } from '@sil/shared';
+import { ApproverType, NotificationCategory } from '@sil/shared';
 
 export class ApprovalStepDto {
   @ApiProperty() @IsString() @MaxLength(200) name: string;
@@ -43,4 +43,16 @@ export class MarkReadDto {
 export class ChainQueryDto {
   @ApiProperty() @IsString() @MaxLength(20) type: string;
   @ApiProperty() @IsUUID() id: string;
+}
+
+export class PreferenceDto {
+  @ApiProperty({ enum: NotificationCategory }) @IsEnum(NotificationCategory) category: NotificationCategory;
+  @ApiProperty() @IsBoolean() inApp: boolean;
+  @ApiProperty() @IsBoolean() email: boolean;
+  @ApiProperty() @IsBoolean() sms: boolean;
+}
+
+export class PreferencesDto {
+  @ApiProperty({ type: [PreferenceDto] }) @IsArray() @ValidateNested({ each: true }) @Type(() => PreferenceDto)
+  preferences: PreferenceDto[];
 }

@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query
 import { ApiTags } from '@nestjs/swagger';
 import { ApprovalActionType, Permissions, SessionUser } from '@sil/shared';
 import { CurrentUser, RequirePermissions } from '../../common/decorators';
-import { ApprovalDecisionDto, ChainQueryDto, CreateDelegationDto, MarkReadDto, SaveWorkflowDto } from './approvals.dto';
+import { ApprovalDecisionDto, ChainQueryDto, CreateDelegationDto, MarkReadDto, PreferencesDto, SaveWorkflowDto } from './approvals.dto';
 import { ApprovalsService } from './approvals.service';
 import { DocumentLinksService } from './document-links.service';
 import { NotificationsService } from './notifications.service';
@@ -82,6 +82,17 @@ export class NotificationsController {
   @Post('read') @HttpCode(204)
   markRead(@CurrentUser() user: SessionUser, @Body() dto: MarkReadDto) {
     return this.notifications.markRead(user.id, dto.ids);
+  }
+
+  /** Channels (in-app, email, SMS) per notification category for the current user. */
+  @Get('preferences')
+  preferences(@CurrentUser() user: SessionUser) {
+    return this.notifications.preferences(user.id);
+  }
+
+  @Put('preferences')
+  setPreferences(@CurrentUser() user: SessionUser, @Body() dto: PreferencesDto) {
+    return this.notifications.setPreferences(user.id, dto.preferences);
   }
 }
 
