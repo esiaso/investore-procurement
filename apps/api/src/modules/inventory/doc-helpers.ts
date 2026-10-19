@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { ValuationMethod } from '@sil/shared';
 import { StoreScope } from '../../common/store-scope';
+import { Bin } from '../org/org.entities';
 
 export interface ItemInfo {
   id: string;
@@ -38,6 +39,17 @@ export async function assertBin(m: EntityManager, storeId: string, binId: string
   if (!bin || bin.store_id !== storeId) throw new BadRequestException('Bin does not belong to the store');
   if (!bin.is_active) throw new BadRequestException('Bin is inactive');
   return bin.id;
+}
+
+/** The store's quarantine bin (code from settings), created on first use. */
+export async function quarantineBin(m: EntityManager, storeId: string, code: string): Promise<string> {
+  const [bin] = await m.query(`SELECT id, is_quarantine FROM bin WHERE store_id = $1 AND code = $2`, [storeId, code]);
+  if (bin) {
+    if (!bin.is_quarantine) throw new BadRequestException(`Bin ${code} exists but is not marked as a quarantine bin`);
+    return bin.id;
+  }
+  const created = await m.save(m.create(Bin, { storeId, code, name: 'Quarantine (damaged / expired returns)', zone: 'QUARANTINE', isQuarantine: true }));
+  return created.id;
 }
 
 /** Current cost per base unit of an item batch in a store, per valuation method. */

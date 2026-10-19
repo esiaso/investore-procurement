@@ -47,13 +47,24 @@ export class StockRuleError extends BadRequestException {
   }
 }
 
-/** Movement types that take stock out for use and must not touch unusable batches. */
+/**
+ * Movement types that take stock out for use: they must not touch unusable
+ * batches (held, expired, in a quarantine bin) or stock reserved for requisitions.
+ */
 const CONSUMING: ReadonlySet<StockTxnType> = new Set([StockTxnType.TRANSFER_DISPATCH, StockTxnType.ISSUE]);
+/**
+ * Outflows that leave reserved stock alone. Returns to suppliers may take held,
+ * expired or quarantined stock (that is usually why it goes back), but not
+ * stock promised to a requisition. Adjustments and stock takes record physical
+ * facts and are not limited by reservations.
+ */
+const RESPECTS_RESERVATIONS: ReadonlySet<StockTxnType> = new Set([...CONSUMING, StockTxnType.SUPPLIER_RETURN]);
 /** Inflows that bring stock in at a given cost (WAC is recalculated). */
 const COST_INFLOWS: ReadonlySet<StockTxnType> = new Set([
   StockTxnType.OPENING,
   StockTxnType.RECEIPT,
   StockTxnType.TRANSFER_RECEIPT,
+  StockTxnType.RETURN_IN,
 ]);
 
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
@@ -160,6 +171,12 @@ export async function postMovements(
   }
 
   // ---- batch usability
+  const binIds = [...new Set(lines.map((l) => l.binId).filter((b): b is string => !!b))];
+  const quarantineBins = new Set<string>(
+    binIds.length
+      ? (await manager.query(`SELECT id FROM bin WHERE id = ANY($1::uuid[]) AND is_quarantine`, [binIds])).map((r: { id: string }) => r.id)
+      : [],
+  );
   for (const l of lines) {
     const b = batchById.get(l.batchId)!;
     const expired = !!b.expiry_date && b.expiry_date <= ctx.effectiveDate;
@@ -168,6 +185,9 @@ export async function postMovements(
         throw new StockRuleError('BATCH_ON_HOLD', `Batch ${b.batch_no} is on hold (${b.hold_status})`);
       }
       if (expired) throw new StockRuleError('BATCH_EXPIRED', `Batch ${b.batch_no} expired on ${b.expiry_date}`);
+      if (l.binId && quarantineBins.has(l.binId)) {
+        throw new StockRuleError('BIN_QUARANTINED', `Batch ${b.batch_no} is in a quarantine bin and cannot be used`);
+      }
     }
     if (l.txnType === StockTxnType.RECEIPT && expired) {
       throw new StockRuleError('BATCH_EXPIRED', `Cannot receive expired batch ${b.batch_no}`);
@@ -177,7 +197,7 @@ export async function postMovements(
   // ---- lock balance rows (deterministic order avoids deadlocks)
   const keyOf = (l: { storeId: string; binId: string | null; batchId: string }) => `${l.storeId}|${l.binId ?? ''}|${l.batchId}`;
   const keys = [...new Map(lines.map((l) => [keyOf(l), l])).values()].sort((a, b) => keyOf(a).localeCompare(keyOf(b)));
-  const balances = new Map<string, { id: string; onHand: number; inTransit: number }>();
+  const balances = new Map<string, { id: string; onHand: number; inTransit: number; reserved: number }>();
   for (const k of keys) {
     await manager.query(
       `INSERT INTO stock_balance (store_id, bin_id, item_id, batch_id) VALUES ($1, $2, $3, $4)
@@ -185,11 +205,11 @@ export async function postMovements(
       [k.storeId, k.binId, k.itemId, k.batchId],
     );
     const [row] = await manager.query(
-      `SELECT id, on_hand, in_transit FROM stock_balance
+      `SELECT id, on_hand, in_transit, reserved FROM stock_balance
         WHERE store_id = $1 AND bin_id IS NOT DISTINCT FROM $2 AND batch_id = $3 FOR UPDATE`,
       [k.storeId, k.binId, k.batchId],
     );
-    balances.set(keyOf(k), { id: row.id, onHand: Number(row.on_hand), inTransit: Number(row.in_transit) });
+    balances.set(keyOf(k), { id: row.id, onHand: Number(row.on_hand), inTransit: Number(row.in_transit), reserved: Number(row.reserved) });
   }
 
   // ---- WAC rows
@@ -228,6 +248,14 @@ export async function postMovements(
       });
     }
     if (newInTransit < 0) throw new StockRuleError('INSUFFICIENT_IN_TRANSIT', `In-transit quantity for ${b.batch_no} would go negative`);
+    if (q < 0 && RESPECTS_RESERVATIONS.has(l.txnType) && newOnHand < bal.reserved) {
+      const free = Math.max(0, round4(bal.onHand - bal.reserved));
+      throw new StockRuleError(
+        'INSUFFICIENT_STOCK',
+        `Not enough unreserved stock of ${b.item_code} batch ${b.batch_no}: ${free} available (${bal.reserved} reserved for requisitions)`,
+        { itemId: l.itemId, batchId: l.batchId, available: free, reserved: bal.reserved },
+      );
+    }
 
     const wacKey = `${l.storeId}|${l.itemId}`;
     const currentCost =
@@ -291,4 +319,43 @@ export async function postMovements(
   const repo = manager.getRepository(StockTransaction);
   const inserted = await repo.insert(rows.map((r) => repo.create(r)));
   return rows.map((r, i) => ({ ...r, id: String(inserted.identifiers[i].id) }) as StockTransaction);
+}
+
+export interface ReservationChange {
+  storeId: string;
+  binId: string | null;
+  batchId: string;
+  /** Signed change to reserved. */
+  delta: number;
+}
+
+/**
+ * The only way `stock_balance.reserved` changes (the reservations service keeps
+ * the matching stock_reservation rows). Locks rows in the same order as
+ * postMovements. Reserving more than is on hand and unreserved is refused;
+ * releasing never takes reserved below zero.
+ */
+export async function changeReserved(manager: EntityManager, changes: ReservationChange[]): Promise<void> {
+  const keyOf = (c: ReservationChange) => `${c.storeId}|${c.binId ?? ''}|${c.batchId}`;
+  const merged = new Map<string, ReservationChange>();
+  for (const c of changes) {
+    const k = keyOf(c);
+    const prev = merged.get(k);
+    merged.set(k, prev ? { ...prev, delta: round4(prev.delta + c.delta) } : { ...c, delta: round4(c.delta) });
+  }
+  for (const k of [...merged.keys()].sort()) {
+    const c = merged.get(k)!;
+    if (c.delta === 0) continue;
+    const [row] = await manager.query(
+      `SELECT id, on_hand, reserved FROM stock_balance
+        WHERE store_id = $1 AND bin_id IS NOT DISTINCT FROM $2 AND batch_id = $3 FOR UPDATE`,
+      [c.storeId, c.binId, c.batchId],
+    );
+    if (!row) throw new StockRuleError('INSUFFICIENT_STOCK', 'Nothing on hand to reserve');
+    const next = round4(Number(row.reserved) + c.delta);
+    if (c.delta > 0 && next > Number(row.on_hand)) {
+      throw new StockRuleError('INSUFFICIENT_STOCK', `Only ${round4(Number(row.on_hand) - Number(row.reserved))} can still be reserved`);
+    }
+    await manager.query(`UPDATE stock_balance SET reserved = $2, updated_at = now() WHERE id = $1`, [row.id, Math.max(0, next)]);
+  }
 }

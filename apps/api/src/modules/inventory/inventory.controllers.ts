@@ -61,6 +61,12 @@ export class InventoryController {
     return this.inventory.listBatches(query);
   }
 
+  /** Every movement of a batch (who, what, when, from, to, document) and where it is now. */
+  @Get('batches/:id/trace') @RequirePermissions(Permissions.INVENTORY_READ)
+  trace(@Param('id', ParseUUIDPipe) id: string) {
+    return this.inventory.batchTrace(id);
+  }
+
   @Put('batches/:id/hold') @RequirePermissions(Permissions.INVENTORY_BATCH_HOLD)
   hold(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetHoldDto) {
     return this.inventory.setHold(id, dto);

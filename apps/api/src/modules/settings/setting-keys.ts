@@ -28,6 +28,14 @@ export interface SettingTypes {
   'purchasing.inspectionCommitteeMinMembers': number;
   /** Add (non-recoverable) VAT to stock cost on receipt. */
   'purchasing.costIncludesVat': boolean;
+  /** Return reason code put on return notes created from GRN inspection rejects. */
+  'purchasing.grnRejectReturnReason': string;
+  /** Reserve stock for internal requisitions on approval. */
+  'inventory.reserveOnApproval': boolean;
+  /** OPTIONAL or REQUIRED: issue picks must be confirmed by a scan. */
+  'inventory.issueScanConfirm': 'OPTIONAL' | 'REQUIRED';
+  /** Code of the per-store bin that receives damaged/expired returns. */
+  'inventory.quarantineBinCode': string;
 }
 
 export type SettingKey = keyof SettingTypes;

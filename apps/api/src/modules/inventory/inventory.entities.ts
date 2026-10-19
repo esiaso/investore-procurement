@@ -206,6 +206,50 @@ export class StockTransaction {
   postedAt: Date;
 }
 
+/**
+ * Stock held for an approved internal requisition line on one balance row.
+ * Invariant: per store × bin × batch, Σ quantity of unreleased rows = stock_balance.reserved.
+ */
+@Entity('stock_reservation')
+@Index(['requisitionLineId'])
+@Index(['storeId', 'itemId'])
+export class StockReservation {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'uuid' })
+  requisitionId: string;
+
+  @Column({ type: 'uuid' })
+  requisitionLineId: string;
+
+  @Column({ type: 'uuid' })
+  storeId: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  binId: string | null;
+
+  @Column({ type: 'uuid' })
+  itemId: string;
+
+  @Column({ type: 'uuid' })
+  batchId: string;
+
+  @ManyToOne(() => Batch, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'batch_id' })
+  batch?: Batch;
+
+  @Column(QUANTITY)
+  quantity: number;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
+
+  /** Set when issued, cancelled or re-planned; the row is kept for the trail. */
+  @Column({ type: 'timestamptz', nullable: true })
+  releasedAt: Date | null;
+}
+
 /** Weighted average cost per item per store. */
 @Entity('item_store_cost')
 export class ItemStoreCost {

@@ -5,6 +5,7 @@ import { UsersModule } from '../users/users.module';
 import { AdjustmentsService } from './adjustments.service';
 import {
   AdjustmentReason,
+  ReturnReason,
   StockAdjustment,
   StockAdjustmentLine,
   StockReceipt,
@@ -22,7 +23,7 @@ import {
   StockTakesController,
   TransfersController,
 } from './inventory.controllers';
-import { Batch, ItemStoreCost, StockBalance, StockTransaction, StorePeriodLock } from './inventory.entities';
+import { Batch, ItemStoreCost, StockBalance, StockReservation, StockTransaction, StorePeriodLock } from './inventory.entities';
 import { InventoryService } from './inventory.service';
 import { ReceiptsService } from './receipts.service';
 import { StockTakesService } from './stocktakes.service';
@@ -36,7 +37,9 @@ import { TransfersService } from './transfers.service';
       StockTransaction,
       ItemStoreCost,
       StorePeriodLock,
+      StockReservation,
       AdjustmentReason,
+      ReturnReason,
       StockReceipt,
       StockReceiptLine,
       StockAdjustment,

@@ -37,6 +37,42 @@ class Sql {
   }
 }
 
+/**
+ * Who/what/when/from/to of ledger rows. `party` is the other side of the
+ * movement (department, other store, supplier or reason); `here` is the store
+ * and bin of the row. Inflows go party → here, outflows here → party.
+ */
+const MOVEMENT_JOINS = `
+  JOIN store hs ON hs.id = t.store_id
+  LEFT JOIN bin bn ON bn.id = t.bin_id
+  LEFT JOIN store cs ON cs.id = t.counterpart_store_id
+  LEFT JOIN department d ON d.id = t.department_id
+  LEFT JOIN goods_received_note g ON t.source_doc_type = 'GRN' AND g.id = t.source_doc_id
+  LEFT JOIN supplier gs ON gs.id = g.supplier_id
+  LEFT JOIN return_to_supplier rts ON t.source_doc_type = 'RTS' AND rts.id = t.source_doc_id
+  LEFT JOIN supplier rs ON rs.id = rts.supplier_id
+  LEFT JOIN app_user u ON u.id = t.user_id
+  LEFT JOIN app_user w ON w.id = t.second_signer_id`;
+const MOVEMENT_PARTY = `CASE
+    WHEN t.department_id IS NOT NULL THEN d.name || ' (' || d.cost_centre_code || ')'
+    WHEN t.counterpart_store_id IS NOT NULL THEN cs.name
+    WHEN gs.id IS NOT NULL THEN gs.name
+    WHEN rs.id IS NOT NULL THEN rs.name
+    WHEN t.txn_type = 'OPENING' THEN 'Opening balance'
+    WHEN t.reason_code IS NOT NULL THEN 'Reason ' || t.reason_code
+    ELSE t.source_doc_type END`;
+const MOVEMENT_HERE = `hs.name || COALESCE(' / ' || bn.code, '')`;
+const MOVEMENT_COLUMNS = `
+  t.id, t.txn_type AS "txnType", to_char(t.effective_date, 'YYYY-MM-DD') AS "effectiveDate", t.posted_at AS "postedAt",
+  t.source_doc_type AS "sourceDocType", t.source_doc_no AS "sourceDocNo", t.source_doc_id AS "sourceDocId",
+  t.store_id AS "storeId", hs.code AS "storeCode", t.batch_id AS "batchId", t.bin_id AS "binId", bn.code AS "binCode",
+  t.quantity::float AS "quantity", t.in_transit_delta::float AS "inTransitDelta", t.unit_cost::float AS "unitCost",
+  t.value_delta::float AS "valueDelta", t.reason_code AS "reasonCode", t.fefo_override_reason AS "fefoOverrideReason",
+  cs.name AS "counterpartStore", d.name AS "department", t.patient_ref AS "patientRef",
+  u.username AS "user", w.username AS "secondSigner",
+  CASE WHEN t.quantity + t.in_transit_delta >= 0 THEN ${MOVEMENT_PARTY} ELSE ${MOVEMENT_HERE} END AS "from",
+  CASE WHEN t.quantity + t.in_transit_delta >= 0 THEN ${MOVEMENT_HERE} || CASE WHEN t.quantity = 0 THEN ' (in transit)' ELSE '' END ELSE ${MOVEMENT_PARTY} END AS "to"`;
+
 export const addDays = (date: string, days: number) => {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -163,7 +199,8 @@ export class InventoryService {
                sb.item_id AS "itemId", i.code AS "itemCode", i.name AS "itemName", g.inn_name AS "genericName", u.code AS "uom",
                i.is_controlled AS "isControlled", i.is_cold_chain AS "isColdChain", i.reorder_level::float AS "reorderLevel",
                SUM(sb.on_hand)::float AS "onHand", SUM(sb.reserved)::float AS "reserved", SUM(sb.in_transit)::float AS "inTransit",
-               COALESCE(SUM(sb.on_hand - sb.reserved) FILTER (WHERE b.hold_status = 'NONE' AND (b.expiry_date IS NULL OR b.expiry_date > ${todayParam}::date)), 0)::float AS "usable",
+               COALESCE(SUM(sb.on_hand - sb.reserved) FILTER (WHERE b.hold_status = 'NONE' AND NOT COALESCE(bn.is_quarantine, false)
+                 AND (b.expiry_date IS NULL OR b.expiry_date > ${todayParam}::date)), 0)::float AS "usable",
                COUNT(DISTINCT sb.batch_id)::int AS "batches",
                to_char(MIN(b.expiry_date) FILTER (WHERE sb.on_hand > 0), 'YYYY-MM-DD') AS "nearestExpiry",
                ${showValue ? `SUM((sb.on_hand + sb.in_transit) * ${unitCost})::float` : 'NULL'} AS "value"
@@ -177,7 +214,7 @@ export class InventoryService {
       const offset = px((query.page - 1) * query.pageSize);
       sql = `
         SELECT sb.id, sb.store_id AS "storeId", s.code AS "storeCode", s.name AS "storeName",
-               sb.bin_id AS "binId", bn.code AS "binCode",
+               sb.bin_id AS "binId", bn.code AS "binCode", COALESCE(bn.is_quarantine, false) AS "inQuarantine",
                sb.item_id AS "itemId", i.code AS "itemCode", i.name AS "itemName", g.inn_name AS "genericName", u.code AS "uom",
                i.is_controlled AS "isControlled", i.is_cold_chain AS "isColdChain",
                sb.batch_id AS "batchId", b.batch_no AS "batchNo", to_char(b.expiry_date, 'YYYY-MM-DD') AS "expiryDate",
@@ -220,19 +257,11 @@ export class InventoryService {
     const limit = q.p(query.pageSize);
     const offset = q.p((query.page - 1) * query.pageSize);
     const rows = await this.dataSource.query(
-      `SELECT t.id, t.txn_type AS "txnType", to_char(t.effective_date, 'YYYY-MM-DD') AS "effectiveDate", t.posted_at AS "postedAt",
-              t.source_doc_type AS "sourceDocType", t.source_doc_no AS "sourceDocNo", t.source_doc_id AS "sourceDocId",
-              t.batch_id AS "batchId", b.batch_no AS "batchNo", t.bin_id AS "binId", bn.code AS "binCode",
-              t.quantity::float AS "quantity", t.in_transit_delta::float AS "inTransitDelta", t.unit_cost::float AS "unitCost",
-              t.value_delta::float AS "valueDelta", t.reason_code AS "reasonCode", t.fefo_override_reason AS "fefoOverrideReason",
-              cs.name AS "counterpartStore", u.username AS "user", w.username AS "secondSigner",
+      `SELECT ${MOVEMENT_COLUMNS}, b.batch_no AS "batchNo",
               (${opening} + SUM(t.quantity) OVER (ORDER BY t.posted_at, t.id))::float AS "balance"
          FROM stock_transaction t
          JOIN batch b ON b.id = t.batch_id
-         LEFT JOIN bin bn ON bn.id = t.bin_id
-         LEFT JOIN store cs ON cs.id = t.counterpart_store_id
-         LEFT JOIN app_user u ON u.id = t.user_id
-         LEFT JOIN app_user w ON w.id = t.second_signer_id
+         ${MOVEMENT_JOINS}
          ${q.whereSql}
         ORDER BY t.posted_at, t.id
         LIMIT ${limit} OFFSET ${offset}`,
@@ -243,6 +272,59 @@ export class InventoryService {
       q.params.slice(0, -2),
     );
     return { items: rows, total: n, page: query.page, pageSize: query.pageSize, openingBalance: opening };
+  }
+
+  /**
+   * Batch trace: every movement of one batch in the stores the user can see
+   * (receipt from the supplier, transfers, issues to departments/patients,
+   * returns), plus where it is now.
+   */
+  async batchTrace(batchId: string) {
+    const [batch] = await this.dataSource.query(
+      `SELECT b.id, b.batch_no AS "batchNo", to_char(b.expiry_date, 'YYYY-MM-DD') AS "expiryDate",
+              to_char(b.manufacture_date, 'YYYY-MM-DD') AS "manufactureDate", b.hold_status AS "holdStatus", b.hold_reason AS "holdReason",
+              i.id AS "itemId", i.code AS "itemCode", i.name AS "itemName", u.code AS "uom", i.is_controlled AS "isControlled"
+         FROM batch b JOIN item i ON i.id = b.item_id JOIN unit_of_measure u ON u.id = i.base_uom_id
+        WHERE b.id = $1`,
+      [batchId],
+    );
+    if (!batch) throw new NotFoundException('Batch not found');
+    const q = new Sql();
+    q.and(`t.batch_id = ${q.p(batchId)}`);
+    const scope = StoreScope.current();
+    if (scope !== null) q.and(`t.store_id = ANY(${q.p(scope)}::uuid[])`);
+    const movements = await this.dataSource.query(
+      `SELECT ${MOVEMENT_COLUMNS}, hs.name AS "storeName"
+         FROM stock_transaction t ${MOVEMENT_JOINS}
+         ${q.whereSql}
+        ORDER BY t.posted_at, t.id
+        LIMIT 5000`,
+      q.params,
+    );
+    const locations = await this.dataSource.query(
+      `SELECT s.code AS "storeCode", s.name AS "storeName", bn.code AS "binCode", COALESCE(bn.is_quarantine, false) AS "inQuarantine",
+              sb.on_hand::float AS "onHand", sb.reserved::float AS "reserved", sb.in_transit::float AS "inTransit"
+         FROM stock_balance sb JOIN store s ON s.id = sb.store_id LEFT JOIN bin bn ON bn.id = sb.bin_id
+        WHERE sb.batch_id = $1 AND (sb.on_hand <> 0 OR sb.in_transit <> 0 OR sb.reserved <> 0)
+          ${scope !== null ? 'AND sb.store_id = ANY($2::uuid[])' : ''}
+        ORDER BY s.name, bn.code`,
+      scope !== null ? [batchId, scope] : [batchId],
+    );
+    const sum = (types: string[]) =>
+      Math.round(movements.filter((r: { txnType: string }) => types.includes(r.txnType)).reduce((s: number, r: { quantity: number }) => s + r.quantity, 0) * 10_000) / 10_000;
+    return {
+      batch,
+      locations,
+      movements,
+      totals: {
+        received: sum(['RECEIPT', 'OPENING']),
+        issued: -sum(['ISSUE']),
+        returnedFromDepartments: sum(['RETURN_IN']),
+        returnedToSupplier: -sum(['SUPPLIER_RETURN']),
+        adjusted: sum(['ADJUSTMENT', 'STOCK_TAKE']),
+      },
+      patients: [...new Set(movements.map((r: { patientRef: string | null }) => r.patientRef).filter(Boolean))],
+    };
   }
 
   /** Stock value as at a date: Σ ledger value up to that date (on hand + in transit). */
@@ -370,6 +452,28 @@ export class InventoryService {
         `SELECT COUNT(*)::int AS checked FROM stock_balance ${storeId ? 'WHERE store_id = $1' : ''}`,
         storeId ? [storeId] : [],
       );
+      // Reserved quantities must equal the open reservations on each balance row.
+      const reservationDrift: { id: string; reserved: number; reservations: number }[] = await m.query(
+        `WITH r AS (
+           SELECT store_id, bin_id, batch_id, SUM(quantity) AS q FROM stock_reservation
+            WHERE released_at IS NULL ${storeId ? 'AND store_id = $1' : ''}
+            GROUP BY store_id, bin_id, batch_id
+         )
+         SELECT sb.id, sb.reserved::float AS reserved, COALESCE(r.q, 0)::float AS reservations
+           FROM stock_balance sb
+           LEFT JOIN r ON r.store_id = sb.store_id AND r.bin_id IS NOT DISTINCT FROM sb.bin_id AND r.batch_id = sb.batch_id
+          WHERE sb.reserved <> COALESCE(r.q, 0) ${storeId ? 'AND sb.store_id = $1' : ''}`,
+        storeId ? [storeId] : [],
+      );
+      if (repair && reservationDrift.length) {
+        for (const d of reservationDrift) {
+          await m.query(`UPDATE stock_balance SET reserved = $2, updated_at = now() WHERE id = $1`, [d.id, d.reservations]);
+        }
+        await this.audit.record(
+          { action: AuditAction.UPDATE, entityType: 'StockBalance', entityId: null, before: { reservationDrift }, after: { repaired: reservationDrift.length } },
+          m,
+        );
+      }
       if (repair && drift.length) {
         for (const d of drift) {
           await m.query(
@@ -383,7 +487,14 @@ export class InventoryService {
           m,
         );
       }
-      return { checked, driftCount: drift.length, repaired: repair ? drift.length : 0, drift };
+      return {
+        checked,
+        driftCount: drift.length,
+        repaired: repair ? drift.length + reservationDrift.length : 0,
+        drift,
+        reservationDriftCount: reservationDrift.length,
+        reservationDrift,
+      };
     });
   }
 }

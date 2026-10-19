@@ -63,14 +63,16 @@ export function allocateFefo(candidates: FefoCandidate[], quantity: number, asOf
   return { allocations, allocated, shortfall: Math.max(0, remaining) };
 }
 
-/** Loads the candidates for an item in a store. */
+/** Loads the candidates for an item in a store (stock in quarantine bins is never a candidate). */
 export async function loadFefoCandidates(manager: EntityManager, itemId: string, storeId: string): Promise<FefoCandidate[]> {
   const rows = await manager.query(
     `SELECT sb.batch_id, sb.bin_id, b.batch_no, to_char(b.expiry_date, 'YYYY-MM-DD') AS expiry_date,
             to_char(b.received_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS received_at,
             b.hold_status, (sb.on_hand - sb.reserved) AS available
        FROM stock_balance sb JOIN batch b ON b.id = sb.batch_id
-      WHERE sb.item_id = $1 AND sb.store_id = $2 AND sb.on_hand - sb.reserved > 0`,
+       LEFT JOIN bin bn ON bn.id = sb.bin_id
+      WHERE sb.item_id = $1 AND sb.store_id = $2 AND sb.on_hand - sb.reserved > 0
+        AND NOT COALESCE(bn.is_quarantine, false)`,
     [itemId, storeId],
   );
   return rows.map(

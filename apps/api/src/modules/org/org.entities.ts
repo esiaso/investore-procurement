@@ -84,6 +84,10 @@ export class Bin extends AppBaseEntity {
   @Column({ type: 'varchar', length: 100, nullable: true })
   zone: string | null;
 
+  /** Stock here (damaged/expired returns) is never picked, issued or transferred. */
+  @Column({ type: 'boolean', default: false })
+  isQuarantine: boolean;
+
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 }

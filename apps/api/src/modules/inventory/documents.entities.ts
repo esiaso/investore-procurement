@@ -2,6 +2,7 @@ import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm
 import {
   AdjustmentDirection,
   AdjustmentStatus,
+  ReturnReasonKind,
   StockReceiptType,
   StockTakeStatus,
   StockTakeType,
@@ -25,6 +26,23 @@ export class AdjustmentReason extends AppBaseEntity {
 
   @Column({ type: 'enum', enum: AdjustmentDirection, enumName: 'adjustment_direction' })
   direction: AdjustmentDirection;
+
+  @Column({ type: 'boolean', default: true })
+  isActive: boolean;
+}
+
+/** Configurable reason codes for department returns and returns to suppliers. */
+@Entity('return_reason')
+export class ReturnReason extends AppBaseEntity {
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 40 })
+  code: string;
+
+  @Column({ type: 'varchar', length: 200 })
+  name: string;
+
+  @Column({ type: 'enum', enum: ReturnReasonKind, enumName: 'return_reason_kind' })
+  kind: ReturnReasonKind;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
