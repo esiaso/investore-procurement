@@ -1,4 +1,12 @@
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import HandshakeIcon from '@mui/icons-material/Handshake';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import CategoryIcon from '@mui/icons-material/Category';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
@@ -29,6 +37,14 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: <DashboardIcon />, permissions: [], section: '' },
+  { label: 'Approvals', path: '/approvals', icon: <TaskAltIcon />, permissions: [], section: '' },
+  { label: 'Requisitions', path: '/requisitions', icon: <PlaylistAddIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
+  { label: 'RFQs', path: '/rfqs', icon: <RequestQuoteIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
+  { label: 'Purchase orders', path: '/purchase-orders', icon: <ShoppingCartIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
+  { label: 'Goods received', path: '/grns', icon: <LocalShippingIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
+  { label: 'Invoices', path: '/invoices', icon: <ReceiptLongIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
+  { label: 'Suppliers', path: '/suppliers', icon: <HandshakeIcon />, permissions: [Permissions.SUPPLIERS_READ], section: 'Procurement' },
+  { label: 'Budgets', path: '/budgets', icon: <AccountBalanceIcon />, permissions: [Permissions.BUDGETS_READ], section: 'Procurement' },
   { label: 'Stock on hand', path: '/stock', icon: <WarehouseIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Receipts', path: '/receipts', icon: <MoveToInboxIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Transfers', path: '/transfers', icon: <SwapHorizIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },

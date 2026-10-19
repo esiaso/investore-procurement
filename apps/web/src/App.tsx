@@ -5,6 +5,14 @@ import { PermissionCode, Permissions } from '@sil/shared';
 import { useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { AdjustmentsPage } from './inventory/AdjustmentsPage';
+import { ApprovalsPage } from './purchasing/ApprovalsPage';
+import { BudgetsPage } from './purchasing/BudgetsPage';
+import { GrnDetailPage, GrnFormPage, GrnsPage } from './purchasing/GrnPages';
+import { InvoiceDetailPage, InvoiceFormPage, InvoicesPage } from './purchasing/InvoicePages';
+import { PurchaseOrderDetailPage, PurchaseOrdersPage } from './purchasing/PoPages';
+import { RequisitionDetailPage, RequisitionFormPage, RequisitionsPage } from './purchasing/RequisitionsPages';
+import { RfqDetailPage, RfqsPage } from './purchasing/RfqPages';
+import { SuppliersPage } from './purchasing/SuppliersPage';
 import { ReceiptsPage } from './inventory/ReceiptsPage';
 import { StockPage } from './inventory/StockPage';
 import { StockTakeDetailPage, StockTakesPage } from './inventory/StockTakesPage';
@@ -50,6 +58,23 @@ export function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="requisitions" element={guarded([Permissions.PURCHASING_READ], <RequisitionsPage />)} />
+        <Route path="requisitions/new" element={guarded([Permissions.PURCHASING_REQUISITION], <RequisitionFormPage />)} />
+        <Route path="requisitions/:id/edit" element={guarded([Permissions.PURCHASING_REQUISITION], <RequisitionFormPage />)} />
+        <Route path="requisitions/:id" element={guarded([Permissions.PURCHASING_READ], <RequisitionDetailPage />)} />
+        <Route path="rfqs" element={guarded([Permissions.PURCHASING_READ], <RfqsPage />)} />
+        <Route path="rfqs/:id" element={guarded([Permissions.PURCHASING_READ], <RfqDetailPage />)} />
+        <Route path="purchase-orders" element={guarded([Permissions.PURCHASING_READ], <PurchaseOrdersPage />)} />
+        <Route path="purchase-orders/:id" element={guarded([Permissions.PURCHASING_READ], <PurchaseOrderDetailPage />)} />
+        <Route path="grns" element={guarded([Permissions.PURCHASING_READ], <GrnsPage />)} />
+        <Route path="grns/new" element={guarded([Permissions.PURCHASING_RECEIVE], <GrnFormPage />)} />
+        <Route path="grns/:id" element={guarded([Permissions.PURCHASING_READ], <GrnDetailPage />)} />
+        <Route path="invoices" element={guarded([Permissions.PURCHASING_READ], <InvoicesPage />)} />
+        <Route path="invoices/new" element={guarded([Permissions.PURCHASING_INVOICE], <InvoiceFormPage />)} />
+        <Route path="invoices/:id" element={guarded([Permissions.PURCHASING_READ], <InvoiceDetailPage />)} />
+        <Route path="suppliers" element={guarded([Permissions.SUPPLIERS_READ], <SuppliersPage />)} />
+        <Route path="budgets" element={guarded([Permissions.BUDGETS_READ], <BudgetsPage />)} />
         <Route path="stock" element={guarded([Permissions.INVENTORY_READ], <StockPage />)} />
         <Route path="receipts" element={guarded([Permissions.INVENTORY_READ], <ReceiptsPage />)} />
         <Route path="transfers" element={guarded([Permissions.INVENTORY_READ], <TransfersPage />)} />

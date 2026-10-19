@@ -23,6 +23,7 @@ import {
 import { Fragment, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { NotificationBell } from '../purchasing/NotificationBell';
 import { visibleNav } from './nav';
 
 const DRAWER_WIDTH = 240;
@@ -90,6 +91,7 @@ export function AppLayout() {
           <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
             Procurement & Inventory
           </Typography>
+          <NotificationBell />
           <Tooltip title={user?.roles.map((r) => r.name).join(', ') ?? ''}>
             <IconButton color="inherit" onClick={(e) => setMenuAnchor(e.currentTarget)} aria-label="Account menu">
               <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main', fontSize: 14 }}>
