@@ -233,13 +233,88 @@ dialogs and Esc closes them.
 
 ---
 
+## Inventory (slice 2)
+
+All stock lives in base units in `stock_balance` (store × bin × batch: `on_hand ≥ 0`,
+`reserved`, `in_transit`). Every change is explained by rows in `stock_transaction`, an
+append-only ledger (a trigger blocks UPDATE/DELETE/TRUNCATE). The only writer is
+`postMovements()` (`apps/api/src/modules/inventory/posting.ts`). In the caller's
+transaction it locks every touched balance row (and the WAC row) with
+`SELECT … FOR UPDATE` in a fixed order, then writes the ledger and the balances
+together. It rejects:
+
+* negative on-hand or in-transit stock (also enforced by CHECK constraints);
+* consuming expired batches, or batches on hold (quarantine / recall / expired);
+* receiving an already-expired batch (opening balances may load one);
+* postings dated on or before the store's **period lock** date;
+* items frozen by an active **stock take** (a full count freezes the whole store);
+* **controlled drugs** without a second, different signatory who holds
+  `inventory.handle_controlled`, and controlled or **cold-chain** items moved by users
+  without `inventory.handle_controlled` / `inventory.handle_cold_chain`.
+
+The invariant *Σ ledger = balance* is tested with fast-check property tests, and can be
+checked at any time:
+
+* `GET /api/v1/inventory/reconciliation[?storeId=]` reports drift;
+  `POST …/reconciliation/repair` rewrites drifted balances from the ledger (audited).
+* `pnpm --filter @sil/api inventory:reconcile [-- --store <id>] [-- --repair]` is the job
+  form; it exits 1 on drift. It becomes a BullMQ repeatable job when the queue arrives.
+
+| Feature | Endpoints (`/api/v1/inventory/…`) | Notes |
+|---|---|---|
+| Stock on hand | `GET stock?storeId&binId&itemId&genericId&batchId&categoryId&search&holdStatus&expired&expiringWithinDays&groupBy=batch\|item` | Values shown only with `inventory.valuation`. |
+| Bin card | `GET ledger?storeId&itemId[&batchId&from&to]` | Running balance. |
+| FEFO | `GET fefo?storeId&itemId&quantity[&asOf]` | Earliest non-expired, not-held batch first (tie-break: received date); spans batches and bins; reports shortfall. |
+| Valuation | `GET valuation?groupBy=store\|category\|item&asOf` | Σ ledger value up to the date. WAC per item per store by default; FIFO (batch cost) via `inventory.valuationMethod`. |
+| Batches / holds | `GET batches`, `PUT batches/:id/hold` | `inventory.batch_hold`. |
+| Period locks | `GET/PUT period-locks` | `inventory.period_lock`. |
+| Receipts | `GET/POST receipts` | Opening balances and a temporary stock-in until GRNs (slice 3). Creates batches. |
+| Adjustments | `POST adjustments`, `…/:id/submit\|approve\|reject`, `GET adjustments/reasons` | Configurable reason codes with direction. Approver ≠ submitter. Above `inventory.adjustmentSecondApprovalThreshold`, a second, different approver is required. Posts on final approval. |
+| Transfers | `POST transfers`, `…/:id/dispatch\|receive\|cancel` | Requested by the receiving store. Dispatch picks by FEFO and moves stock to in-transit at the destination; manual picks need `inventory.override_fefo` plus a reason (recorded on the ledger). Receipt can be partial: the shortfall is written off from in-transit with a reason code. |
+| Stock takes | `POST stock-takes`, `…/:id/freeze\|counts\|submit\|approve\|cancel` | Full or cycle. Freeze takes a snapshot and blocks movements. Blind counts hide system quantities while counting. Variance review, then approval by someone other than the submitter, which posts the variances. |
+
+New settings: `inventory.valuationMethod` (`WAC`/`FIFO`),
+`inventory.adjustmentSecondApprovalThreshold` (currency) and
+`inventory.expiryWarningDays` (`[30, 60, 90, 180]`). Reason codes live in
+`adjustment_reason`. New permission codes are granted to the built-in roles once, when
+the seed first sees them.
+
+The sample stock seed puts opening balances on every seeded item across the stores:
+454 batches (11 quarantined) with expiries spread from already expired through ≤30, ≤60,
+≤90 and ≤180 days to two years out. Controlled drugs sit in CD bins and cold-chain items
+in fridges.
+
+### Load test
+
+`pnpm --filter @sil/api load-test` builds a separate database (`LOAD_DATABASE_URL`,
+default `…/silp_load`) holding the sample hospital, ~32k extra balance rows and
+**1,000,001 ledger rows**, then times the endpoints through the full HTTP stack. Results
+on a developer laptop (Docker Desktop on Windows), median of 3:
+
+| Query | ms |
+|---|---:|
+| Stock on hand, all stores, batch level (page 1) | 89 |
+| Stock on hand, all stores, item level (page 1) | 56 |
+| Stock on hand, main store, page 20 | 53 |
+| Stock on hand, search "amox" | 122 |
+| Stock on hand, by generic | 37 |
+| Stock on hand, by category, item level | 59 |
+| Stock on hand, expiring within 90 days | 49 |
+| Bin card, busiest item (page 1 / last page) | 19 / 25 |
+| Valuation by store, today | 480 |
+| Valuation by category, 1 year ago | 332 |
+| Reconciliation (full ledger scan) | 1051 |
+
 ## Known limitations / next slices
 
 * Redis is only the session store for now; BullMQ jobs, Mailpit and MinIO arrive with
   the slices that need them (notifications, attachments).
-* Stock (batches, expiry, movements), requisitions, purchasing, GRNs, POS and the
-  supplier portal are later slices. The numbering schemes for PR/PO/GRN/SR/ISS/TRF/ADJ
-  are already seeded.
+* Requisitions, purchasing, GRNs (replacing the temporary receipts), issues to
+  departments and patients, POS and the supplier portal are later slices. `reserved`
+  exists on balances but nothing reserves stock yet.
+* The `uq_stock_balance_location` constraint (`UNIQUE NULLS NOT DISTINCT`) and the
+  ledger trigger are hand-written in the inventory migration; TypeORM cannot express
+  them. Review any future `migration:generate` output so it does not drop them.
 * The API image copies the full workspace (including dev dependencies) for simplicity;
   slim it with `pnpm deploy` before production.
 * Money and quantities are `NUMERIC(18,4)` in the database and JavaScript numbers in the
