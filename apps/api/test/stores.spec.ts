@@ -442,7 +442,7 @@ describe('Internal requisitions, issues and returns', () => {
 
   it('keeps the ledger, balances and reservations reconciled', async () => {
     const r = await c.scm.get(`/inventory/reconciliation?storeId=${ids.MS}`).expect(200);
-    expect(r.body).toMatchObject({ driftCount: 0, reservationDriftCount: 0 });
+    expect(r.body).toMatchObject({ driftCount: 0, reservationDriftCount: 0, overReservedCount: 0 });
     const [neg] = await ctx.ds.query(`SELECT count(*)::int AS n FROM stock_balance WHERE on_hand < 0 OR reserved < 0 OR reserved > on_hand`);
     expect(neg.n).toBe(0);
   });

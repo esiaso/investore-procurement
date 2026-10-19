@@ -487,8 +487,14 @@ export class InventoryService {
           m,
         );
       }
+      // Reserved above on hand (an adjustment or count removed reserved stock): re-plan the requisitions.
+      const [{ over }] = await m.query(
+        `SELECT COUNT(*)::int AS over FROM stock_balance WHERE reserved > on_hand ${storeId ? 'AND store_id = $1' : ''}`,
+        storeId ? [storeId] : [],
+      );
       return {
         checked,
+        overReservedCount: over,
         driftCount: drift.length,
         repaired: repair ? drift.length + reservationDrift.length : 0,
         drift,

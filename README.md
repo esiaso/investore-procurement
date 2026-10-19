@@ -3,7 +3,11 @@
 A procurement, supply chain and inventory system for a private hospital in Kenya.
 **Slice 1** covers the foundations: authentication and RBAC, organisation structure,
 audit trail, configuration (tax, numbering, locale) and the product catalog
-(generics ↔ brands, units, bulk import).
+(generics ↔ brands, units, bulk import). **Slice 2** adds inventory (ledger, FEFO,
+transfers, adjustments, stock takes), **slice 3** procurement (approvals, suppliers,
+budgets, PR → RFQ → PO → GRN → invoice), and **slice 4** internal requisitions from
+wards, reservations, issues, back-orders, department and supplier returns and
+departmental consumption.
 
 Defaults are KES, VAT 16% with zero-rated and exempt categories, Africa/Nairobi time,
 DD/MM/YYYY dates and a January financial-year start. **All of these live in database
@@ -50,7 +54,10 @@ value is in [`.env.example`](.env.example) and in the `docker-compose.yml` defau
 | `pharm.tech` | Pharmacy Technician | OPD Pharmacy |
 | `cashier` | POS Cashier | OPD Pharmacy |
 | `quality` | Cold-chain / Quality Officer | all |
-| `ward.incharge` | Department / Ward In-charge | – |
+| `ward.incharge` | Department / Ward In-charge (Medical Ward) | – |
+| `ward.nurse` | Department / Ward Staff (Medical Ward) | – |
+| `surg.incharge`, `surg.nurse` | In-charge / staff, Surgical Ward | – |
+| `mat.incharge`, `mat.nurse` | In-charge / staff, Maternity | – |
 | `finance` | Finance / Accounts | all |
 | `accountant` | Finance / Accounts (second user, so capture ≠ approval) | all |
 | `tender` | Tender / Evaluation Committee Member | – |
@@ -349,6 +356,7 @@ Default workflows (KES, VAT inclusive; edit them under **Approvals → Workflows
 | PO-2 | Purchase order | 500,000 – 5,000,000 | Procurement Manager → Finance |
 | PO-3 | Purchase order | ≥ 5,000,000 | Procurement Manager → Finance → Hospital Management |
 | INV-1 | Supplier invoice | any | Finance |
+| SR-1 | Internal requisition (slice 4) | any | Ward in-charge **of the requesting department** |
 
 Stock adjustments (slice 2) keep their own two-level approval; they are **not yet**
 moved onto this engine. That needs a data migration of open adjustments and is left as
@@ -444,14 +452,126 @@ and documents at every stage:
 * a part-delivered contract PO with an invoice flagged for a price variance;
 * an emergency receipt awaiting regularisation.
 
+## Wards, issues and returns (slice 4)
+
+Departments and wards request stock from a store or pharmacy, the store issues it
+FEFO, and its cost is charged to the department's cost centre.
+
+### Internal requisitions (S11)
+
+* Raised by department staff (`inventory.requisition`) for **their own department**:
+  lines from the item master (base units), priority, required-by date and an optional
+  patient/encounter reference per line (free text until the HMIS link in slice 9).
+* Approved through the approval engine. The default workflow `SR-1` has one step,
+  **"Department in-charge"**. It uses a new approver type, `DEPARTMENT_ROLE`: holders of
+  the role who belong to the requesting department, so the Surgical Ward in-charge
+  cannot approve a Medical Ward requisition. The requester can never approve their
+  own. Workflows can be edited under Approvals → Workflows, for example by value
+  band or for controlled-drug categories.
+* **Reservations.** On approval (`inventory.reserveOnApproval`), the outstanding
+  quantity is reserved FEFO on specific batch/bin rows (`stock_balance.reserved`, with
+  a `stock_reservation` row for each pick). Available = on hand − reserved. Issues,
+  transfers and returns to supplier cannot take reserved stock. Adjustments and stock
+  takes record physical facts and are not limited. Reservations are released on
+  issue or cancellation and re-planned after each issue. **Re-plan reservations**
+  tops them up when new stock arrives.
+* Statuses: draft → pending approval → approved → partly issued (back-order) → issued,
+  or **closed** when a back-order is cancelled with a reason.
+
+### Issue vouchers
+
+`GET /store-requisitions/:id/issue-plan` gives the FEFO picks for everything
+outstanding, plus every usable batch/bin. `POST /store-requisitions/:id/issues`
+posts the voucher.
+
+* **FEFO**: earliest usable expiry first. Expired stock, held batches and stock in
+  quarantine bins are never issued, even when picked by hand. Picks that differ from
+  FEFO need `inventory.override_fefo` and a reason, which is recorded on the voucher and
+  the ledger.
+* **Partial issue**: by default everything usable is issued. The rest stays on
+  **back-order** (`GET /store-requisitions/backorders`, "Back-orders" screen) and is
+  filled later or cancelled. Asking for a specific quantity that isn't available is
+  refused, so stock never goes negative.
+* **Scan to confirm**: each pick can be confirmed by scanning the item barcode, GTIN or
+  code, or the batch number. A code that doesn't match is refused. The setting
+  `inventory.issueScanConfirm` decides whether scanning is `OPTIONAL` (default) or
+  `REQUIRED` for every pick.
+* Controlled drugs need a second signatory (witness username + password). The issuer
+  must hold `inventory.handle_controlled`, and cold-chain items need
+  `inventory.handle_cold_chain`, as for transfers.
+* Posting writes `ISSUE` ledger rows charged to the department, valued at WAC (or FIFO
+  per `inventory.valuationMethod`), and carries the patient reference.
+* The voucher can be printed as a PDF (`GET /issues/:id/pdf`), with batch, expiry, bin,
+  value and signature blocks.
+
+### Department returns
+
+* Raised by the department (or the store) from the issued lines that can still be
+  returned. Each line has a reason code and a condition. The store posts the return
+  (`inventory.dept_return`).
+* **Resaleable** stock goes back on the same batch, to a usable bin. Expired or held
+  batches cannot be returned as resaleable. **Damaged/expired** stock goes to the
+  store's quarantine bin (`inventory.quarantineBinCode`, created on first use). Stock
+  there is never picked, issued or transferred.
+* A department cannot return more than was issued to it. The department is credited at
+  the cost it was charged (`RETURN_IN` ledger rows).
+
+### Returns to supplier
+
+* **From stock**: supplier, store, reason code and batch lines. The GRN and PO are found
+  automatically from the batch, or given explicitly. **Dispatch** posts
+  `SUPPLIER_RETURN` out of stock. Expired, held and quarantined stock may go back;
+  reserved stock may not. A return cannot exceed what was accepted on that GRN line.
+* **GRN inspection rejects** create a dispatched return automatically (those goods
+  never entered stock). Reason code: `purchasing.grnRejectReturnReason`.
+* The return note is the hospital's debit note. The supplier's **credit note** (number,
+  date, amount) is recorded against it, and any difference is shown. The return is
+  linked into the document chain (PO → GRN → RTS). Existing slice-3 return notes are
+  converted by the migration.
+
+### Consumption and traceability
+
+* `GET /consumption?from&to&groupBy=department|period|item|patient[&departmentId&storeId&itemId&categoryId&patientRef]`
+  reports issues less returns, at the cost posted, per department/cost centre, month,
+  item or patient reference. `format=csv` downloads the same report. It needs
+  `inventory.consumption`. Users without `store.all` see their own department only.
+* The **bin card** now shows from/to (department, other store, supplier or reason),
+  patient and witness. `GET /inventory/batches/:id/trace` (the "Batch trace" screen) lists
+  every movement of a batch (who, what, when, from, to, document), where it is now and
+  which patients received it.
+* Reconciliation also checks that reserved quantities equal the open reservations, and
+  the repair fixes them.
+
+### Reference data and settings
+
+New permissions: `inventory.requisition`, `inventory.issue`, `inventory.dept_return`,
+`inventory.supplier_return`, `inventory.consumption`. There is a new role, **Department /
+Ward Staff**, and sample users `ward.nurse`, `surg.incharge`, `surg.nurse`,
+`mat.incharge` and `mat.nurse`.
+
+There are configurable return reason codes (`GET/POST/PUT /return-reasons`: department,
+supplier or both). New settings: `inventory.reserveOnApproval` (true),
+`inventory.issueScanConfirm` (`OPTIONAL`), `inventory.quarantineBinCode` (`QUARANTINE`)
+and `purchasing.grnRejectReturnReason` (`INSPECTION_REJECT`). The numbering scheme
+`DRT` covers department returns; `SR` and `ISS` already existed.
+
+Sample data covers three wards: requisitions at every stage (draft, pending,
+rejected, approved and reserved, fully issued with a patient line, and partly issued
+with a back-order), a posted department return (resaleable + damaged to quarantine)
+and a draft one, and a supplier return of the damaged stock with a credit note.
+
 ## Known limitations / next slices
 
 * Redis is only the session store for now. The mail outbox and reconciliation run as
   in-process pollers or scripts; BullMQ and MinIO arrive with the slices that need them.
-* Issues to departments and patients, POS, full contracts, eTIMS verification and the
-  supplier portal are later slices. `reserved` exists on balances but nothing reserves
-  stock yet. The slice-2 stock receipt is still available for opening balances; normal
-  purchases go through GRNs.
+* Dispensing to patients (POS), full contracts, eTIMS verification and the supplier
+  portal are later slices. Patient references on requisitions are free text until the
+  HMIS link (slice 9). The slice-2 stock receipt is still available for opening
+  balances; normal purchases go through GRNs.
+* Reservations are re-planned on issue, cancellation and on demand, not automatically
+  when new stock is received. An adjustment or count that removes reserved stock leaves
+  the reservation in place until the next issue re-plans it (reconciliation reports
+  such rows as `overReservedCount`).
 * Supplier documents are metadata only; file uploads arrive with MinIO.
 * The `uq_stock_balance_location` constraint (`UNIQUE NULLS NOT DISTINCT`) and the
   ledger trigger are hand-written in the inventory migration; TypeORM cannot express
