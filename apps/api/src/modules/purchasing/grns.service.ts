@@ -23,6 +23,7 @@ import { SettingsService } from '../settings/settings.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { TaxService } from '../tax/tax.service';
 import { PurchaseOrdersService } from './purchase-orders.service';
+import { SupplierReturnsService } from './supplier-returns.service';
 import { CreateGrnDto, DocListQueryDto, InspectGrnDto, PostGrnDto } from './purchasing.dto';
 import { GoodsReceivedNote, GrnLine, PurchaseOrder, PurchaseOrderLine, ReturnToSupplier } from './purchasing.entities';
 
@@ -48,16 +49,13 @@ export class GrnsService implements OnModuleInit {
     private readonly units: UnitsService,
     private readonly tax: TaxService,
     private readonly settings: SettingsService,
+    private readonly supplierReturns: SupplierReturnsService,
   ) {}
 
   onModuleInit() {
     this.links.registerResolver(DocumentType.GOODS_RECEIVED_NOTE, async (ids) => {
       const rows = await this.ds.getRepository(GoodsReceivedNote).findBy({ id: In(ids) });
       return new Map(rows.map((r) => [r.id, { status: r.isEmergency ? `${r.status} (emergency: ${r.regularisationStatus})` : r.status, date: r.receivedDate }]));
-    });
-    this.links.registerResolver(DocumentType.RETURN_TO_SUPPLIER, async (ids) => {
-      const rows = await this.ds.getRepository(ReturnToSupplier).findBy({ id: In(ids) });
-      return new Map(rows.map((r) => [r.id, { status: 'ISSUED', date: r.createdAt.toISOString() }]));
     });
   }
 
@@ -241,10 +239,11 @@ export class GrnsService implements OnModuleInit {
       const coSigner = witnessId ?? grn.inspectedBy.find((u) => u !== actor.id) ?? null;
       const ctx = await this.inventory.postingContext(actor, { type: DocumentType.GOODS_RECEIVED_NOTE, id: grn.id, number: grn.number }, grn.receivedDate, coSigner, m);
 
+      const baseCostOf = (l: GrnLine) => round6((l.unitPrice / l.conversionFactor) * (includeVat ? 1 + l.taxRatePercent / 100 : 1));
       const movements = [];
       for (const l of lines) {
         if (l.acceptedBaseQty <= 0) continue;
-        const baseCost = round6((l.unitPrice / l.conversionFactor) * (includeVat ? 1 + l.taxRatePercent / 100 : 1));
+        const baseCost = baseCostOf(l);
         const batchNo = l.item?.isBatchTracked ? l.batchNo! : 'NOBATCH';
         let batch = await m.findOneBy(Batch, { itemId: l.itemId, batchNo });
         if (batch && l.item?.isBatchTracked && batch.expiryDate !== l.expiryDate) {
@@ -279,15 +278,7 @@ export class GrnsService implements OnModuleInit {
 
       const rejected = lines.filter((l) => l.rejectedBaseQty > 0);
       if (rejected.length) {
-        const rts = await m.save(
-          m.create(ReturnToSupplier, {
-            number: await this.numbering.next(DocumentType.RETURN_TO_SUPPLIER, { storeId: grn.storeId, manager: m }),
-            grnId: grn.id,
-            supplierId: grn.supplierId,
-            lines: rejected.map((l) => ({ itemId: l.itemId, itemName: l.item?.name ?? '', batchNo: l.batchNo, quantity: l.rejectedBaseQty, reason: l.rejectionReason })),
-          }),
-        );
-        await this.links.link(m, { type: DocumentType.GOODS_RECEIVED_NOTE, id: grn.id, no: grn.number }, { type: DocumentType.RETURN_TO_SUPPLIER, id: rts.id, no: rts.number });
+        await this.supplierReturns.createFromGrnRejects(m, grn, rejected.map((l) => Object.assign(l, { baseCost: baseCostOf(l) })));
       }
 
       grn.status = GrnStatus.POSTED;
@@ -380,7 +371,7 @@ export class GrnsService implements OnModuleInit {
     });
     if (!grn) throw new NotFoundException('GRN not found');
     if (!actor?.permissions.includes(Permissions.PURCHASING_INSPECT)) StoreScope.assert(grn.storeId);
-    const returns = await this.ds.getRepository(ReturnToSupplier).find({ where: { grnId: id } });
+    const returns = await this.supplierReturns.forGrn(id);
     return { ...grn, returns } as GoodsReceivedNote & { returns: ReturnToSupplier[] };
   }
 

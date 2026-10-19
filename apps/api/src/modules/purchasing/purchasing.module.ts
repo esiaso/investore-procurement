@@ -15,6 +15,7 @@ import {
   PurchaseOrdersController,
   RequisitionsController,
   RfqsController,
+  SupplierReturnsController,
 } from './purchasing.controllers';
 import {
   GoodsReceivedNote,
@@ -28,6 +29,7 @@ import {
   Quotation,
   QuotationLine,
   ReturnToSupplier,
+  ReturnToSupplierLine,
   Rfq,
   RfqLine,
   SupplierInvoice,
@@ -35,6 +37,7 @@ import {
 } from './purchasing.entities';
 import { RequisitionsService } from './requisitions.service';
 import { RfqsService } from './rfqs.service';
+import { SupplierReturnsService } from './supplier-returns.service';
 
 @Module({
   imports: [
@@ -51,6 +54,7 @@ import { RfqsService } from './rfqs.service';
       GoodsReceivedNote,
       GrnLine,
       ReturnToSupplier,
+      ReturnToSupplierLine,
       SupplierInvoice,
       SupplierInvoiceLine,
       PaymentVoucher,
@@ -62,8 +66,8 @@ import { RfqsService } from './rfqs.service';
     BudgetsModule,
     InventoryModule,
   ],
-  controllers: [RequisitionsController, RfqsController, PurchaseOrdersController, GrnsController, InvoicesController],
-  providers: [RequisitionsService, RfqsService, PurchaseOrdersService, GrnsService, InvoicesService],
-  exports: [RequisitionsService, PurchaseOrdersService, GrnsService, InvoicesService, RfqsService],
+  controllers: [RequisitionsController, RfqsController, PurchaseOrdersController, GrnsController, InvoicesController, SupplierReturnsController],
+  providers: [RequisitionsService, RfqsService, PurchaseOrdersService, GrnsService, InvoicesService, SupplierReturnsService],
+  exports: [RequisitionsService, PurchaseOrdersService, GrnsService, InvoicesService, RfqsService, SupplierReturnsService],
 })
 export class PurchasingModule {}

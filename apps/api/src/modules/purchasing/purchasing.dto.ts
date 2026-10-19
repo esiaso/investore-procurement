@@ -208,3 +208,35 @@ export class PayInvoiceDto {
   @ApiProperty() @IsString() @MaxLength(100) paymentReference: string;
   @ApiProperty({ example: 'EFT' }) @IsString() @MaxLength(40) method: string;
 }
+
+// ------------------------------------------------------------------ returns to supplier
+
+export class SupplierReturnLineDto {
+  @ApiProperty() @IsUUID() batchId: string;
+  @ApiPropertyOptional({ description: 'Bin the stock is taken from (quarantine bins allowed)' })
+  @IsOptional() @Transform(emptyToNull) @IsUUID() binId?: string | null;
+  @ApiProperty({ description: 'Base units' }) @IsNumber(QTY) @Min(0.0001) quantity: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
+export class CreateSupplierReturnDto {
+  @ApiProperty() @IsUUID() supplierId: string;
+  @ApiProperty() @IsUUID() storeId: string;
+  @ApiProperty() @IsString() @MaxLength(40) reasonCode: string;
+  @ApiPropertyOptional({ description: 'GRN the goods came on (found automatically when omitted)' }) @IsOptional() @IsUUID() grnId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+  @ApiProperty({ type: [SupplierReturnLineDto] })
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => SupplierReturnLineDto)
+  lines: SupplierReturnLineDto[];
+}
+
+export class DispatchSupplierReturnDto {
+  @ApiPropertyOptional() @IsOptional() @IsDateString({ strict: true }) returnDate?: string;
+  @ApiPropertyOptional({ type: WitnessDto }) @IsOptional() @ValidateNested() @Type(() => WitnessDto) witness?: WitnessDto;
+}
+
+export class CreditNoteDto {
+  @ApiProperty() @IsString() @MaxLength(60) creditNoteNo: string;
+  @ApiProperty() @IsDateString({ strict: true }) creditNoteDate: string;
+  @ApiProperty() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) amount: number;
+}

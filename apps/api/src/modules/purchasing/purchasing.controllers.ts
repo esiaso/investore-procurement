@@ -2,7 +2,7 @@ import { Body, Controller, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Pu
 import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { DocumentType, Permissions, SessionUser } from '@sil/shared';
-import { CurrentUser, RequirePermissions } from '../../common/decorators';
+import { CurrentUser, RequireAnyPermission, RequirePermissions, StoreScoped } from '../../common/decorators';
 import { MailService } from '../mail/mail.service';
 import { GrnsService } from './grns.service';
 import { InvoicesService } from './invoices.service';
@@ -15,6 +15,9 @@ import {
   CreatePurchaseOrderDto,
   CreateRequisitionDto,
   CreateRfqDto,
+  CreateSupplierReturnDto,
+  CreditNoteDto,
+  DispatchSupplierReturnDto,
   DocListQueryDto,
   InspectGrnDto,
   PayInvoiceDto,
@@ -25,6 +28,7 @@ import {
 } from './purchasing.dto';
 import { RequisitionsService } from './requisitions.service';
 import { RfqsService } from './rfqs.service';
+import { SupplierReturnsService } from './supplier-returns.service';
 
 @ApiTags('purchasing')
 @Controller('requisitions')
@@ -268,5 +272,42 @@ export class InvoicesController {
   @Post(':id/cancel') @HttpCode(200) @RequirePermissions(Permissions.PURCHASING_INVOICE)
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
     return this.invoices.cancel(id, u);
+  }
+}
+
+@ApiTags('purchasing')
+@Controller('supplier-returns')
+export class SupplierReturnsController {
+  constructor(private readonly returns: SupplierReturnsService) {}
+
+  @Get() @RequireAnyPermission(Permissions.PURCHASING_READ, Permissions.INVENTORY_SUPPLIER_RETURN)
+  list(@Query() q: DocListQueryDto) {
+    return this.returns.list(q);
+  }
+
+  @Get(':id') @RequireAnyPermission(Permissions.PURCHASING_READ, Permissions.INVENTORY_SUPPLIER_RETURN)
+  get(@Param('id', ParseUUIDPipe) id: string) {
+    return this.returns.get(id);
+  }
+
+  /** Return stock to a supplier (draft; dispatch posts it out of stock). */
+  @Post() @RequirePermissions(Permissions.INVENTORY_SUPPLIER_RETURN) @StoreScoped('body.storeId')
+  create(@Body() dto: CreateSupplierReturnDto) {
+    return this.returns.create(dto);
+  }
+
+  @Post(':id/dispatch') @HttpCode(200) @RequirePermissions(Permissions.INVENTORY_SUPPLIER_RETURN)
+  dispatch(@Param('id', ParseUUIDPipe) id: string, @Body() dto: DispatchSupplierReturnDto, @CurrentUser() u: SessionUser) {
+    return this.returns.dispatch(id, dto, u);
+  }
+
+  @Post(':id/credit-note') @HttpCode(200) @RequireAnyPermission(Permissions.PURCHASING_INVOICE, Permissions.INVENTORY_SUPPLIER_RETURN)
+  credit(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreditNoteDto, @CurrentUser() u: SessionUser) {
+    return this.returns.recordCredit(id, dto, u);
+  }
+
+  @Post(':id/cancel') @HttpCode(200) @RequirePermissions(Permissions.INVENTORY_SUPPLIER_RETURN)
+  cancel(@Param('id', ParseUUIDPipe) id: string) {
+    return this.returns.cancel(id);
   }
 }

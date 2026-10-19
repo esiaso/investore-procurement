@@ -10,6 +10,8 @@ import {
   RequisitionPriority,
   RequisitionStatus,
   RfqStatus,
+  SupplierReturnSource,
+  SupplierReturnStatus,
 } from '@sil/shared';
 import { AppBaseEntity } from '../../common/entities/base.entity';
 import { MONEY, numericTransformer, QUANTITY } from '../../common/entities/transformers';
@@ -552,22 +554,131 @@ export class GrnLine extends AppBaseEntity {
   batchId: string | null;
 }
 
-/** Note returning rejected goods to the supplier. */
+/**
+ * Goods going back to a supplier: stock from the store (posted out of stock on
+ * dispatch) or goods rejected at GRN inspection (never entered stock). The note
+ * doubles as the hospital's debit note; the supplier's credit note is recorded on it.
+ */
 @Entity('return_to_supplier')
+@Index(['supplierId', 'status'])
 export class ReturnToSupplier extends AppBaseEntity {
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 60 })
   number: string;
 
-  @Column({ type: 'uuid' })
-  grnId: string;
+  @Column({ type: 'enum', enum: SupplierReturnSource, enumName: 'supplier_return_source', default: SupplierReturnSource.GRN_REJECT })
+  source: SupplierReturnSource;
+
+  @Column({ type: 'enum', enum: SupplierReturnStatus, enumName: 'supplier_return_status', default: SupplierReturnStatus.DRAFT })
+  status: SupplierReturnStatus;
 
   @Column({ type: 'uuid' })
   supplierId: string;
 
-  /** [{ itemId, batchNo, quantity (base), reason }] */
-  @Column({ type: 'jsonb' })
-  lines: { itemId: string; itemName: string; batchNo: string | null; quantity: number; reason: string | null }[];
+  @ManyToOne(() => Supplier, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'supplier_id' })
+  supplier?: Supplier;
+
+  @Column({ type: 'uuid' })
+  storeId: string;
+
+  @ManyToOne(() => Store, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'store_id' })
+  store?: Store;
+
+  @Column({ type: 'uuid', nullable: true })
+  grnId: string | null;
+
+  @ManyToOne(() => GoodsReceivedNote, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'grn_id' })
+  grn?: GoodsReceivedNote | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  purchaseOrderId: string | null;
+
+  @ManyToOne(() => PurchaseOrder, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'purchase_order_id' })
+  purchaseOrder?: PurchaseOrder | null;
+
+  @Column({ type: 'varchar', length: 40 })
+  reasonCode: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  notes: string | null;
+
+  /** Value of the goods returned = amount to be credited (debit note value). */
+  @Column({ ...MONEY, default: 0 })
+  totalValue: number;
+
+  @Column({ type: 'date', nullable: true })
+  returnDate: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  dispatchedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  dispatchedAt: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  witnessId: string | null;
+
+  @Column({ type: 'varchar', length: 60, nullable: true })
+  creditNoteNo: string | null;
+
+  @Column({ type: 'date', nullable: true })
+  creditNoteDate: string | null;
+
+  @Column({ ...MONEY, nullable: true })
+  creditNoteAmount: number | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  creditRecordedBy: string | null;
+
+  @OneToMany(() => ReturnToSupplierLine, (l) => l.supplierReturn, { cascade: true })
+  lines?: ReturnToSupplierLine[];
+}
+
+@Entity('return_to_supplier_line')
+export class ReturnToSupplierLine extends AppBaseEntity {
+  @Column({ type: 'uuid' })
+  returnId: string;
+
+  @ManyToOne(() => ReturnToSupplier, (r) => r.lines, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'return_id' })
+  supplierReturn?: ReturnToSupplier;
+
+  @Column({ type: 'uuid' })
+  itemId: string;
+
+  @ManyToOne(() => Item, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'item_id' })
+  item?: Item;
+
+  /** Stock returns: the batch leaving the store. GRN rejects: null (never booked in). */
+  @Column({ type: 'uuid', nullable: true })
+  batchId: string | null;
+
+  @Column({ type: 'varchar', length: 60, nullable: true })
+  batchNo: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  binId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  grnLineId: string | null;
+
+  /** Base units. */
+  @Column(QUANTITY)
+  quantity: number;
+
+  @Column({ type: 'numeric', precision: 18, scale: 6, transformer: numericTransformer, default: 0 })
+  unitCost: number;
+
+  @Column({ ...MONEY, default: 0 })
+  value: number;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  reason: string | null;
 }
 
 // ------------------------------------------------------------------ invoices and payments
