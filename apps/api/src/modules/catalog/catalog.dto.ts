@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNumber,
   IsObject,
   IsOptional,
@@ -85,6 +86,9 @@ export class CreateItemCategoryDto {
   @ValidateNested({ each: true })
   @Type(() => AttributeDefinitionDto)
   attributeSchema?: AttributeDefinitionDto[];
+  @ApiPropertyOptional({ type: [Number], nullable: true, description: 'Near-expiry alert horizons (days); null = system default' })
+  @IsOptional() @IsArray() @IsInt({ each: true }) @Min(1, { each: true })
+  expiryAlertDays?: number[] | null;
 }
 export class UpdateItemCategoryDto extends PartialType(CreateItemCategoryDto) {}
 

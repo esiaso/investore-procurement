@@ -27,12 +27,18 @@ export class TransfersService {
     return this.inventory.dataSource;
   }
 
-  async request(dto: CreateTransferDto, actor: SessionUser): Promise<StockTransfer> {
+  /**
+   * Normally raised by the receiving store. `pushedBySource` lets the sending
+   * store raise it instead (redistributing near-expiry stock to a store that
+   * uses more); it still goes through dispatch and receipt as usual.
+   */
+  async request(dto: CreateTransferDto, actor: SessionUser, opts: { pushedBySource?: boolean } = {}): Promise<StockTransfer> {
     if (dto.fromStoreId === dto.toStoreId) throw new BadRequestException('Source and destination must differ');
     const id = await this.ds.transaction(async (m) => {
-      await assertStore(m, dto.toStoreId); // requester works at the destination
-      const [from] = await m.query(`SELECT id, is_active FROM store WHERE id = $1`, [dto.fromStoreId]);
-      if (!from?.is_active) throw new BadRequestException('Source store not found or inactive');
+      const [mine, other] = opts.pushedBySource ? [dto.fromStoreId, dto.toStoreId] : [dto.toStoreId, dto.fromStoreId];
+      await assertStore(m, mine);
+      const [from] = await m.query(`SELECT id, is_active FROM store WHERE id = $1`, [other]);
+      if (!from?.is_active) throw new BadRequestException(`${opts.pushedBySource ? 'Destination' : 'Source'} store not found or inactive`);
       const items = await loadItems(m, dto.lines.map((l) => l.itemId));
       if (new Set(dto.lines.map((l) => l.itemId)).size !== dto.lines.length) {
         throw new BadRequestException('Each item may appear only once');
@@ -227,6 +233,7 @@ export class TransfersService {
       t.receivedAt = new Date();
       await m.save(t);
     });
+    await this.inventory.stockArrived(pre.toStoreId, pre.lines!.map((l) => l.itemId));
     return this.get(id);
   }
 

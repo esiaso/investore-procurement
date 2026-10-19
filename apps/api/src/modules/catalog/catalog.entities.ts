@@ -75,6 +75,10 @@ export class ItemCategory extends AppBaseEntity {
   /** Category-specific attribute definitions for non-drug items. */
   @Column({ type: 'jsonb', default: () => `'[]'::jsonb` })
   attributeSchema: AttributeDefinition[];
+
+  /** Near-expiry alert horizons in days for items in this category; null = setting inventory.expiryWarningDays. */
+  @Column({ type: 'int', array: true, nullable: true })
+  expiryAlertDays: number[] | null;
 }
 
 @Entity('unit_of_measure')

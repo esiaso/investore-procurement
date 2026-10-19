@@ -36,6 +36,19 @@ export interface SettingTypes {
   'inventory.issueScanConfirm': 'OPTIONAL' | 'REQUIRED';
   /** Code of the per-store bin that receives damaged/expired returns. */
   'inventory.quarantineBinCode': string;
+  'stock.amcWindowDays': number;
+  /** Ledger movement types that count as consumption. */
+  'stock.amcTxnTypes': string[];
+  'stock.amcExcludeStockoutDays': boolean;
+  'stock.amcMinDays': number;
+  'stock.defaultLeadTimeDays': number;
+  'stock.defaultReviewPeriodDays': number;
+  'stock.safetyStockDays': number;
+  'stock.reorderIncludeOnOrder': boolean;
+  'stock.disposalReasonCode': string;
+  'notify.emailDefault': boolean;
+  /** Job name → cron expression. */
+  'jobs.schedules': Record<string, string>;
 }
 
 export type SettingKey = keyof SettingTypes;

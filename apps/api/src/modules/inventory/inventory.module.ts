@@ -55,6 +55,6 @@ import { TransfersService } from './transfers.service';
   ],
   controllers: [InventoryController, ReceiptsController, AdjustmentsController, TransfersController, StockTakesController],
   providers: [InventoryService, ReceiptsService, AdjustmentsService, TransfersService, StockTakesService],
-  exports: [InventoryService],
+  exports: [InventoryService, TransfersService, AdjustmentsService, ReceiptsService],
 })
 export class InventoryModule {}
