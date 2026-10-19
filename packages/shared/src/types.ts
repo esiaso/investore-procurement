@@ -16,6 +16,8 @@ export interface SessionUser {
   permissions: string[];
   /** null = all stores (store.all permission). */
   storeIds: string[] | null;
+  /** Department the user belongs to (scopes department-level data). */
+  departmentId?: string | null;
   totpEnabled: boolean;
   mustChangePassword: boolean;
 }

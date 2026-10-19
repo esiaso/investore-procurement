@@ -77,6 +77,7 @@ export enum DocumentType {
   SUPPLIER_INVOICE = 'INV',
   RETURN_TO_SUPPLIER = 'RTS',
   PAYMENT_VOUCHER = 'PV',
+  DEPARTMENT_RETURN = 'DRT',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -84,6 +85,8 @@ export enum DocumentType {
 export enum ApproverType {
   ROLE = 'ROLE',
   USER = 'USER',
+  /** Members of the role who belong to the document's department (e.g. the ward in-charge). */
+  DEPARTMENT_ROLE = 'DEPARTMENT_ROLE',
 }
 
 export enum ApprovalStatus {
@@ -241,7 +244,12 @@ export enum StockTxnType {
   TRANSFER_RECEIPT = 'TRANSFER_RECEIPT',
   TRANSFER_DISCREPANCY = 'TRANSFER_DISCREPANCY',
   STOCK_TAKE = 'STOCK_TAKE',
+  /** Issue to a department / cost centre (negative). */
   ISSUE = 'ISSUE',
+  /** Return from a department back into the store (positive, credits the department). */
+  RETURN_IN = 'RETURN_IN',
+  /** Stock sent back to a supplier (negative). */
+  SUPPLIER_RETURN = 'SUPPLIER_RETURN',
 }
 
 export enum ValuationMethod {
@@ -290,4 +298,58 @@ export enum StockTakeStatus {
 export enum StockReceiptType {
   OPENING = 'OPENING',
   RECEIPT = 'RECEIPT',
+}
+
+// ------------------------------------------------------------------ internal requisitions, issues, returns
+
+export enum StoreRequisitionStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  /** Approved; stock reserved where available. */
+  APPROVED = 'APPROVED',
+  /** Something issued; the rest is on back-order. */
+  PARTIALLY_ISSUED = 'PARTIALLY_ISSUED',
+  /** Everything issued. */
+  ISSUED = 'ISSUED',
+  /** Settled with some back-order cancelled. */
+  CLOSED = 'CLOSED',
+  REJECTED = 'REJECTED',
+  RETURNED = 'RETURNED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum ReturnCondition {
+  /** Back to the same batch, usable. */
+  RESALEABLE = 'RESALEABLE',
+  /** To the store's quarantine bin. */
+  DAMAGED = 'DAMAGED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum ReturnReasonKind {
+  DEPARTMENT = 'DEPARTMENT',
+  SUPPLIER = 'SUPPLIER',
+  BOTH = 'BOTH',
+}
+
+export enum DepartmentReturnStatus {
+  DRAFT = 'DRAFT',
+  POSTED = 'POSTED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum SupplierReturnSource {
+  /** Stock already in the store. */
+  STOCK = 'STOCK',
+  /** Rejected at GRN inspection; never entered stock. */
+  GRN_REJECT = 'GRN_REJECT',
+}
+
+export enum SupplierReturnStatus {
+  DRAFT = 'DRAFT',
+  /** Goods left the store (stock posted for STOCK returns). */
+  DISPATCHED = 'DISPATCHED',
+  /** Supplier credit note recorded. */
+  CREDITED = 'CREDITED',
+  CANCELLED = 'CANCELLED',
 }

@@ -41,6 +41,16 @@ export const Permissions = {
   INVENTORY_BATCH_HOLD: 'inventory.batch_hold',
   INVENTORY_PERIOD_LOCK: 'inventory.period_lock',
   INVENTORY_RECONCILE: 'inventory.reconcile',
+  /** Raise internal (S11) requisitions for a department and return stock to the store. */
+  INVENTORY_REQUISITION: 'inventory.requisition',
+  /** Issue stock against approved internal requisitions. */
+  INVENTORY_ISSUE: 'inventory.issue',
+  /** Receive and post department returns. */
+  INVENTORY_DEPT_RETURN: 'inventory.dept_return',
+  /** Return stock to suppliers and record credit notes. */
+  INVENTORY_SUPPLIER_RETURN: 'inventory.supplier_return',
+  /** Departmental consumption reports (own department only without store.all). */
+  INVENTORY_CONSUMPTION: 'inventory.consumption',
   /** Configure approval workflows and see everyone's delegations. */
   APPROVALS_MANAGE: 'approvals.manage',
   SUPPLIERS_READ: 'suppliers.read',
@@ -98,6 +108,11 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'inventory.batch_hold': 'Quarantine, recall and release batches',
   'inventory.period_lock': 'Set store period lock dates',
   'inventory.reconcile': 'Run and repair ledger reconciliation',
+  'inventory.requisition': 'Raise internal requisitions and department returns',
+  'inventory.issue': 'Issue stock against internal requisitions',
+  'inventory.dept_return': 'Receive and post department returns',
+  'inventory.supplier_return': 'Return stock to suppliers and record credit notes',
+  'inventory.consumption': 'View departmental consumption',
   'approvals.manage': 'Configure approval workflows and delegations',
   'suppliers.read': 'View suppliers',
   'suppliers.manage': 'Create and edit suppliers, documents and contract prices',
@@ -126,6 +141,7 @@ export const RoleCodes = {
   POS_CASHIER: 'POS_CASHIER',
   QUALITY_OFFICER: 'QUALITY_OFFICER',
   WARD_IN_CHARGE: 'WARD_IN_CHARGE',
+  WARD_STAFF: 'WARD_STAFF',
   FINANCE: 'FINANCE',
   TENDER_COMMITTEE: 'TENDER_COMMITTEE',
   SUPPLY_CHAIN_MANAGER: 'SUPPLY_CHAIN_MANAGER',
