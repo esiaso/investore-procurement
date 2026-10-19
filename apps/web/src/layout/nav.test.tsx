@@ -26,7 +26,7 @@ describe('role-aware navigation', () => {
   it('shows a cashier only catalog browsing', () => {
     state.held = [Permissions.CATALOG_READ];
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NavList />
       </MemoryRouter>,
     );
@@ -39,7 +39,7 @@ describe('role-aware navigation', () => {
   it('shows administration links to an admin', () => {
     state.held = Object.values(Permissions);
     render(
-      <MemoryRouter initialEntries={['/users']}>
+      <MemoryRouter initialEntries={['/users']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NavList />
       </MemoryRouter>,
     );

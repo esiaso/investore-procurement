@@ -25,6 +25,10 @@ docker compose up --build
 | API | http://localhost:3000/api/v1 |
 | OpenAPI (Swagger UI) | http://localhost:3000/api/v1/docs (JSON at `/api/v1/openapi.json`) |
 
+Host ports are configurable in `.env` (`WEB_PORT`, `API_PORT`, `POSTGRES_PORT`,
+`REDIS_PORT`). On Windows with WSL, `localhost:3000` may already be taken by WSL's
+port relay; if the API URL hangs, set `API_PORT=3001`. The web app only uses 8080.
+
 On first start the API runs the migrations and seeds a sample hospital:
 6 stores (main store, main pharmacy, and OPD/IPD/theatre/emergency satellite pharmacies)
 with bins, 12 departments/cost centres, one user per role, and **233 catalog items**
