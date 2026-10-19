@@ -1,7 +1,36 @@
 import { join } from 'node:path';
 import type { DataSourceOptions } from 'typeorm';
 import { loadEnv } from '../config/env';
+import {
+  ApprovalAction,
+  ApprovalDelegation,
+  ApprovalRequest,
+  ApprovalStep,
+  ApprovalWorkflow,
+  DocumentLink,
+  Notification,
+} from '../modules/approvals/approvals.entities';
 import { AuditSubscriber } from '../modules/audit/audit.subscriber';
+import { Budget, BudgetEntry } from '../modules/budgets/budgets.entities';
+import { EmailOutbox } from '../modules/mail/mail.entities';
+import {
+  GoodsReceivedNote,
+  GrnLine,
+  PaymentVoucher,
+  PurchaseOrder,
+  PurchaseOrderLine,
+  PurchaseOrderVersion,
+  PurchaseRequisition,
+  PurchaseRequisitionLine,
+  Quotation,
+  QuotationLine,
+  ReturnToSupplier,
+  Rfq,
+  RfqLine,
+  SupplierInvoice,
+  SupplierInvoiceLine,
+} from '../modules/purchasing/purchasing.entities';
+import { ContractPrice, Supplier, SupplierContact, SupplierDocument } from '../modules/suppliers/suppliers.entities';
 import { AuditLog } from '../modules/audit/audit-log.entity';
 import { Generic, Item, ItemCategory, UnitConversion, UnitOfMeasure } from '../modules/catalog/catalog.entities';
 import {
@@ -59,6 +88,35 @@ export const ENTITIES = [
   StockTransferAllocation,
   StockTake,
   StockTakeLine,
+  ApprovalWorkflow,
+  ApprovalStep,
+  ApprovalRequest,
+  ApprovalAction,
+  ApprovalDelegation,
+  Notification,
+  DocumentLink,
+  EmailOutbox,
+  Supplier,
+  SupplierContact,
+  SupplierDocument,
+  ContractPrice,
+  Budget,
+  BudgetEntry,
+  PurchaseRequisition,
+  PurchaseRequisitionLine,
+  Rfq,
+  RfqLine,
+  Quotation,
+  QuotationLine,
+  PurchaseOrder,
+  PurchaseOrderLine,
+  PurchaseOrderVersion,
+  GoodsReceivedNote,
+  GrnLine,
+  ReturnToSupplier,
+  SupplierInvoice,
+  SupplierInvoiceLine,
+  PaymentVoucher,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

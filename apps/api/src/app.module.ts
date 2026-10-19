@@ -9,7 +9,12 @@ import { HealthController } from './health.controller';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { BudgetsModule } from './modules/budgets/budgets.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { MailModule } from './modules/mail/mail.module';
+import { PurchasingModule } from './modules/purchasing/purchasing.module';
+import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { NumberingModule } from './modules/numbering/numbering.module';
 import { OrgModule } from './modules/org/org.module';
 import { RbacModule } from './modules/rbac/rbac.module';
@@ -32,6 +37,11 @@ import { UsersModule } from './modules/users/users.module';
     AuthModule,
     CatalogModule,
     InventoryModule,
+    ApprovalsModule,
+    MailModule,
+    SuppliersModule,
+    BudgetsModule,
+    PurchasingModule,
   ],
   controllers: [HealthController],
   providers: [
