@@ -1,8 +1,10 @@
 import {
   AdjustmentDirection,
+  ApproverType,
   AttributeType,
   DocumentType,
   Permissions,
+  ReturnReasonKind,
   RoleCodes,
   TaxTreatment,
   type AttributeDefinition,
@@ -43,6 +45,30 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'purchasing.overReceiptTolerancePct', value: 0, description: '% over the ordered quantity a GRN may receive', isPublic: false },
   { key: 'purchasing.inspectionCommitteeMinMembers', value: 2, description: 'Inspection committee sign-offs needed to post a GRN', isPublic: false },
   { key: 'purchasing.costIncludesVat', value: true, description: 'Add VAT to stock cost on receipt. On by default: the hospital cannot claim input VAT, so VAT paid is part of item cost', isPublic: false },
+  { key: 'purchasing.grnRejectReturnReason', value: 'INSPECTION_REJECT', description: 'Return reason on supplier return notes created from GRN inspection rejects', isPublic: false },
+  { key: 'inventory.reserveOnApproval', value: true, description: 'Reserve stock (FEFO) for internal requisitions when they are approved', isPublic: false },
+  {
+    key: 'inventory.issueScanConfirm',
+    value: 'OPTIONAL',
+    description: 'Issue picks: OPTIONAL (scan or confirm by hand) or REQUIRED (every pick must be scanned: item barcode/GTIN/code or batch number)',
+    isPublic: true,
+  },
+  { key: 'inventory.quarantineBinCode', value: 'QUARANTINE', description: 'Bin (created per store when first needed) that receives damaged/expired returns', isPublic: false },
+];
+
+/** Configurable reason codes for department returns and returns to suppliers. */
+export const DEFAULT_RETURN_REASONS: { code: string; name: string; kind: ReturnReasonKind }[] = [
+  { code: 'NOT_USED', name: 'Not used / excess to need', kind: ReturnReasonKind.DEPARTMENT },
+  { code: 'DISCHARGED', name: 'Patient discharged or transferred', kind: ReturnReasonKind.DEPARTMENT },
+  { code: 'TREATMENT_CHANGED', name: 'Treatment changed or stopped', kind: ReturnReasonKind.DEPARTMENT },
+  { code: 'WRONG_ITEM', name: 'Wrong item issued / supplied', kind: ReturnReasonKind.BOTH },
+  { code: 'DAMAGED', name: 'Damaged', kind: ReturnReasonKind.BOTH },
+  { code: 'EXPIRED', name: 'Expired', kind: ReturnReasonKind.BOTH },
+  { code: 'NEAR_EXPIRY', name: 'Near expiry', kind: ReturnReasonKind.BOTH },
+  { code: 'QUALITY', name: 'Quality defect', kind: ReturnReasonKind.SUPPLIER },
+  { code: 'RECALL', name: 'Manufacturer / PPB recall', kind: ReturnReasonKind.SUPPLIER },
+  { code: 'OVER_SUPPLY', name: 'Supplied in excess of order', kind: ReturnReasonKind.SUPPLIER },
+  { code: 'INSPECTION_REJECT', name: 'Rejected at goods inspection', kind: ReturnReasonKind.SUPPLIER },
 ];
 
 export const DEFAULT_ADJUSTMENT_REASONS: { code: string; name: string; direction: AdjustmentDirection }[] = [
@@ -90,6 +116,7 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.SUPPLIER_INVOICE, prefix: 'INV', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.RETURN_TO_SUPPLIER, prefix: 'RTS', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
   { documentType: DocumentType.PAYMENT_VOUCHER, prefix: 'PV', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.DEPARTMENT_RETURN, prefix: 'DRT', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
 ];
 
 export const DEFAULT_UOMS: [code: string, name: string][] = [
@@ -168,13 +195,13 @@ const P = Permissions;
 const ALL = Object.values(P) as PermissionCode[];
 const READ_ALL: PermissionCode[] = [
   P.SETTINGS_READ, P.AUDIT_READ, P.USERS_READ, P.ROLES_READ, P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.NUMBERING_READ,
-  P.INVENTORY_READ, P.INVENTORY_VALUATION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
+  P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
 /** Day-to-day store operations in assigned stores. */
 const STORE_OPS: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_RECEIVE, P.INVENTORY_ADJUST, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_DISPATCH,
-  P.INVENTORY_TRANSFER_RECEIVE, P.INVENTORY_STOCKTAKE,
+  P.INVENTORY_TRANSFER_RECEIVE, P.INVENTORY_STOCKTAKE, P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_SUPPLIER_RETURN,
 ];
 
 /** Default permission sets per built-in role. Editable at runtime. */
@@ -192,7 +219,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     name: 'Procurement Manager / Approver',
     description: 'Approves procurement documents',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ,
-      P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, ...BUYING],
+      P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_CONSUMPTION, ...BUYING],
   },
   {
     code: RoleCodes.STOREKEEPER,
@@ -221,6 +248,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [
       P.ORG_READ, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_RECEIVE,
       P.INVENTORY_STOCKTAKE, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.PURCHASING_READ,
+      P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN,
     ],
   },
   { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ] },
@@ -236,8 +264,14 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
   {
     code: RoleCodes.WARD_IN_CHARGE,
     name: 'Department / Ward In-charge',
-    description: 'Requests stock for a department or ward',
-    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION],
+    description: 'Requests stock for a department or ward and approves its internal requisitions',
+    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION],
+  },
+  {
+    code: RoleCodes.WARD_STAFF,
+    name: 'Department / Ward Staff',
+    description: 'Raises internal requisitions and returns for their department',
+    permissions: [P.ORG_READ, P.CATALOG_READ, P.INVENTORY_REQUISITION],
   },
   {
     code: RoleCodes.FINANCE,
@@ -245,7 +279,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     description: 'Tax configuration, invoices and payments',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
-      P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT],
+      P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT],
   },
   {
     code: RoleCodes.TENDER_COMMITTEE,
@@ -262,7 +296,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ, P.NUMBERING_MANAGE, P.USERS_READ, ...STORE_OPS,
       P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_OVERRIDE_FEFO,
       P.INVENTORY_HANDLE_CONTROLLED, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_BATCH_HOLD, P.INVENTORY_PERIOD_LOCK,
-      P.INVENTORY_RECONCILE, ...BUYING, P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
+      P.INVENTORY_RECONCILE, P.INVENTORY_CONSUMPTION, ...BUYING, P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
       P.PURCHASING_EMERGENCY_RECEIPT, P.APPROVALS_MANAGE,
     ],
   },
@@ -283,7 +317,8 @@ export const DEFAULT_WORKFLOWS: {
   maxAmount: number | null;
   itemCategoryCode?: string;
   priority?: number;
-  steps: [name: string, roleCode: string][];
+  /** Approver type defaults to ROLE; DEPARTMENT_ROLE = role members in the document's department. */
+  steps: [name: string, roleCode: string, approverType?: ApproverType][];
 }[] = [
   { code: 'PR-1', name: 'Requisitions up to 100,000', documentType: DocumentType.PURCHASE_REQUISITION, minAmount: null, maxAmount: 100_000, steps: [['Procurement review', RoleCodes.PROCUREMENT_MANAGER]] },
   { code: 'PR-2', name: 'Requisitions 100,000 to 1,000,000', documentType: DocumentType.PURCHASE_REQUISITION, minAmount: 100_000, maxAmount: 1_000_000, steps: [['Procurement review', RoleCodes.PROCUREMENT_MANAGER], ['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER]] },
@@ -293,4 +328,5 @@ export const DEFAULT_WORKFLOWS: {
   { code: 'PO-2', name: 'Purchase orders 500,000 to 5,000,000', documentType: DocumentType.PURCHASE_ORDER, minAmount: 500_000, maxAmount: 5_000_000, steps: [['Procurement approval', RoleCodes.PROCUREMENT_MANAGER], ['Finance approval', RoleCodes.FINANCE]] },
   { code: 'PO-3', name: 'Purchase orders over 5,000,000', documentType: DocumentType.PURCHASE_ORDER, minAmount: 5_000_000, maxAmount: null, steps: [['Procurement approval', RoleCodes.PROCUREMENT_MANAGER], ['Finance approval', RoleCodes.FINANCE], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
   { code: 'INV-1', name: 'Supplier invoices', documentType: DocumentType.SUPPLIER_INVOICE, minAmount: null, maxAmount: null, steps: [['Finance approval', RoleCodes.FINANCE]] },
+  { code: 'SR-1', name: 'Internal requisitions', documentType: DocumentType.STORE_REQUISITION, minAmount: null, maxAmount: null, steps: [['Department in-charge', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE]] },
 ];

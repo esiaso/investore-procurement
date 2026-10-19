@@ -7,6 +7,7 @@ import { API_PREFIX, configureApp, createRedisClient } from './bootstrap';
 import { loadEnv } from './config/env';
 import { seedSamplePurchasing } from './database/seeds/sample-purchasing';
 import { seedDatabase } from './database/seeds/seed';
+import { seedSampleStores } from './database/seeds/sample-stores';
 
 async function main() {
   const env = loadEnv();
@@ -20,6 +21,7 @@ async function main() {
   if (env.seedOnStart) {
     await seedDatabase(app.get(DataSource), { defaultPassword: env.seedDefaultPassword, sample: true });
     await seedSamplePurchasing(app);
+    await seedSampleStores(app);
   }
 
   await app.listen(env.port);

@@ -57,6 +57,11 @@ export const SAMPLE_USERS: { username: string; fullName: string; role: string; s
   { username: 'cashier', fullName: 'Mutua Cashier', role: RoleCodes.POS_CASHIER, stores: ['OPD-PH'] },
   { username: 'quality', fullName: 'Chebet Quality', role: RoleCodes.QUALITY_OFFICER, stores: [] },
   { username: 'ward.incharge', fullName: 'Akinyi Ward Sister', role: RoleCodes.WARD_IN_CHARGE, stores: [], department: 'IPD-MED' },
+  { username: 'ward.nurse', fullName: 'Moraa Nurse', role: RoleCodes.WARD_STAFF, stores: [], department: 'IPD-MED' },
+  { username: 'surg.incharge', fullName: 'Kiprop Theatre Sister', role: RoleCodes.WARD_IN_CHARGE, stores: [], department: 'IPD-SURG' },
+  { username: 'surg.nurse', fullName: 'Halima Nurse', role: RoleCodes.WARD_STAFF, stores: [], department: 'IPD-SURG' },
+  { username: 'mat.incharge', fullName: 'Wairimu Midwife In-charge', role: RoleCodes.WARD_IN_CHARGE, stores: [], department: 'MAT' },
+  { username: 'mat.nurse', fullName: 'Nafula Midwife', role: RoleCodes.WARD_STAFF, stores: [], department: 'MAT' },
   { username: 'finance', fullName: 'Mwangi Finance', role: RoleCodes.FINANCE, stores: [], department: 'ADMIN' },
   // A second finance user so invoices can be captured and approved by different people.
   { username: 'accountant', fullName: 'Atieno Accountant', role: RoleCodes.FINANCE, stores: [], department: 'ADMIN' },

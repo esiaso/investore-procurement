@@ -25,16 +25,26 @@ import {
   Quotation,
   QuotationLine,
   ReturnToSupplier,
+  ReturnToSupplierLine,
   Rfq,
   RfqLine,
   SupplierInvoice,
   SupplierInvoiceLine,
 } from '../modules/purchasing/purchasing.entities';
+import {
+  DepartmentReturn,
+  DepartmentReturnLine,
+  IssueVoucher,
+  IssueVoucherLine,
+  StoreRequisition,
+  StoreRequisitionLine,
+} from '../modules/stores/stores.entities';
 import { ContractPrice, Supplier, SupplierContact, SupplierDocument } from '../modules/suppliers/suppliers.entities';
 import { AuditLog } from '../modules/audit/audit-log.entity';
 import { Generic, Item, ItemCategory, UnitConversion, UnitOfMeasure } from '../modules/catalog/catalog.entities';
 import {
   AdjustmentReason,
+  ReturnReason,
   StockAdjustment,
   StockAdjustmentLine,
   StockReceipt,
@@ -45,7 +55,7 @@ import {
   StockTransferAllocation,
   StockTransferLine,
 } from '../modules/inventory/documents.entities';
-import { Batch, ItemStoreCost, StockBalance, StockTransaction, StorePeriodLock } from '../modules/inventory/inventory.entities';
+import { Batch, ItemStoreCost, StockBalance, StockReservation, StockTransaction, StorePeriodLock } from '../modules/inventory/inventory.entities';
 import { DocumentSequence, NumberingScheme } from '../modules/numbering/numbering.entities';
 import { Bin, Department, Facility, Store } from '../modules/org/org.entities';
 import { Permission, Role } from '../modules/rbac/rbac.entities';
@@ -78,7 +88,9 @@ export const ENTITIES = [
   StockTransaction,
   ItemStoreCost,
   StorePeriodLock,
+  StockReservation,
   AdjustmentReason,
+  ReturnReason,
   StockReceipt,
   StockReceiptLine,
   StockAdjustment,
@@ -114,9 +126,16 @@ export const ENTITIES = [
   GoodsReceivedNote,
   GrnLine,
   ReturnToSupplier,
+  ReturnToSupplierLine,
   SupplierInvoice,
   SupplierInvoiceLine,
   PaymentVoucher,
+  StoreRequisition,
+  StoreRequisitionLine,
+  IssueVoucher,
+  IssueVoucherLine,
+  DepartmentReturn,
+  DepartmentReturnLine,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

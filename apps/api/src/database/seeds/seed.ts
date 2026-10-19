@@ -12,7 +12,7 @@ import { TaxCategory, TaxRate } from '../../modules/tax/tax.entities';
 import { User } from '../../modules/users/user.entity';
 import { ApproverType } from '@sil/shared';
 import { ApprovalStep, ApprovalWorkflow } from '../../modules/approvals/approvals.entities';
-import { AdjustmentReason } from '../../modules/inventory/documents.entities';
+import { AdjustmentReason, ReturnReason } from '../../modules/inventory/documents.entities';
 import { seedSampleStock } from './sample-stock';
 import { seedSampleSuppliers } from './sample-suppliers';
 import {
@@ -20,6 +20,7 @@ import {
   DEFAULT_CATEGORIES,
   DEFAULT_CONVERSIONS,
   DEFAULT_NUMBERING,
+  DEFAULT_RETURN_REASONS,
   DEFAULT_ROLES,
   DEFAULT_SETTINGS,
   DEFAULT_TAX,
@@ -116,6 +117,9 @@ async function seedReference(m: EntityManager, log: (msg: string) => void): Prom
   for (const reason of DEFAULT_ADJUSTMENT_REASONS) {
     if (!(await m.existsBy(AdjustmentReason, { code: reason.code }))) await m.save(m.create(AdjustmentReason, reason));
   }
+  for (const reason of DEFAULT_RETURN_REASONS) {
+    if (!(await m.existsBy(ReturnReason, { code: reason.code }))) await m.save(m.create(ReturnReason, reason));
+  }
 
   for (const t of DEFAULT_TAX) {
     if (await m.existsBy(TaxCategory, { code: t.code })) continue;
@@ -160,8 +164,8 @@ async function seedReference(m: EntityManager, log: (msg: string) => void): Prom
         maxAmount: w.maxAmount,
         itemCategoryId: category?.id ?? null,
         priority: w.priority ?? 0,
-        steps: w.steps.map(([name, roleCode], i) =>
-          m.create(ApprovalStep, { sequence: i + 1, name, approverType: ApproverType.ROLE, roleId: roleIds.get(roleCode)! }),
+        steps: w.steps.map(([name, roleCode, approverType], i) =>
+          m.create(ApprovalStep, { sequence: i + 1, name, approverType: approverType ?? ApproverType.ROLE, roleId: roleIds.get(roleCode)! }),
         ),
       }),
     );
