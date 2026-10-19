@@ -53,6 +53,12 @@ export class StoresController {
     return this.org.listStores(query);
   }
 
+  /** All active stores (id, code, name) for counterpart pickers; not store-scoped. */
+  @Get('directory') @RequirePermissions(Permissions.ORG_READ)
+  directory() {
+    return this.org.storeDirectory();
+  }
+
   @Get(':id') @RequirePermissions(Permissions.ORG_READ) @StoreScoped('params.id')
   get(@Param('id', ParseUUIDPipe) id: string) {
     return this.org.getStore(id);

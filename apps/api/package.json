@@ -13,7 +13,9 @@
     "db:migration:generate": "pnpm typeorm migration:generate",
     "db:seed": "node --env-file-if-exists=../../.env -r ts-node/register/transpile-only src/database/seeds/run-seed.ts",
     "db:seed:prod": "node dist/database/seeds/run-seed.js",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "load-test": "node -r ts-node/register/transpile-only scripts/load-test.ts",
+    "inventory:reconcile": "node --env-file-if-exists=../../.env -r ts-node/register/transpile-only scripts/reconcile.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",

@@ -29,14 +29,15 @@ export class SettingsService {
   }
 
   async publicSettings(): Promise<PublicSettings> {
-    const [currency, timezone, dateFormat, financialYearStartMonth, passwordPolicy] = await Promise.all([
+    const [currency, timezone, dateFormat, financialYearStartMonth, passwordPolicy, expiryWarningDays] = await Promise.all([
       this.get('locale.currency'),
       this.get('locale.timezone'),
       this.get('locale.dateFormat'),
       this.get('finance.fyStartMonth'),
       this.get('security.passwordPolicy'),
+      this.get('inventory.expiryWarningDays'),
     ]);
-    return { currency, timezone, dateFormat, financialYearStartMonth, passwordPolicy };
+    return { currency, timezone, dateFormat, financialYearStartMonth, passwordPolicy, expiryWarningDays };
   }
 
   /** Today's calendar date (YYYY-MM-DD) in the configured timezone. */

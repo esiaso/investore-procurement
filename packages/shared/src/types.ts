@@ -32,6 +32,8 @@ export interface PublicSettings {
   dateFormat: string;
   financialYearStartMonth: number;
   passwordPolicy: PasswordPolicy;
+  /** Expiry warning buckets (days), e.g. [30, 60, 90, 180]. */
+  expiryWarningDays: number[];
 }
 
 export interface ImportIssue {

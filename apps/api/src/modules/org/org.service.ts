@@ -64,6 +64,14 @@ export class OrgService {
     return paginate(qb, query);
   }
 
+  /**
+   * Every active store's id, code and name, without scoping: needed to pick a
+   * counterpart store (e.g. the source of a transfer request). No stock data.
+   */
+  storeDirectory(): Promise<Pick<Store, 'id' | 'code' | 'name' | 'type'>[]> {
+    return this.stores.find({ select: { id: true, code: true, name: true, type: true }, where: { isActive: true }, order: { name: 'ASC' } });
+  }
+
   /** Throws 404 for stores outside the caller's scope (no existence leak). */
   async getStore(id: string): Promise<Store> {
     const qb = this.stores.createQueryBuilder('store').where('store.id = :id', { id });
