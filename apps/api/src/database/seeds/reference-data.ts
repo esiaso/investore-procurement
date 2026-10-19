@@ -42,7 +42,7 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'purchasing.matchPriceTolerancePct', value: 2, description: 'Three-way match: % price difference tolerated', isPublic: false },
   { key: 'purchasing.overReceiptTolerancePct', value: 0, description: '% over the ordered quantity a GRN may receive', isPublic: false },
   { key: 'purchasing.inspectionCommitteeMinMembers', value: 2, description: 'Inspection committee sign-offs needed to post a GRN', isPublic: false },
-  { key: 'purchasing.costIncludesVat', value: true, description: 'Add VAT to stock cost on receipt (VAT not recoverable)', isPublic: false },
+  { key: 'purchasing.costIncludesVat', value: true, description: 'Add VAT to stock cost on receipt. On by default: the hospital cannot claim input VAT, so VAT paid is part of item cost', isPublic: false },
 ];
 
 export const DEFAULT_ADJUSTMENT_REASONS: { code: string; name: string; direction: AdjustmentDirection }[] = [

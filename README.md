@@ -426,6 +426,9 @@ a follow-up.
 New settings: `mail.fromAddress`, `purchasing.matchQtyTolerancePct` (0),
 `purchasing.matchPriceTolerancePct` (2), `purchasing.overReceiptTolerancePct` (0),
 `purchasing.inspectionCommitteeMinMembers` (2) and `purchasing.costIncludesVat` (true).
+`costIncludesVat` is on because the hospital cannot claim input VAT (confirmed by the
+owner), so VAT paid becomes part of item cost, WAC and issue values. Budgets commit
+the VAT-inclusive amount.
 
 Mail is written to an outbox in the same transaction as the business change. A poller
 in the API sends it over SMTP (Mailpit in development), retrying with back-off. Leave
