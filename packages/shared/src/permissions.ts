@@ -22,6 +22,25 @@ export const Permissions = {
   TAX_MANAGE: 'tax.manage',
   NUMBERING_READ: 'numbering.read',
   NUMBERING_MANAGE: 'numbering.manage',
+  INVENTORY_READ: 'inventory.read',
+  /** See costs and stock values. */
+  INVENTORY_VALUATION: 'inventory.valuation',
+  /** Opening balances / temporary stock-in receipts. */
+  INVENTORY_RECEIVE: 'inventory.receive',
+  INVENTORY_ADJUST: 'inventory.adjust',
+  INVENTORY_ADJUST_APPROVE: 'inventory.adjust_approve',
+  INVENTORY_TRANSFER_REQUEST: 'inventory.transfer_request',
+  INVENTORY_TRANSFER_DISPATCH: 'inventory.transfer_dispatch',
+  INVENTORY_TRANSFER_RECEIVE: 'inventory.transfer_receive',
+  INVENTORY_STOCKTAKE: 'inventory.stocktake',
+  INVENTORY_STOCKTAKE_APPROVE: 'inventory.stocktake_approve',
+  INVENTORY_OVERRIDE_FEFO: 'inventory.override_fefo',
+  /** Move controlled drugs, and witness (second-sign) their movements. */
+  INVENTORY_HANDLE_CONTROLLED: 'inventory.handle_controlled',
+  INVENTORY_HANDLE_COLD_CHAIN: 'inventory.handle_cold_chain',
+  INVENTORY_BATCH_HOLD: 'inventory.batch_hold',
+  INVENTORY_PERIOD_LOCK: 'inventory.period_lock',
+  INVENTORY_RECONCILE: 'inventory.reconcile',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -45,6 +64,22 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'tax.manage': 'Manage tax categories and rates',
   'numbering.read': 'View document numbering schemes',
   'numbering.manage': 'Manage document numbering schemes',
+  'inventory.read': 'View stock, batches and the item ledger',
+  'inventory.valuation': 'View costs and stock values',
+  'inventory.receive': 'Post opening balances and stock-in receipts',
+  'inventory.adjust': 'Create stock adjustments',
+  'inventory.adjust_approve': 'Approve stock adjustments',
+  'inventory.transfer_request': 'Request inter-store transfers',
+  'inventory.transfer_dispatch': 'Dispatch inter-store transfers',
+  'inventory.transfer_receive': 'Receive inter-store transfers',
+  'inventory.stocktake': 'Create and count stock takes',
+  'inventory.stocktake_approve': 'Approve and post stock takes',
+  'inventory.override_fefo': 'Override FEFO batch selection (with reason)',
+  'inventory.handle_controlled': 'Move and witness controlled drugs',
+  'inventory.handle_cold_chain': 'Move cold-chain items',
+  'inventory.batch_hold': 'Quarantine, recall and release batches',
+  'inventory.period_lock': 'Set store period lock dates',
+  'inventory.reconcile': 'Run and repair ledger reconciliation',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

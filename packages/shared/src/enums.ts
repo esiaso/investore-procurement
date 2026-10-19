@@ -70,4 +70,75 @@ export enum DocumentType {
   ISSUE_NOTE = 'ISS',
   TRANSFER = 'TRF',
   STOCK_ADJUSTMENT = 'ADJ',
+  STOCK_RECEIPT = 'RCPT',
+  STOCK_TAKE = 'STK',
+}
+
+// ------------------------------------------------------------------ inventory
+
+export enum BatchHoldStatus {
+  NONE = 'NONE',
+  QUARANTINE = 'QUARANTINE',
+  RECALL = 'RECALL',
+  EXPIRED = 'EXPIRED',
+}
+
+/** Ledger transaction types. Quantities on the ledger are signed, in base units. */
+export enum StockTxnType {
+  OPENING = 'OPENING',
+  RECEIPT = 'RECEIPT',
+  ADJUSTMENT = 'ADJUSTMENT',
+  TRANSFER_DISPATCH = 'TRANSFER_DISPATCH',
+  TRANSFER_RECEIPT = 'TRANSFER_RECEIPT',
+  TRANSFER_DISCREPANCY = 'TRANSFER_DISCREPANCY',
+  STOCK_TAKE = 'STOCK_TAKE',
+  ISSUE = 'ISSUE',
+}
+
+export enum ValuationMethod {
+  WAC = 'WAC',
+  FIFO = 'FIFO',
+}
+
+export enum AdjustmentDirection {
+  INCREASE = 'INCREASE',
+  DECREASE = 'DECREASE',
+  BOTH = 'BOTH',
+}
+
+export enum AdjustmentStatus {
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  /** First approval done; value above threshold needs a second approver. */
+  PARTIALLY_APPROVED = 'PARTIALLY_APPROVED',
+  POSTED = 'POSTED',
+  REJECTED = 'REJECTED',
+}
+
+export enum TransferStatus {
+  REQUESTED = 'REQUESTED',
+  DISPATCHED = 'DISPATCHED',
+  RECEIVED = 'RECEIVED',
+  RECEIVED_WITH_DISCREPANCY = 'RECEIVED_WITH_DISCREPANCY',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum StockTakeType {
+  FULL = 'FULL',
+  CYCLE = 'CYCLE',
+}
+
+export enum StockTakeStatus {
+  DRAFT = 'DRAFT',
+  /** Stock frozen, counting in progress. */
+  COUNTING = 'COUNTING',
+  /** Counts submitted, variances under review. */
+  REVIEW = 'REVIEW',
+  POSTED = 'POSTED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum StockReceiptType {
+  OPENING = 'OPENING',
+  RECEIPT = 'RECEIPT',
 }
