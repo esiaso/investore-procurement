@@ -4,6 +4,12 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { PermissionCode, Permissions } from '@sil/shared';
 import { useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
+import { AdjustmentsPage } from './inventory/AdjustmentsPage';
+import { ReceiptsPage } from './inventory/ReceiptsPage';
+import { StockPage } from './inventory/StockPage';
+import { StockTakeDetailPage, StockTakesPage } from './inventory/StockTakesPage';
+import { TransfersPage } from './inventory/TransfersPage';
+import { ValuationPage } from './inventory/ValuationPage';
 import { AppLayout } from './layout/AppLayout';
 import { AccountPage, ForcedPasswordChangePage } from './pages/AccountPage';
 import { AuditPage } from './pages/AuditPage';
@@ -44,6 +50,13 @@ export function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="stock" element={guarded([Permissions.INVENTORY_READ], <StockPage />)} />
+        <Route path="receipts" element={guarded([Permissions.INVENTORY_READ], <ReceiptsPage />)} />
+        <Route path="transfers" element={guarded([Permissions.INVENTORY_READ], <TransfersPage />)} />
+        <Route path="adjustments" element={guarded([Permissions.INVENTORY_READ], <AdjustmentsPage />)} />
+        <Route path="stock-takes" element={guarded([Permissions.INVENTORY_READ], <StockTakesPage />)} />
+        <Route path="stock-takes/:id" element={guarded([Permissions.INVENTORY_READ], <StockTakeDetailPage />)} />
+        <Route path="valuation" element={guarded([Permissions.INVENTORY_VALUATION], <ValuationPage />)} />
         <Route path="items" element={guarded([Permissions.CATALOG_READ], <ItemsPage />)} />
         <Route path="generics" element={guarded([Permissions.CATALOG_READ], <GenericsPage />)} />
         <Route path="import" element={guarded([Permissions.CATALOG_IMPORT], <ImportPage />)} />

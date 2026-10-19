@@ -10,6 +10,7 @@ const FALLBACK: PublicSettings = {
   dateFormat: 'DD/MM/YYYY',
   financialYearStartMonth: 1,
   passwordPolicy: { minLength: 12, requireUppercase: true, requireLowercase: true, requireDigit: true, requireSymbol: true },
+  expiryWarningDays: [30, 60, 90, 180],
 };
 
 const SettingsContext = createContext<PublicSettings>(FALLBACK);

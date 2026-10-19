@@ -1,6 +1,12 @@
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CategoryIcon from '@mui/icons-material/Category';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
+import MoveToInboxIcon from '@mui/icons-material/MoveToInbox';
+import PaidIcon from '@mui/icons-material/Paid';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import TuneIcon from '@mui/icons-material/Tune';
+import WarehouseIcon from '@mui/icons-material/Warehouse';
 import GroupIcon from '@mui/icons-material/Group';
 import HistoryIcon from '@mui/icons-material/History';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
@@ -23,6 +29,12 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: <DashboardIcon />, permissions: [], section: '' },
+  { label: 'Stock on hand', path: '/stock', icon: <WarehouseIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
+  { label: 'Receipts', path: '/receipts', icon: <MoveToInboxIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
+  { label: 'Transfers', path: '/transfers', icon: <SwapHorizIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
+  { label: 'Adjustments', path: '/adjustments', icon: <TuneIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
+  { label: 'Stock takes', path: '/stock-takes', icon: <FactCheckIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
+  { label: 'Valuation', path: '/valuation', icon: <PaidIcon />, permissions: [Permissions.INVENTORY_VALUATION], section: 'Inventory' },
   { label: 'Items', path: '/items', icon: <Inventory2Icon />, permissions: [Permissions.CATALOG_READ], section: 'Catalog' },
   { label: 'Generics', path: '/generics', icon: <MedicationIcon />, permissions: [Permissions.CATALOG_READ], section: 'Catalog' },
   { label: 'Bulk import', path: '/import', icon: <UploadFileIcon />, permissions: [Permissions.CATALOG_IMPORT], section: 'Catalog' },
