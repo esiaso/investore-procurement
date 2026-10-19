@@ -15,6 +15,8 @@ async function main() {
   configureApp(app, env, redis);
   app.enableShutdownHooks();
 
+  // Run onModuleInit hooks (approval handlers, link resolvers) before seeding through services.
+  await app.init();
   if (env.seedOnStart) {
     await seedDatabase(app.get(DataSource), { defaultPassword: env.seedDefaultPassword, sample: true });
     await seedSamplePurchasing(app);
