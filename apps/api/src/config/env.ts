@@ -1,0 +1,86 @@
+/**
+ * Process environment, parsed once. Only infrastructure concerns live here;
+ * business configuration (tax rates, prefixes, thresholds, locale) lives in
+ * database config tables.
+ */
+export interface Env {
+  nodeEnv: string;
+  port: number;
+  databaseUrl: string;
+  redisUrl: string;
+  sessionSecret: string;
+  sessionIdleTimeoutMinutes: number;
+  sessionAbsoluteTimeoutHours: number;
+  cookieSecure: boolean;
+  trustProxy: boolean;
+  corsOrigins: string[];
+  totpEncryptionKey: Buffer;
+  migrationsRun: boolean;
+  seedOnStart: boolean;
+  seedDefaultPassword: string | null;
+  importMaxFileMb: number;
+  dbLogging: boolean;
+}
+
+function bool(v: string | undefined, def: boolean): boolean {
+  if (v === undefined || v === '') return def;
+  return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
+}
+
+function int(v: string | undefined, def: number): number {
+  if (v === undefined || v === '') return def;
+  const n = Number(v);
+  if (!Number.isFinite(n)) throw new Error(`Invalid number in environment: ${v}`);
+  return n;
+}
+
+const DEV_SECRET = 'dev-only-session-secret-change-me-0123456789';
+const DEV_TOTP_KEY = '0'.repeat(64);
+
+let cached: Env | null = null;
+
+export function loadEnv(): Env {
+  if (cached) return cached;
+  const e = process.env;
+  const nodeEnv = e.NODE_ENV ?? 'development';
+  const isProd = nodeEnv === 'production';
+
+  const sessionSecret = e.SESSION_SECRET ?? (isProd ? '' : DEV_SECRET);
+  if (sessionSecret.length < 32) throw new Error('SESSION_SECRET must be at least 32 characters');
+
+  const totpHex = e.TOTP_ENCRYPTION_KEY ?? (isProd ? '' : DEV_TOTP_KEY);
+  if (!/^[0-9a-fA-F]{64}$/.test(totpHex)) {
+    throw new Error('TOTP_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+  }
+  if (isProd && (sessionSecret === DEV_SECRET || totpHex === DEV_TOTP_KEY)) {
+    throw new Error('Development secrets must not be used in production');
+  }
+
+  cached = {
+    nodeEnv,
+    port: int(e.PORT, 3000),
+    databaseUrl: e.DATABASE_URL ?? 'postgres://silp:silp_dev_password@localhost:5432/silp',
+    redisUrl: e.REDIS_URL ?? 'redis://localhost:6379/0',
+    sessionSecret,
+    sessionIdleTimeoutMinutes: int(e.SESSION_IDLE_TIMEOUT_MINUTES, 30),
+    sessionAbsoluteTimeoutHours: int(e.SESSION_ABSOLUTE_TIMEOUT_HOURS, 12),
+    cookieSecure: bool(e.COOKIE_SECURE, isProd),
+    trustProxy: bool(e.TRUST_PROXY, false),
+    corsOrigins: (e.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:8080')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    totpEncryptionKey: Buffer.from(totpHex, 'hex'),
+    migrationsRun: bool(e.DB_MIGRATIONS_RUN, true),
+    seedOnStart: bool(e.SEED_ON_START, false),
+    seedDefaultPassword: e.SEED_DEFAULT_PASSWORD || null,
+    importMaxFileMb: int(e.IMPORT_MAX_FILE_MB, 10),
+    dbLogging: bool(e.DB_LOGGING, false),
+  };
+  return cached;
+}
+
+/** Test helper: forget the cached env so a test can change process.env. */
+export function resetEnvCache(): void {
+  cached = null;
+}
