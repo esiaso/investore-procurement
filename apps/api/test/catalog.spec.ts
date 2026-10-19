@@ -141,6 +141,17 @@ describe('Catalog: generics, brands, units', () => {
     expect(noPath.status).toBe(400);
   });
 
+  it('paginates generics correctly when brands are included', async () => {
+    const plain = await admin.get('/generics?pageSize=25').expect(200);
+    const withItems = await admin.get('/generics?pageSize=25&includeItems=true').expect(200);
+    const page2 = await admin.get('/generics?pageSize=25&page=2&includeItems=true').expect(200);
+    expect(withItems.body.total).toBe(plain.body.total);
+    expect(withItems.body.items).toHaveLength(25);
+    expect(page2.body.total).toBe(plain.body.total);
+    expect(withItems.body.items.map((g: { id: string }) => g.id)).toEqual(plain.body.items.map((g: { id: string }) => g.id));
+    expect(withItems.body.items.some((g: { items: unknown[] }) => g.items.length > 1)).toBe(true);
+  });
+
   it('seeds a realistic sample catalog', async () => {
     const [{ count }] = await ctx.ds.query(`SELECT count(*)::int AS count FROM item`);
     expect(count).toBeGreaterThanOrEqual(200);

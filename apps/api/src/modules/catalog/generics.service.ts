@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, Repository } from 'typeorm';
+import { DeepPartial, In, Repository } from 'typeorm';
 import { Paginated } from '@sil/shared';
 import { likeTerm, paginate } from '../../common/pagination';
 import { CreateGenericDto, GenericQueryDto, UpdateGenericDto } from './catalog.dto';
-import { Generic } from './catalog.entities';
+import { Generic, Item } from './catalog.entities';
 
 /** Identity parts are stored as '' rather than NULL so the unique index applies. */
 export function normaliseGenericIdentity(dto: Partial<CreateGenericDto>): DeepPartial<Generic> {
@@ -20,11 +20,8 @@ export function normaliseGenericIdentity(dto: Partial<CreateGenericDto>): DeepPa
 export class GenericsService {
   constructor(@InjectRepository(Generic) private readonly generics: Repository<Generic>) {}
 
-  list(query: GenericQueryDto): Promise<Paginated<Generic>> {
+  async list(query: GenericQueryDto): Promise<Paginated<Generic>> {
     const qb = this.generics.createQueryBuilder('g').orderBy('g.innName', 'ASC').addOrderBy('g.strength', 'ASC');
-    if (query.includeItems) {
-      qb.leftJoinAndSelect('g.items', 'item', 'item.is_active = true').addOrderBy('item.name', 'ASC');
-    }
     if (query.search) {
       const q = likeTerm(query.search);
       // A brand name or code also finds its generic.
@@ -37,7 +34,16 @@ export class GenericsService {
     }
     if (query.keml !== undefined) qb.andWhere('g.is_keml = :keml', { keml: query.keml });
     if (query.active !== undefined) qb.andWhere('g.is_active = :active', { active: query.active });
-    return paginate(qb, query);
+    const page = await paginate(qb, query);
+    if (query.includeItems && page.items.length) {
+      // Separate query: joining one-to-many rows into a skip/take query gives wrong pages and totals.
+      const items = await this.generics.manager.find(Item, {
+        where: { genericId: In(page.items.map((g) => g.id)), isActive: true },
+        order: { name: 'ASC' },
+      });
+      for (const g of page.items) g.items = items.filter((i) => i.genericId === g.id);
+    }
+    return page;
   }
 
   async get(id: string, withItems = false): Promise<Generic> {
