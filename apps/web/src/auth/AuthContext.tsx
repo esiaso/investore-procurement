@@ -13,6 +13,8 @@ interface AuthApi {
   logout(): Promise<void>;
   refresh(): Promise<void>;
   can(...permissions: PermissionCode[]): boolean;
+  /** At least one of the permissions. */
+  canAny(...permissions: PermissionCode[]): boolean;
 }
 
 const AuthContext = createContext<AuthApi | null>(null);
@@ -61,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await qc.invalidateQueries({ queryKey: ME_KEY });
       },
       can: (...permissions) => permissions.every((p) => held.has(p)),
+      canAny: (...permissions) => permissions.some((p) => held.has(p)),
     };
   }, [me.data, me.isLoading, finish, qc]);
 

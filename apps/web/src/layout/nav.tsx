@@ -1,5 +1,11 @@
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import InsightsIcon from '@mui/icons-material/Insights';
+import KeyboardReturnIcon from '@mui/icons-material/KeyboardReturn';
+import OutboxIcon from '@mui/icons-material/Outbox';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import HandshakeIcon from '@mui/icons-material/Handshake';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
@@ -32,8 +38,14 @@ export interface NavItem {
   icon: ReactNode;
   /** All required. */
   permissions: PermissionCode[];
+  /** At least one required (in addition to `permissions`). */
+  anyOf?: PermissionCode[];
   section: string;
 }
+
+const P = Permissions;
+/** Department staff, issuing stores and read-only roles see department documents. */
+export const STORES_SEE: PermissionCode[] = [P.INVENTORY_REQUISITION, P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_READ];
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: <DashboardIcon />, permissions: [], section: '' },
@@ -45,6 +57,12 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Invoices', path: '/invoices', icon: <ReceiptLongIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
   { label: 'Suppliers', path: '/suppliers', icon: <HandshakeIcon />, permissions: [Permissions.SUPPLIERS_READ], section: 'Procurement' },
   { label: 'Budgets', path: '/budgets', icon: <AccountBalanceIcon />, permissions: [Permissions.BUDGETS_READ], section: 'Procurement' },
+  { label: 'Internal requisitions', path: '/store-requisitions', icon: <AssignmentTurnedInIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
+  { label: 'Issue vouchers', path: '/issues', icon: <OutboxIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
+  { label: 'Back-orders', path: '/backorders', icon: <PendingActionsIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
+  { label: 'Department returns', path: '/department-returns', icon: <AssignmentReturnIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
+  { label: 'Consumption', path: '/consumption', icon: <InsightsIcon />, permissions: [P.INVENTORY_CONSUMPTION], section: 'Wards & issues' },
+  { label: 'Supplier returns', path: '/supplier-returns', icon: <KeyboardReturnIcon />, permissions: [], anyOf: [P.PURCHASING_READ, P.INVENTORY_SUPPLIER_RETURN], section: 'Procurement' },
   { label: 'Stock on hand', path: '/stock', icon: <WarehouseIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Receipts', path: '/receipts', icon: <MoveToInboxIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Transfers', path: '/transfers', icon: <SwapHorizIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
@@ -64,5 +82,5 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export function visibleNav(can: (...p: PermissionCode[]) => boolean): NavItem[] {
-  return NAV_ITEMS.filter((i) => can(...i.permissions));
+  return NAV_ITEMS.filter((i) => can(...i.permissions) && (!i.anyOf?.length || i.anyOf.some((p) => can(p))));
 }

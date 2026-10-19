@@ -19,6 +19,18 @@ import { StockTakeDetailPage, StockTakesPage } from './inventory/StockTakesPage'
 import { TransfersPage } from './inventory/TransfersPage';
 import { ValuationPage } from './inventory/ValuationPage';
 import { AppLayout } from './layout/AppLayout';
+import { STORES_SEE } from './layout/nav';
+import { IssueFormPage, IssueVoucherDetailPage, IssueVouchersPage } from './stores/IssuePages';
+import { BatchTracePage, ConsumptionPage } from './stores/ReportPages';
+import { BackordersPage, StoreRequisitionDetailPage, StoreRequisitionFormPage, StoreRequisitionsPage } from './stores/RequisitionPages';
+import {
+  DepartmentReturnDetailPage,
+  DepartmentReturnFormPage,
+  DepartmentReturnsPage,
+  SupplierReturnDetailPage,
+  SupplierReturnFormPage,
+  SupplierReturnsPage,
+} from './stores/ReturnPages';
 import { AccountPage, ForcedPasswordChangePage } from './pages/AccountPage';
 import { AuditPage } from './pages/AuditPage';
 import { BinsPage } from './pages/BinsPage';
@@ -31,14 +43,19 @@ import { RolesPage } from './pages/RolesPage';
 import { StoresPage } from './pages/StoresPage';
 import { UsersPage } from './pages/UsersPage';
 
-export function RequirePermission({ permissions, children }: { permissions: PermissionCode[]; children: ReactNode }) {
-  const { can } = useAuth();
-  if (!can(...permissions)) return <Alert severity="warning">You do not have access to this page.</Alert>;
+export function RequirePermission({ permissions, any, children }: { permissions: PermissionCode[]; any?: boolean; children: ReactNode }) {
+  const { can, canAny } = useAuth();
+  if (!(any ? canAny(...permissions) : can(...permissions))) return <Alert severity="warning">You do not have access to this page.</Alert>;
   return <>{children}</>;
 }
 
 const guarded = (permissions: PermissionCode[], element: ReactNode) => (
   <RequirePermission permissions={permissions}>{element}</RequirePermission>
+);
+const guardedAny = (permissions: PermissionCode[], element: ReactNode) => (
+  <RequirePermission permissions={permissions} any>
+    {element}
+  </RequirePermission>
 );
 
 export function App() {
@@ -75,6 +92,22 @@ export function App() {
         <Route path="invoices/:id" element={guarded([Permissions.PURCHASING_READ], <InvoiceDetailPage />)} />
         <Route path="suppliers" element={guarded([Permissions.SUPPLIERS_READ], <SuppliersPage />)} />
         <Route path="budgets" element={guarded([Permissions.BUDGETS_READ], <BudgetsPage />)} />
+        <Route path="store-requisitions" element={guardedAny(STORES_SEE, <StoreRequisitionsPage />)} />
+        <Route path="store-requisitions/new" element={guarded([Permissions.INVENTORY_REQUISITION], <StoreRequisitionFormPage />)} />
+        <Route path="store-requisitions/:id/edit" element={guarded([Permissions.INVENTORY_REQUISITION], <StoreRequisitionFormPage />)} />
+        <Route path="store-requisitions/:id/issue" element={guarded([Permissions.INVENTORY_ISSUE], <IssueFormPage />)} />
+        <Route path="store-requisitions/:id" element={guardedAny(STORES_SEE, <StoreRequisitionDetailPage />)} />
+        <Route path="backorders" element={guardedAny(STORES_SEE, <BackordersPage />)} />
+        <Route path="issues" element={guardedAny(STORES_SEE, <IssueVouchersPage />)} />
+        <Route path="issues/:id" element={guardedAny(STORES_SEE, <IssueVoucherDetailPage />)} />
+        <Route path="department-returns" element={guardedAny(STORES_SEE, <DepartmentReturnsPage />)} />
+        <Route path="department-returns/new" element={guardedAny([Permissions.INVENTORY_REQUISITION, Permissions.INVENTORY_DEPT_RETURN], <DepartmentReturnFormPage />)} />
+        <Route path="department-returns/:id" element={guardedAny(STORES_SEE, <DepartmentReturnDetailPage />)} />
+        <Route path="supplier-returns" element={guardedAny([Permissions.PURCHASING_READ, Permissions.INVENTORY_SUPPLIER_RETURN], <SupplierReturnsPage />)} />
+        <Route path="supplier-returns/new" element={guarded([Permissions.INVENTORY_SUPPLIER_RETURN], <SupplierReturnFormPage />)} />
+        <Route path="supplier-returns/:id" element={guardedAny([Permissions.PURCHASING_READ, Permissions.INVENTORY_SUPPLIER_RETURN], <SupplierReturnDetailPage />)} />
+        <Route path="consumption" element={guarded([Permissions.INVENTORY_CONSUMPTION], <ConsumptionPage />)} />
+        <Route path="batches/:id/trace" element={guarded([Permissions.INVENTORY_READ], <BatchTracePage />)} />
         <Route path="stock" element={guarded([Permissions.INVENTORY_READ], <StockPage />)} />
         <Route path="receipts" element={guarded([Permissions.INVENTORY_READ], <ReceiptsPage />)} />
         <Route path="transfers" element={guarded([Permissions.INVENTORY_READ], <TransfersPage />)} />
