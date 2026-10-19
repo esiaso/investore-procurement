@@ -52,7 +52,8 @@ export function loadEnv(): Env {
   if (!/^[0-9a-fA-F]{64}$/.test(totpHex)) {
     throw new Error('TOTP_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
   }
-  if (isProd && (sessionSecret === DEV_SECRET || totpHex === DEV_TOTP_KEY)) {
+  // Placeholder values (dev defaults, docker-compose defaults) are refused in production.
+  if (isProd && (sessionSecret.startsWith('dev-only') || /^(.)\1+$/.test(totpHex))) {
     throw new Error('Development secrets must not be used in production');
   }
 

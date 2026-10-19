@@ -1,5 +1,29 @@
 name: silp
 
+# One command from a clean checkout:   docker compose up --build
+#   web  http://localhost:8080        (nginx: SPA + /api proxy)
+#   api  http://localhost:3000/api/v1 (OpenAPI UI at /api/v1/docs)
+# Tests:                               docker compose --profile test run --rm test
+# Every variable has a development default; override in .env (see .env.example).
+
+x-api-env: &api-env
+  # production refuses the placeholder secrets below; set real ones in .env first.
+  NODE_ENV: ${NODE_ENV:-development}
+  PORT: 3000
+  DATABASE_URL: postgres://${POSTGRES_USER:-silp}:${POSTGRES_PASSWORD:-silp_dev_password}@postgres:5432/${POSTGRES_DB:-silp}
+  REDIS_URL: redis://redis:6379/0
+  SESSION_SECRET: ${SESSION_SECRET:-dev-only-compose-session-secret-change-me-0123456789}
+  SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-30}
+  SESSION_ABSOLUTE_TIMEOUT_HOURS: ${SESSION_ABSOLUTE_TIMEOUT_HOURS:-12}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  TRUST_PROXY: ${TRUST_PROXY:-true}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+  TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-1111111111111111111111111111111111111111111111111111111111111111}
+  DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-true}
+  SEED_ON_START: ${SEED_ON_START:-true}
+  SEED_DEFAULT_PASSWORD: ${SEED_DEFAULT_PASSWORD:-Imani#Dev2026!}
+  IMPORT_MAX_FILE_MB: ${IMPORT_MAX_FILE_MB:-10}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -31,6 +55,42 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  api:
+    build: { context: ., target: api }
+    environment: *api-env
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build: { context: ., target: web }
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Mailpit (dev SMTP) and MinIO (S3 attachments) arrive with the slices that need them.
+
+  test:
+    profiles: ["test"]
+    build: { context: ., target: test }
+    environment:
+      TEST_DATABASE_URL: postgres://${POSTGRES_USER:-silp}:${POSTGRES_PASSWORD:-silp_dev_password}@postgres:5432/silp_test
+      TEST_REDIS_URL: redis://redis:6379/1
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
 volumes:
   pgdata:

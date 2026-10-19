@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+.git
+.devtmp
+.env
+*.log

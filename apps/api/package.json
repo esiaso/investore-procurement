@@ -5,13 +5,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev": "node --env-file-if-exists=../../.env --watch -r ts-node/register/transpile-only src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "typeorm": "typeorm-ts-node-commonjs -d src/database/data-source.ts",
-    "db:migrate": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run",
+    "typeorm": "node --env-file-if-exists=../../.env -r ts-node/register/transpile-only ./node_modules/typeorm/cli.js -d src/database/data-source.ts",
+    "db:migrate": "pnpm typeorm migration:run",
     "db:migrate:prod": "typeorm -d dist/database/data-source.js migration:run",
-    "db:migration:generate": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:generate",
-    "db:seed": "ts-node --transpile-only src/database/seeds/run-seed.ts",
+    "db:migration:generate": "pnpm typeorm migration:generate",
+    "db:seed": "node --env-file-if-exists=../../.env -r ts-node/register/transpile-only src/database/seeds/run-seed.ts",
     "db:seed:prod": "node dist/database/seeds/run-seed.js",
     "test": "jest --runInBand"
   },
@@ -50,6 +50,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.15.0",
     "@types/passport": "^1.0.17",
+    "@types/pg": "^8.15.0",
     "@types/passport-local": "^1.0.38",
     "@types/qrcode": "^1.5.5",
     "@types/supertest": "^6.0.3",
@@ -57,7 +58,6 @@
     "supertest": "^7.1.0",
     "ts-jest": "^29.3.0",
     "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
     "typescript": "~5.9.3"
   },
   "jest": {
