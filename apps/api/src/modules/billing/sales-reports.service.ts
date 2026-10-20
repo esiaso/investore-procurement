@@ -162,6 +162,8 @@ export class SalesReportsService {
          FROM sales_invoice si JOIN store s ON s.id = si.store_id JOIN etims_config c ON c.store_id = si.store_id
          LEFT JOIN etims_outbox o ON o.kind = 'SALE' AND o.doc_id = si.id
         WHERE si.status = 'ISSUED' AND ${p.sql} ${f}
+          -- Issued while the outlet had no control unit (before eTIMS go-live): nothing to reconcile.
+          AND si.etims_status <> 'NOT_REQUIRED'
           AND (si.etims_status <> 'ACCEPTED' OR o.id IS NULL OR abs((o.payload->>'totAmt')::numeric - si.total_amount) > 0.01 OR si.rcpt_sign IS NULL)
         ORDER BY si.issued_at LIMIT 1000`,
       p.params,

@@ -31,12 +31,12 @@ describe('Strategic procurement (acceptance)', () => {
 
   beforeAll(async () => {
     ctx = await createTestApp();
-    for (const u of ['admin', 'scm', 'proc.officer', 'proc.manager', 'finance', 'management', 'ward.incharge', 'pharmacist', 'tender', 'quality', 'storekeeper', 'cashier', 'supplier', 'supplier2']) {
+    for (const u of ['admin', 'scm', 'proc.officer', 'proc.manager', 'finance', 'management', 'ward.incharge', 'pharmacist', 'tender', 'quality', 'storekeeper', 'supplier', 'supplier2']) {
       c[u] = await loggedIn(ctx, u);
     }
     Object.assign(ids, {
       MS: await idByCode(ctx.ds, 'store', 'MS'),
-      OPD: await idByCode(ctx.ds, 'store', 'OPD-PH'),
+      IPD: await idByCode(ctx.ds, 'store', 'IPD-PH'),
       ipd: await idByCode(ctx.ds, 'department', 'IPD-MED'),
       pharm: await idByCode(ctx.ds, 'department', 'PHARM'),
       supGen: await idByCode(ctx.ds, 'item_category', 'SUP-GEN'),
@@ -455,15 +455,15 @@ describe('Strategic procurement (acceptance)', () => {
       await c.scm.post('/funding-sources', { code, name: 'Test donor', donor: 'Test Foundation', allowSale: false }).expect(201);
       const g = await c.admin.post('/generics', { innName: `Donorcillin ${uniq('g')}`, strength: '1 g', dosageForm: 'Tablet', route: 'Oral', controlledSchedule: 'NONE' }).expect(201);
       const it = (await c.admin.post('/items', { genericId: g.body.id, categoryId: ids.antiinf, name: `Donorcillin ${uniq('i')}`, baseUomId: ids.tab, unitPrice: 10, taxCategoryId: ids.exempt }).expect(201)).body;
-      await c.scm.post('/inventory/receipts', { storeId: ids.OPD, type: 'OPENING', lines: [{ itemId: it.id, batchNo: 'DON', expiryDate: day(100), quantity: 5, unitCost: 4 }, { itemId: it.id, batchNo: 'OWN', expiryDate: day(300), quantity: 3, unitCost: 4 }] }).expect(201);
+      await c.scm.post('/inventory/receipts', { storeId: ids.IPD, type: 'OPENING', lines: [{ itemId: it.id, batchNo: 'DON', expiryDate: day(100), quantity: 5, unitCost: 4 }, { itemId: it.id, batchNo: 'OWN', expiryDate: day(300), quantity: 3, unitCost: 4 }] }).expect(201);
       await q(`UPDATE batch SET funding_source = $2 WHERE item_id = $1 AND batch_no = 'DON'`, [it.id, code]);
 
       // The donor batch expires first but is not for sale: FEFO takes the hospital's own batch.
-      const sale = await c.cashier.post('/billing/invoices', { storeId: ids.OPD, source: 'OTC', lines: [{ itemId: it.id, quantity: 3 }], payments: [{ modeCode: 'CASH', amount: 30 }] }).expect(201);
+      const sale = await c.pharmacist.post('/billing/invoices', { storeId: ids.IPD, source: 'OTC', lines: [{ itemId: it.id, quantity: 3 }], payments: [{ modeCode: 'CASH', amount: 30 }] }).expect(201);
       expect(sale.body.status).toBeDefined();
-      const left = await q(`SELECT b.batch_no, sb.on_hand::float AS q FROM stock_balance sb JOIN batch b ON b.id = sb.batch_id WHERE sb.item_id = $1 AND sb.store_id = $2 ORDER BY b.batch_no`, [it.id, ids.OPD]);
+      const left = await q(`SELECT b.batch_no, sb.on_hand::float AS q FROM stock_balance sb JOIN batch b ON b.id = sb.batch_id WHERE sb.item_id = $1 AND sb.store_id = $2 ORDER BY b.batch_no`, [it.id, ids.IPD]);
       expect(left).toEqual([{ batch_no: 'DON', q: 5 }, { batch_no: 'OWN', q: 0 }]);
-      const none = await c.cashier.post('/billing/invoices', { storeId: ids.OPD, source: 'OTC', lines: [{ itemId: it.id, quantity: 1 }], payments: [{ modeCode: 'CASH', amount: 10 }] }).expect(400);
+      const none = await c.pharmacist.post('/billing/invoices', { storeId: ids.IPD, source: 'OTC', lines: [{ itemId: it.id, quantity: 1 }], payments: [{ modeCode: 'CASH', amount: 10 }] }).expect(400);
       expect(none.body.code).toBe('INSUFFICIENT_STOCK');
 
       const report = await c.scm.get(`/funding-sources/stock?fundingSource=${code}`).expect(200);
