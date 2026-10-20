@@ -12,6 +12,8 @@ export function ensureCsrfToken(req: Request): string {
 
 export function csrfMiddleware(req: Request, res: Response, next: NextFunction): void {
   if (SAFE_METHODS.has(req.method)) return next();
+  // API-key (machine) calls carry no cookie, so cross-site forgery does not apply.
+  if ((req as Request & { apiClient?: unknown }).apiClient) return next();
   const expected = req.session?.csrfToken;
   const provided = req.get(CSRF_HEADER);
   if (expected && provided) {

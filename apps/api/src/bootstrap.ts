@@ -12,6 +12,7 @@ import { CSRF_HEADER, csrfMiddleware } from './common/csrf';
 import { requestContextMiddleware } from './common/request-context';
 import { Env } from './config/env';
 import { SESSION_COOKIE } from './modules/auth/auth.controller';
+import { ApiClientsService, apiKeyMiddleware } from './modules/billing/api-clients.service';
 
 export const API_PREFIX = 'api/v1';
 
@@ -59,6 +60,7 @@ export function configureApp(app: NestExpressApplication, env: Env, redis: Redis
 
   app.use(passport.initialize());
   app.use(passport.session());
+  app.use(apiKeyMiddleware(app.get(ApiClientsService, { strict: false }), `/${API_PREFIX}/integration/`));
   app.use(csrfMiddleware);
   app.use(requestContextMiddleware);
 
