@@ -70,6 +70,46 @@ export interface SettingTypes {
   'pharmacy.activeMedicationDays': number;
   /** Alert severities that block dispensing until a pharmacist overrides them. */
   'pharmacy.blockingSeverities': string[];
+  /** Months of consumption history used by the forecasters. */
+  'forecast.historyMonths': number;
+  'forecast.horizonMonths': number;
+  'forecast.movingAverageMonths': number;
+  /** AMC | MOVING_AVERAGE | HOLT_WINTERS | AUTO. */
+  'forecast.defaultMethod': string;
+  'forecast.holtWinters': { alpha: number; beta: number; gamma: number; seasonLength: number };
+  /** Months of stock: below min → order; order up to max. */
+  'supply.minMonthsOfStock': number;
+  'supply.maxMonthsOfStock': number;
+  /** Sourcing methods and the amount bands (VAT inclusive) in which each may be used. */
+  'procurement.sourcingMethods': SourcingMethodRule[];
+  /** Optional public-procurement (PPADA) steps: standstill, PPRA report, AGPO tracking. Off for a private hospital. */
+  'procurement.ppadaRuleSet': boolean;
+  'procurement.standstillDays': number;
+  'procurement.bidValidityDays': number;
+  /** Committee members without a conflict of interest needed to evaluate a tender. */
+  'procurement.minEvaluationCommittee': number;
+  /** Days before a contract ends / a performance security expires at which to alert. */
+  'contracts.expiryAlertDays': number[];
+  'contracts.securityAlertDays': number[];
+  /** Weights (summing to 100) of the scorecard dimensions. */
+  'suppliers.scorecardWeights': { onTime: number; inFull: number; quality: number; price: number; documents: number };
+  /** Supplier document types that must be current for document compliance. */
+  'suppliers.requiredDocumentTypes': string[];
+  /** Overall score below which a corrective action is opened automatically. */
+  'suppliers.scorecardActionThreshold': number;
+}
+
+export interface SourcingMethodRule {
+  code: string;
+  label: string;
+  /** Inclusive lower bound of the estimated value; null = no lower bound. */
+  minAmount: number | null;
+  /** Exclusive upper bound; null = no limit. */
+  maxAmount: number | null;
+  /** Quotations / bids to invite at least. */
+  minBidders: number;
+  requiresJustification: boolean;
+  isActive: boolean;
 }
 
 export type SettingKey = keyof SettingTypes;

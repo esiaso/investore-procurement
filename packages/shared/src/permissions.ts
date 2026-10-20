@@ -93,6 +93,27 @@ export const Permissions = {
   PURCHASING_EMERGENCY_RECEIPT: 'purchasing.emergency_receipt',
   PURCHASING_INVOICE: 'purchasing.invoice',
   PURCHASING_PAYMENT: 'purchasing.payment',
+  FORECASTING_READ: 'forecasting.read',
+  /** Run forecasts, adjustment factors, quantification, programmes and funding-source rules. */
+  FORECASTING_MANAGE: 'forecasting.manage',
+  PLANS_READ: 'plans.read',
+  /** Prepare and revise a department's annual procurement plan. */
+  PLANS_MANAGE: 'plans.manage',
+  /** Consolidate departmental plans into the hospital plan. */
+  PLANS_CONSOLIDATE: 'plans.consolidate',
+  TENDERS_READ: 'tenders.read',
+  /** Create, publish, record bids, open, recommend and award tenders. */
+  TENDERS_MANAGE: 'tenders.manage',
+  /** Evaluation committee member (declare conflicts, score bids). */
+  TENDERS_EVALUATE: 'tenders.evaluate',
+  CONTRACTS_READ: 'contracts.read',
+  /** Sign contracts, securities, milestones, variations and call-off orders. */
+  CONTRACTS_MANAGE: 'contracts.manage',
+  /** Scorecards, corrective actions and suspension / blacklisting requests. */
+  SUPPLIERS_PERFORMANCE: 'suppliers.performance',
+  PROCUREMENT_KPIS: 'procurement.kpis',
+  /** Supplier portal (users linked to a supplier). */
+  PORTAL_ACCESS: 'portal.access',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -167,6 +188,19 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'purchasing.emergency_receipt': 'Receive goods without a purchase order (emergency)',
   'purchasing.invoice': 'Capture and match supplier invoices',
   'purchasing.payment': 'Record payment vouchers',
+  'forecasting.read': 'View forecasts, quantification, supply plans and donor stock',
+  'forecasting.manage': 'Run forecasts; manage adjustment factors, programmes and funding-source rules',
+  'plans.read': 'View annual procurement plans',
+  'plans.manage': "Prepare and revise a department's annual procurement plan",
+  'plans.consolidate': 'Consolidate departmental plans into the hospital plan',
+  'tenders.read': 'View tenders',
+  'tenders.manage': 'Create, publish, open, recommend and award tenders',
+  'tenders.evaluate': 'Sit on tender evaluation committees and score bids',
+  'contracts.read': 'View contracts and framework agreements',
+  'contracts.manage': 'Sign contracts; securities, milestones, variations and call-off orders',
+  'suppliers.performance': 'Supplier scorecards, corrective actions and sanction requests',
+  'procurement.kpis': 'View procurement KPIs',
+  'portal.access': 'Use the supplier portal (own supplier only)',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

@@ -82,6 +82,11 @@ export enum DocumentType {
   CREDIT_NOTE = 'CN',
   PRESCRIPTION = 'RX',
   DISPENSE = 'DSP',
+  PROCUREMENT_PLAN = 'APP',
+  TENDER = 'TND',
+  CONTRACT = 'CTR',
+  CONTRACT_VARIATION = 'CV',
+  SUPPLIER_SANCTION = 'SSN',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -186,6 +191,8 @@ export enum PurchaseOrderSource {
   REQUISITION = 'REQUISITION',
   RFQ = 'RFQ',
   CONTRACT = 'CONTRACT',
+  /** Raised from an order template (national agency order cycle). */
+  ORDER_CYCLE = 'ORDER_CYCLE',
 }
 
 export enum GrnStatus {
@@ -392,6 +399,8 @@ export enum NotificationCategory {
   JOBS = 'JOBS',
   /** eTIMS documents not accepted in time. */
   ETIMS = 'ETIMS',
+  /** Contract and performance-security expiry, tender milestones. */
+  CONTRACTS = 'CONTRACTS',
 }
 
 export enum JobRunStatus {
@@ -490,4 +499,134 @@ export enum EtimsPurchaseStatus {
   RECEIVED = 'RECEIVED',
   CONFIRMED = 'CONFIRMED',
   REJECTED = 'REJECTED',
+}
+
+// ------------------------------------------------------------------ slice 7: planning, sourcing, contracts
+
+export enum ForecastMethod {
+  AMC = 'AMC',
+  MOVING_AVERAGE = 'MOVING_AVERAGE',
+  HOLT_WINTERS = 'HOLT_WINTERS',
+  /** Pick the method with the lowest back-tested MAPE per item. */
+  AUTO = 'AUTO',
+}
+
+export enum PlanStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  APPROVED = 'APPROVED',
+  RETURNED = 'RETURNED',
+  REJECTED = 'REJECTED',
+  /** Departmental plan rolled into the hospital plan. */
+  CONSOLIDATED = 'CONSOLIDATED',
+}
+
+/** Sourcing method codes; thresholds and rules live in setting procurement.sourcingMethods. */
+export enum SourcingMethod {
+  LOW_VALUE = 'LOW_VALUE',
+  RFQ = 'RFQ',
+  RESTRICTED_TENDER = 'RESTRICTED_TENDER',
+  OPEN_TENDER = 'OPEN_TENDER',
+  /** Request for proposals (services, quality-weighted). */
+  RFP = 'RFP',
+  DIRECT = 'DIRECT',
+  FRAMEWORK = 'FRAMEWORK',
+}
+
+export enum TenderStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  CLOSED = 'CLOSED',
+  OPENED = 'OPENED',
+  EVALUATION = 'EVALUATION',
+  RECOMMENDED = 'RECOMMENDED',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  AWARDED = 'AWARDED',
+  CONTRACTED = 'CONTRACTED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum BidStatus {
+  SUBMITTED = 'SUBMITTED',
+  WITHDRAWN = 'WITHDRAWN',
+  OPENED = 'OPENED',
+  NON_RESPONSIVE = 'NON_RESPONSIVE',
+  TECHNICALLY_FAILED = 'TECHNICALLY_FAILED',
+  QUALIFIED = 'QUALIFIED',
+  AWARDED = 'AWARDED',
+  REGRET = 'REGRET',
+}
+
+export enum EvaluationStage {
+  PRELIMINARY = 'PRELIMINARY',
+  TECHNICAL = 'TECHNICAL',
+  FINANCIAL = 'FINANCIAL',
+}
+
+export enum CommitteeRole {
+  CHAIR = 'CHAIR',
+  MEMBER = 'MEMBER',
+  SECRETARY = 'SECRETARY',
+}
+
+export enum ContractType {
+  FIXED = 'FIXED',
+  FRAMEWORK = 'FRAMEWORK',
+}
+
+export enum ContractStatus {
+  DRAFT = 'DRAFT',
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  TERMINATED = 'TERMINATED',
+}
+
+export enum VariationStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  RETURNED = 'RETURNED',
+}
+
+export enum SanctionType {
+  SUSPEND = 'SUSPEND',
+  BLACKLIST = 'BLACKLIST',
+  REINSTATE = 'REINSTATE',
+}
+
+export enum CorrectiveActionStatus {
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED',
+}
+
+/** Access to Government Procurement Opportunities (optional PPADA rule set). */
+export enum AgpoCategory {
+  YOUTH = 'YOUTH',
+  WOMEN = 'WOMEN',
+  PWD = 'PWD',
+}
+
+export enum NationalAgency {
+  KEMSA = 'KEMSA',
+  MEDS = 'MEDS',
+}
+
+export enum DeliveryStage {
+  ORDER_SENT = 'ORDER_SENT',
+  ACKNOWLEDGED = 'ACKNOWLEDGED',
+  PROCESSING = 'PROCESSING',
+  DISPATCHED = 'DISPATCHED',
+  IN_TRANSIT = 'IN_TRANSIT',
+  DELIVERED = 'DELIVERED',
+}
+
+export enum SupplierSubmissionType {
+  DELIVERY_NOTE = 'DELIVERY_NOTE',
+  INVOICE = 'INVOICE',
+}
+
+export enum QuantificationMethod {
+  CONSUMPTION = 'CONSUMPTION',
+  MORBIDITY = 'MORBIDITY',
 }

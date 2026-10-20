@@ -18,6 +18,8 @@ export interface SessionUser {
   storeIds: string[] | null;
   /** Department the user belongs to (scopes department-level data). */
   departmentId?: string | null;
+  /** Supplier portal users: the supplier they act for (all portal data is scoped to it). */
+  supplierId?: string | null;
   totpEnabled: boolean;
   mustChangePassword: boolean;
 }
