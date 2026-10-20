@@ -65,6 +65,29 @@ import { Permission, Role } from '../modules/rbac/rbac.entities';
 import { SystemSetting } from '../modules/settings/system-setting.entity';
 import { TaxCategory, TaxRate } from '../modules/tax/tax.entities';
 import { User } from '../modules/users/user.entity';
+import { Payer, PaymentMode, PriceList, PriceListItem, SalesInvoice, SalesInvoiceLine, SalesPayment } from '../modules/billing/billing.entities';
+import {
+  ApiClient,
+  EtimsCode,
+  EtimsCodeMapping,
+  EtimsConfig,
+  EtimsImportItem,
+  EtimsItem,
+  EtimsItemClass,
+  EtimsOutbox,
+  EtimsPurchase,
+  EtimsTransmission,
+} from '../modules/etims/etims.entities';
+import {
+  ClinicalAlert,
+  Dispense,
+  DispenseLine,
+  DrugInteraction,
+  InteractionOverride,
+  Patient,
+  Prescription,
+  PrescriptionLine,
+} from '../modules/pharmacy/pharmacy.entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
 
 export const ENTITIES = [
@@ -143,6 +166,31 @@ export const ENTITIES = [
   JobRun,
   StoreItemSetting,
   StockAlert,
+  PriceList,
+  PriceListItem,
+  Payer,
+  PaymentMode,
+  SalesInvoice,
+  SalesInvoiceLine,
+  SalesPayment,
+  EtimsConfig,
+  EtimsCode,
+  EtimsItemClass,
+  EtimsCodeMapping,
+  EtimsItem,
+  EtimsOutbox,
+  EtimsTransmission,
+  EtimsPurchase,
+  EtimsImportItem,
+  ApiClient,
+  Patient,
+  Prescription,
+  PrescriptionLine,
+  Dispense,
+  DispenseLine,
+  DrugInteraction,
+  ClinicalAlert,
+  InteractionOverride,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

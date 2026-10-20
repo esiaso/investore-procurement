@@ -13,6 +13,11 @@ import { User } from '../../modules/users/user.entity';
 import { ApproverType } from '@sil/shared';
 import { ApprovalStep, ApprovalWorkflow } from '../../modules/approvals/approvals.entities';
 import { AdjustmentReason, ReturnReason } from '../../modules/inventory/documents.entities';
+import { PaymentMode, PriceList } from '../../modules/billing/billing.entities';
+import { EtimsCodeMapping } from '../../modules/etims/etims.entities';
+import { orderPair } from '../../modules/pharmacy/interactions';
+import { DrugInteraction } from '../../modules/pharmacy/pharmacy.entities';
+import { DEFAULT_ETIMS_MAPPINGS, DEFAULT_PAYMENT_MODES, DEFAULT_PRICE_LISTS, DEMO_INTERACTIONS } from './reference-billing';
 import { seedSampleStock } from './sample-stock';
 import { seedSampleSuppliers } from './sample-suppliers';
 import {
@@ -169,6 +174,21 @@ async function seedReference(m: EntityManager, log: (msg: string) => void): Prom
         ),
       }),
     );
+  }
+
+  for (const p of DEFAULT_PRICE_LISTS) {
+    if (!(await m.existsBy(PriceList, { code: p.code }))) await m.save(m.create(PriceList, { ...p, isActive: true }));
+  }
+  for (const pm of DEFAULT_PAYMENT_MODES) {
+    if (!(await m.existsBy(PaymentMode, { code: pm.code }))) await m.save(m.create(PaymentMode, { ...pm, isActive: true }));
+  }
+  for (const [kind, localKey, etimsCode] of DEFAULT_ETIMS_MAPPINGS) {
+    if (!(await m.existsBy(EtimsCodeMapping, { kind, localKey }))) await m.save(m.create(EtimsCodeMapping, { kind, localKey, etimsCode }));
+  }
+  // Demonstration interaction set (source DEMO); never overwrites curated rows.
+  for (const [a, b, severity, mechanism, management] of DEMO_INTERACTIONS) {
+    const [innA, innB] = orderPair(a, b);
+    if (!(await m.existsBy(DrugInteraction, { innA, innB }))) await m.save(m.create(DrugInteraction, { innA, innB, severity, mechanism, management, source: 'DEMO', isActive: true }));
   }
 
   log('reference data ready');

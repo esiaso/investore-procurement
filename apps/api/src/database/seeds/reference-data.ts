@@ -11,6 +11,15 @@ import {
   type PermissionCode,
 } from '@sil/shared';
 
+/** eTIMS background jobs (also merged into existing installations by a migration). */
+export const ETIMS_SCHEDULES: Record<string, string> = {
+  'etims.dispatch': '* * * * *',
+  'etims.stock': '*/15 * * * *',
+  'etims.purchases': '0 * * * *',
+  'etims.monitor': '*/15 * * * *',
+  'etims.codes': '0 3 * * *',
+};
+
 /**
  * Default configuration for a private hospital in Kenya. Everything here is
  * data: it is inserted once and can then be changed through the API.
@@ -57,8 +66,8 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'stock.amcWindowDays', value: 90, description: 'Average monthly consumption: days of ledger history used', isPublic: false },
   {
     key: 'stock.amcTxnTypes',
-    value: ['ISSUE', 'TRANSFER_DISPATCH'],
-    description: 'Ledger movements counted as consumption for AMC (issues to departments, transfers to other stores; returns from departments are netted off)',
+    value: ['ISSUE', 'TRANSFER_DISPATCH', 'DISPENSE'],
+    description: 'Ledger movements counted as consumption for AMC (issues to departments, transfers to other stores, dispenses and sales; returns are netted off)',
     isPublic: false,
   },
   { key: 'stock.amcExcludeStockoutDays', value: true, description: 'Leave days with no stock out of the AMC so stock-outs do not understate demand', isPublic: false },
@@ -71,9 +80,40 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'notify.emailDefault', value: true, description: 'Stock alerts are emailed unless the user switched email off for that category', isPublic: false },
   {
     key: 'jobs.schedules',
-    value: { 'inventory.reconcile': '0 2 * * *', 'stock.amc': '30 2 * * *', 'stock.expiry': '15 0 * * *', 'stock.reorder': '0 6-20 * * *' },
+    value: {
+      'inventory.reconcile': '0 2 * * *',
+      'stock.amc': '30 2 * * *',
+      'stock.expiry': '15 0 * * *',
+      'stock.reorder': '0 6-20 * * *',
+      ...ETIMS_SCHEDULES,
+    },
     description: 'Background job schedules (cron, in locale.timezone). Remove a job to stop scheduling it.',
     isPublic: false,
+  },
+  { key: 'etims.requestTimeoutMs', value: 10000, description: 'eTIMS: time allowed for one call to the control unit (ms)', isPublic: false },
+  { key: 'etims.syncWaitMs', value: 4000, description: 'eTIMS: at sale, how long to wait for the signed receipt before printing "eTIMS pending" and queueing (ms)', isPublic: false },
+  { key: 'etims.maxAttempts', value: 20, description: 'eTIMS: attempts for a transient failure (timeout, 5xx, offline) before the document is marked FAILED', isPublic: false },
+  { key: 'etims.retryBaseSeconds', value: 30, description: 'eTIMS: first retry delay; doubles each attempt, capped at one hour', isPublic: false },
+  { key: 'etims.alertAfterMinutes', value: 60, description: 'eTIMS: alert finance about documents not accepted within this many minutes', isPublic: false },
+  {
+    key: 'etims.qrUrlTemplate',
+    value: 'https://etims.kra.go.ke/common/link/etims/receipt/indexEtimsReceptData?Data={pin}{bhfId}{rcptSign}',
+    description: 'eTIMS: receipt QR link ({pin}, {bhfId}, {rcptSign})',
+    isPublic: false,
+  },
+  { key: 'etims.defaultPackagingUnit', value: 'NT', description: 'eTIMS: packaging unit (code class 17) for units without a mapping', isPublic: false },
+  { key: 'etims.defaultOriginCountry', value: 'KE', description: 'eTIMS: country of origin for item codes when not mapped per item', isPublic: false },
+  { key: 'etims.defaultPaymentType', value: '01', description: 'eTIMS: payment type (code class 07) when a document has no payment', isPublic: false },
+  { key: 'etims.taxTypeRates', value: { A: 0, B: 16, C: 0, D: 0, E: 8 }, description: 'eTIMS: rate per tax type when the synced code table carries none', isPublic: false },
+  { key: 'etims.stockReporting', value: true, description: 'eTIMS: report stock movements and stock master (job etims.stock)', isPublic: false },
+  { key: 'billing.defaultPriceListCode', value: 'RETAIL', description: 'Price list for walk-in / cash customers', isPublic: false },
+  { key: 'billing.patientCreditMode', value: 'CREDIT', description: 'Payment mode that carries an unpaid patient balance (on account)', isPublic: false },
+  { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
+  {
+    key: 'pharmacy.blockingSeverities',
+    value: ['CONTRAINDICATED', 'MAJOR'],
+    description: 'Alert severities that block verification and dispensing until a pharmacist overrides them with a reason',
+    isPublic: true,
   },
 ];
 
@@ -138,6 +178,10 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.RETURN_TO_SUPPLIER, prefix: 'RTS', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
   { documentType: DocumentType.PAYMENT_VOUCHER, prefix: 'PV', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.DEPARTMENT_RETURN, prefix: 'DRT', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.SALES_INVOICE, prefix: 'SI', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 6, resetEachYear: true },
+  { documentType: DocumentType.CREDIT_NOTE, prefix: 'CN', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.PRESCRIPTION, prefix: 'RX', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 6, resetEachYear: true },
+  { documentType: DocumentType.DISPENSE, prefix: 'DSP', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 6, resetEachYear: true },
 ];
 
 export const DEFAULT_UOMS: [code: string, name: string][] = [
@@ -217,6 +261,7 @@ const ALL = Object.values(P) as PermissionCode[];
 const READ_ALL: PermissionCode[] = [
   P.SETTINGS_READ, P.AUDIT_READ, P.USERS_READ, P.ROLES_READ, P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.NUMBERING_READ,
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
+  P.PATIENTS_READ, P.PHARMACY_READ, P.BILLING_READ, P.ETIMS_READ,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
 /** Day-to-day store operations in assigned stores. */
@@ -261,6 +306,8 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_OVERRIDE_FEFO,
       P.INVENTORY_HANDLE_CONTROLLED, P.INVENTORY_HANDLE_COLD_CHAIN, P.SUPPLIERS_READ, P.PURCHASING_READ,
       P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
+      P.PATIENTS_READ, P.PATIENTS_MANAGE, P.PHARMACY_READ, P.PHARMACY_PRESCRIPTION, P.PHARMACY_VERIFY, P.PHARMACY_DISPENSE,
+      P.PHARMACY_INTERACTIONS, P.BILLING_READ, P.BILLING_INVOICE,
     ],
   },
   {
@@ -271,9 +318,10 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.ORG_READ, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_RECEIVE,
       P.INVENTORY_STOCKTAKE, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.PURCHASING_READ,
       P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_ALERTS,
+      P.PATIENTS_READ, P.PATIENTS_MANAGE, P.PHARMACY_READ, P.PHARMACY_PRESCRIPTION, P.PHARMACY_DISPENSE, P.BILLING_READ, P.BILLING_INVOICE,
     ],
   },
-  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ] },
+  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ, P.PATIENTS_READ, P.BILLING_READ, P.BILLING_INVOICE] },
   {
     code: RoleCodes.QUALITY_OFFICER,
     name: 'Cold-chain / Quality Officer',
@@ -301,7 +349,8 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     description: 'Tax configuration, invoices and payments',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
-      P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT],
+      P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
+      P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE],
   },
   {
     code: RoleCodes.TENDER_COMMITTEE,

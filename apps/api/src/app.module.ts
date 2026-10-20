@@ -23,6 +23,9 @@ import { StoresModule } from './modules/stores/stores.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { PlanningModule } from './modules/planning/planning.module';
 import { TaxModule } from './modules/tax/tax.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { EtimsModule } from './modules/etims/etims.module';
+import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -48,6 +51,9 @@ import { UsersModule } from './modules/users/users.module';
     StoresModule,
     JobsModule,
     PlanningModule,
+    EtimsModule,
+    BillingModule,
+    PharmacyModule,
   ],
   controllers: [HealthController],
   providers: [
