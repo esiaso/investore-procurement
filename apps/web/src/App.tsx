@@ -5,6 +5,9 @@ import { PermissionCode, Permissions } from '@sil/shared';
 import { useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { AdjustmentsPage } from './inventory/AdjustmentsPage';
+import { BillingReportsPage, BillingSetupPage, SaleFormPage, SalesInvoiceDetailPage, SalesInvoicesPage } from './billing/BillingPages';
+import { EtimsConsolePage } from './etims/EtimsPages';
+import { InteractionsPage, PatientsPage, PharmacyWorklistPage, PrescriptionDetailPage, PrescriptionFormPage } from './pharmacy/PharmacyPages';
 import { ApprovalsPage } from './purchasing/ApprovalsPage';
 import { BudgetsPage } from './purchasing/BudgetsPage';
 import { GrnDetailPage, GrnFormPage, GrnsPage } from './purchasing/GrnPages';
@@ -93,6 +96,17 @@ export function App() {
         <Route path="invoices/:id" element={guarded([Permissions.PURCHASING_READ], <InvoiceDetailPage />)} />
         <Route path="suppliers" element={guarded([Permissions.SUPPLIERS_READ], <SuppliersPage />)} />
         <Route path="budgets" element={guarded([Permissions.BUDGETS_READ], <BudgetsPage />)} />
+        <Route path="pharmacy" element={guarded([Permissions.PHARMACY_READ], <PharmacyWorklistPage />)} />
+        <Route path="pharmacy/new" element={guarded([Permissions.PHARMACY_PRESCRIPTION], <PrescriptionFormPage />)} />
+        <Route path="pharmacy/prescriptions/:id" element={guarded([Permissions.PHARMACY_READ], <PrescriptionDetailPage />)} />
+        <Route path="pharmacy/interactions" element={guarded([Permissions.PHARMACY_READ], <InteractionsPage />)} />
+        <Route path="patients" element={guardedAny([Permissions.PATIENTS_READ, Permissions.PHARMACY_READ], <PatientsPage />)} />
+        <Route path="sales" element={guardedAny([Permissions.BILLING_READ, Permissions.BILLING_INVOICE], <SalesInvoicesPage />)} />
+        <Route path="sales/new" element={guarded([Permissions.BILLING_INVOICE], <SaleFormPage />)} />
+        <Route path="sales/:id" element={guardedAny([Permissions.BILLING_READ, Permissions.PHARMACY_READ], <SalesInvoiceDetailPage />)} />
+        <Route path="billing/setup" element={guarded([Permissions.BILLING_READ], <BillingSetupPage />)} />
+        <Route path="billing/reports" element={guardedAny([Permissions.BILLING_READ, Permissions.ETIMS_READ], <BillingReportsPage />)} />
+        <Route path="etims" element={guarded([Permissions.ETIMS_READ], <EtimsConsolePage />)} />
         <Route path="store-requisitions" element={guardedAny(STORES_SEE, <StoreRequisitionsPage />)} />
         <Route path="store-requisitions/new" element={guarded([Permissions.INVENTORY_REQUISITION], <StoreRequisitionFormPage />)} />
         <Route path="store-requisitions/:id/edit" element={guarded([Permissions.INVENTORY_REQUISITION], <StoreRequisitionFormPage />)} />
