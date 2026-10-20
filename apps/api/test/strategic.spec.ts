@@ -81,6 +81,9 @@ describe('Strategic procurement (acceptance)', () => {
         { itemId: ids.itemA, quantity: 1000, estimatedUnitCost: 100, voteHead: ids.ipdVote, plannedQuarter: 1 },
         { itemId: ids.itemB, quantity: 1000, estimatedUnitCost: 100, voteHead: ids.ipdVote, plannedQuarter: 2 },
       ];
+      // The plan form offers the department's vote heads for the year.
+      const opts = await c['ward.incharge'].get(`/budgets/options?departmentId=${ids.ipd}&financialYear=${encodeURIComponent(fy)}`).expect(200);
+      expect(opts.body).toEqual(expect.arrayContaining([expect.objectContaining({ voteHead: ids.ipdVote, financialYear: fy })]));
       // Not on a vote head this department has.
       await c['ward.incharge'].post('/procurement-plans', { financialYear: fy, departmentId: ids.ipd, title: 'x', lines: [{ ...lines[0], voteHead: ids.pharmVote }] }).expect(400);
       // Not another department's plan.
@@ -216,7 +219,11 @@ describe('Strategic procurement (acceptance)', () => {
       await c['proc.manager']
         .put(`/tenders/${tender.id}/committee`, { members: [{ userId: ids.tender, role: 'MEMBER' }, { userId: ids.admin, role: 'MEMBER' }] })
         .expect(400); // no chair
+      const evaluators = await c['proc.manager'].get('/tenders/evaluators').expect(200);
+      expect(evaluators.body.map((u: { id: string }) => u.id)).toEqual(expect.arrayContaining([ids.tender, ids.admin, ids.quality, ids.storekeeper]));
+      await c.tender.get('/tenders/evaluators').expect(403);
       const finUser = (await one(`SELECT id FROM app_user WHERE username = 'finance'`)).id;
+      expect(evaluators.body.map((u: { id: string }) => u.id)).not.toContain(finUser);
       await c['proc.manager'].put(`/tenders/${tender.id}/committee`, { members: [{ userId: ids.tender, role: 'CHAIR' }, { userId: finUser, role: 'MEMBER' }] }).expect(400); // finance cannot evaluate
       await c['proc.manager']
         .put(`/tenders/${tender.id}/committee`, {

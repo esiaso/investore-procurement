@@ -136,6 +136,12 @@ export class TendersController {
     return this.tenders.list(q);
   }
 
+  /** Active users who may sit on an evaluation committee (tenders.evaluate). */
+  @Get('evaluators') @RequirePermissions(P.TENDERS_MANAGE)
+  evaluators() {
+    return this.tenders.evaluators();
+  }
+
   @Get(':id') @RequireAnyPermission(P.TENDERS_READ, P.TENDERS_EVALUATE)
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
     return this.tenders.get(id, u);

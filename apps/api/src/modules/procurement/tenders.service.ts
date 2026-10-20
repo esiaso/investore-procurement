@@ -317,6 +317,15 @@ export class TendersService implements OnModuleInit, ApprovalHandler {
     });
   }
 
+  evaluators(): Promise<{ id: string; fullName: string; username: string }[]> {
+    return this.ds.query(
+      `SELECT DISTINCT u.id, u.full_name AS "fullName", u.username FROM app_user u JOIN user_role ur ON ur.user_id = u.id
+         JOIN role_permission rp ON rp.role_id = ur.role_id AND rp.permission_code = $1
+        WHERE u.is_active ORDER BY 2`,
+      [Permissions.TENDERS_EVALUATE],
+    );
+  }
+
   /** A member's conflict-of-interest declaration (required before scoring; once only). */
   async declare(id: string, actor: SessionUser, dto: { hasConflict: boolean; declaration: string }) {
     return this.ds.transaction(async (m) => {

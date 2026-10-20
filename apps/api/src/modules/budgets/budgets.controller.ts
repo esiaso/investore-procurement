@@ -38,6 +38,8 @@ export class BudgetsController {
     return (await this.budgets.positions({ departmentId: q.departmentId, financialYear: fy })).map((b) => ({
       id: b.id,
       departmentId: b.departmentId,
+      voteHead: b.voteHead,
+      financialYear: b.financialYear,
       label: `${b.voteHead} · ${b.departmentName} · FY ${b.financialYear}`,
     }));
   }
