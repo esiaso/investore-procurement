@@ -150,5 +150,7 @@ export const ETIMS_ASSUMPTIONS: string[] = [
   'Purchase confirmation (insertTrnsPurchase) uses pchsSttsCd 02 to accept and 04 to reject, pchsTyCd "N", rcptTyCd "P", regTyCd "M"; spplrInvcNo is matched against the supplier invoice number captured locally.',
   'Item codes (itemCd) follow spec 4.19: country (KE) + product type + packaging unit + quantity unit + 7-digit sequence per control unit.',
   'VSCU uses the same JSON payloads as OSCU at the VSCU paths listed in ETIMS_PATHS (VSCU spec v2.0 function list).',
+  'lastReqDt (code tables, purchases, imports) is sent in Kenyan time (setting locale.timezone), the time KRA stamps its records with; the next request starts from the previous request time and duplicates are ignored.',
+  'Go-live: an outlet reports ledger movements made after its eTIMS configuration was created. Earlier history is not replayed; an item’s stock master is first sent with its first reported movement.',
   'Reverse invoicing (buyer-issued invoices for non-VAT-registered suppliers) is not specified in the OSCU/VSCU v2.0 documents; a hook records the need and queues nothing until KRA publishes the format.',
 ];

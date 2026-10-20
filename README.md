@@ -142,6 +142,8 @@ Other scripts:
 | `SMTP_URL` | – (`smtp://mailpit:1025` in compose) | empty = mail stays queued in `email_outbox` |
 | `MAIL_POLL_SECONDS` | `10` | outbox sender interval |
 | `JOBS_MODE` | `inline` (`queue` in compose) | `queue` = BullMQ + the worker service; `inline` = run jobs in the calling process; `off` |
+| `SAMPLE_ETIMS_URL` | – (`http://mock-etims:8088/etims-api` in compose) | sample data only: the mock control unit the sample pharmacies use; empty = in-process mock |
+| `MOCK_ETIMS_PORT` | `8088` | port of the `mock-etims` service |
 | `CHROMIUM_PATH` | – | Chromium for PDFs; default is Playwright's bundled browser (installed in the Docker image) |
 | `DB_LOGGING` | `false` | log SQL |
 | `TEST_DATABASE_URL`, `TEST_REDIS_URL` | `…/silp_test`, `redis://…/1` | used by the API tests |
@@ -649,6 +651,117 @@ jobs run once on a fresh database. A few Main Store and Main Pharmacy items get
 MANUAL levels just above their stock, so the reorder report has suggestions despite
 the short sample history.
 
+## Pharmacy, billing and KRA eTIMS (slice 6)
+
+### Pharmacy
+
+* **Patients** are a minimal cache (hospital no., name, date of birth, sex, weight,
+  pregnancy, payer/scheme and member no., allergies). The HMIS stays the patient
+  register (slice 9).
+* **Prescriptions** are written at generic level (dose, frequency, duration, route,
+  quantity in base units). The **worklist** per outlet lists open prescriptions oldest
+  first, with waiting time and alert badges; it refreshes every 30 s.
+* **Clinical checks** run when a prescription is received, again at verification and at
+  each dispense, against the other lines and the patient's **active medications**
+  (dispensed in the last `pharmacy.activeMedicationDays`, 30):
+  - interactions from an `InteractionSource` (the internal `drug_interaction` table,
+    keyed on INN or `class:<therapeutic class>`; combination products are checked by
+    component);
+  - allergies by substance or class ("penicillins" matches *Penicillin antibiotic*);
+  - duplicate therapy (same substance: moderate; same class: minor);
+  - minimum age and pregnancy (flags on the generic).
+* Severities in `pharmacy.blockingSeverities` (contraindicated, major) **block
+  verification and dispensing** until a pharmacist (`pharmacy.verify`) overrides each
+  alert with a reason. Overrides cannot be edited or deleted (database trigger) and are
+  listed in *Drug interactions → Alerts raised vs overridden* (CSV export). Moderate
+  and minor alerts are shown inline in colour.
+* The starter interaction set is labelled **DEMO** — illustrative, not a clinical
+  reference. Import a licensed set as CSV (`inn_a,inn_b,severity,mechanism,management[,source]`,
+  checked first, upserted by pair).
+* **Dispensing**: any brand of the prescribed generic (substitution recorded), FEFO
+  batches (picking other batches needs `inventory.override_fefo` and a reason),
+  partial supply, controlled drugs with a witness. Each dispense records batch per
+  patient (`dispense_line`), posts `DISPENSE` ledger movements and issues the sales
+  invoice. Timestamps: received → verified → first dispensed → completed.
+* **Returns** of dispensed medicines raise a credit note (eTIMS) and put the stock back
+  on the same batches; undispensed balances can be cancelled with a reason.
+
+### Billing
+
+* **Price lists** (retail, staff, corporate, insurance): VAT-inclusive prices from the
+  item's VAT-exclusive price ± the list adjustment, or explicit per-item prices.
+  **Payers** carry a price list and a patient co-pay %; the invoice splits each line.
+* VAT per line from the item's tax category and the tax tables (`computeLine`:
+  tax = gross × r / (100 + r)). Tax categories map to eTIMS tax types (A exempt, B 16%,
+  C zero-rated, D non-VAT, E 8%).
+* **Payment modes** (cash, M-Pesa with its code, card, insurance, corporate, credit),
+  each mapped to an eTIMS payment type. An unpaid patient share goes on account
+  (`billing.patientCreditMode`).
+* Buyer KRA PIN is validated when given; B2C sales need none.
+* **Sales invoices** are immutable once issued (trigger); corrections are **credit
+  notes** linked to the original. OTC and patient-chargeable consumables are sold at
+  *Sales & receipts → New sale*.
+* **Receipts**: 80 mm thermal or A4 PDF in the TIS layout with the SCU block (CU date
+  and time, CU ID, CU invoice no., receipt counter, internal data and signature in
+  groups of 4, QR). Until eTIMS accepts the invoice it prints **"eTIMS PENDING — THIS IS
+  NOT AN OFFICIAL RECEIPT"**; the signed receipt is reprintable (marked COPY).
+* **HMIS**: `POST /api/v1/integration/invoices` with an API key in `x-api-key`
+  (created by an admin under `/api-clients`, shown once, stored hashed). The key acts
+  as a service user (its permissions and stores apply, the audit trail names it).
+  `externalRef` (the HMIS bill id) makes the call idempotent (409 with the existing
+  invoice id). HMIS charges do not move stock unless `deductStock` is set.
+
+### eTIMS
+
+* One **control unit per selling outlet** (*KRA eTIMS → Control units*): OSCU, VSCU or
+  MOCK, PIN, branch id (each outlet is its own KRA branch), device serial.
+  Initialisation stores the communication key encrypted.
+* **Code tables and item classes** sync daily (`etims.codes`). Local codes are mapped
+  (tax category, unit of measure, packaging, item class per category or item,
+  country). **Items without a mapping cannot be invoiced**; the console lists them.
+  Items are registered (`saveItem`) before their first sale or stock movement.
+* Every document goes through the **outbox** (`etims_outbox`): idempotency key per
+  document, dependencies (item registration before sale, sale before its stock-out),
+  one sender at a time (`FOR UPDATE SKIP LOCKED`), exponential back-off for timeouts,
+  5xx and offline (`etims.retryBaseSeconds` × 2ⁿ, capped at 1 h, up to
+  `etims.maxAttempts`); business errors fail at once. An accepted document is never
+  sent again. At the till the sale waits `etims.syncWaitMs` (4 s) for the signed
+  receipt, then stays queued for `etims.dispatch` (every minute).
+* Every call is logged (`etims_transmission`) with the key masked. Documents not
+  accepted within `etims.alertAfterMinutes` (60) alert users with `etims.manage`
+  (`etims.monitor`). *Outbox* shows status, attempts and the call log, and reprocesses
+  failed documents (re-resolving mappings).
+* **Stock movements** (`etims.stock`, every 15 min): new ledger rows per outlet become
+  stock in/out messages (receipts, returns, transfers, issues, write-offs/disposals,
+  dispenses), each followed by the item's stock master.
+* **Purchases** (`etims.purchases`, hourly, and at invoice capture): supplier sales to
+  the hospital are fetched and matched to captured supplier invoices by supplier PIN
+  and invoice number. Unmatched invoices get eTIMS status `NOT_ON_ETIMS` and a
+  **NOT_ON_ETIMS variance in the three-way match**. Purchases can be confirmed or
+  rejected on eTIMS. Declared imports can be linked to items.
+* **Mock**: `mock-etims` compose service (port 8088; OSCU paths under `/etims-api`,
+  VSCU at the root). It is not KRA. Inject failures with
+  `POST /_mock/failure {"mode":"offline"|"timeout"|"http500"|"business","count":n}`.
+  Sample outlets (Main, OPD and IPD pharmacies) use it.
+* Where the KRA OSCU/VSCU v2.0 and TIS v2.0 documents leave room for interpretation, the
+  choices are listed in **`ETIMS_ASSUMPTIONS`**
+  (`apps/api/src/modules/etims/etims-spec.ts`, also `GET /etims/assumptions` and the
+  console's *Specification notes* tab). Review them with KRA during certification.
+
+### Reports
+
+*Tax & eTIMS reports*: VAT output by tax category (invoices less credit notes),
+purchases by tax category (eTIMS-verified vs unverified), credit-note register, local
+vs eTIMS reconciliation (counts and totals, documents not accepted, transmitted totals
+that differ, gaps in the CU receipt counter) and eTIMS sync status. Interaction alerts
+raised vs overridden are under *Drug interactions*.
+
+New permissions: `patients.read/manage`, `pharmacy.read/prescription/verify/dispense/interactions`,
+`billing.read/invoice/manage`, `etims.read/manage`. New settings: `etims.*`,
+`billing.defaultPriceListCode`, `billing.patientCreditMode`,
+`pharmacy.activeMedicationDays`, `pharmacy.blockingSeverities`; `stock.amcTxnTypes` now
+counts dispenses.
+
 ## Known limitations / next slices
 
 * Redis holds sessions and the BullMQ job queue. The mail outbox is still sent by a
@@ -658,9 +771,12 @@ the short sample history.
   creates these for every item with ledger history in a store; add one by hand
   (Stock levels → PUT `/stock-planning/settings/:storeId/:itemId`) for a new item with
   no history.
-* Dispensing to patients (POS), full contracts, eTIMS verification and the supplier
-  portal are later slices. Patient references on requisitions are free text until the
-  HMIS link (slice 9). The slice-2 stock receipt is still available for opening
+* Full contracts and the supplier portal are later slices. Patients are a local cache
+  and patient references on requisitions are free text until the HMIS link (slice 9).
+* eTIMS has been exercised against the mock control unit only. KRA sandbox
+  certification (OSCU or VSCU) still has to be done with the hospital's PIN and device;
+  see `ETIMS_ASSUMPTIONS`. Reverse invoicing is a hook only (no KRA format yet).
+* The interaction set shipped is a DEMO set; load a licensed one before go-live. The slice-2 stock receipt is still available for opening
   balances; normal purchases go through GRNs.
 * Reservations are re-planned on issue, cancellation, on demand and (slice 5) when
   stock arrives. An adjustment or count that removes reserved stock leaves
