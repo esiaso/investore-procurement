@@ -49,6 +49,27 @@ export interface SettingTypes {
   'notify.emailDefault': boolean;
   /** Job name → cron expression. */
   'jobs.schedules': Record<string, string>;
+  'etims.requestTimeoutMs': number;
+  /** How long a sale waits for eTIMS before the receipt is printed as "eTIMS pending". */
+  'etims.syncWaitMs': number;
+  'etims.maxAttempts': number;
+  'etims.retryBaseSeconds': number;
+  'etims.alertAfterMinutes': number;
+  /** {pin} {bhfId} {rcptSign} placeholders. */
+  'etims.qrUrlTemplate': string;
+  'etims.defaultPackagingUnit': string;
+  'etims.defaultOriginCountry': string;
+  'etims.defaultPaymentType': string;
+  /** Rate per eTIMS tax type until code tables are synchronised. */
+  'etims.taxTypeRates': Record<string, number>;
+  'etims.stockReporting': boolean;
+  'billing.defaultPriceListCode': string;
+  /** Payment mode used when the patient's share is left on account. */
+  'billing.patientCreditMode': string;
+  /** Prescriptions dispensed within this many days count as the patient's active medication. */
+  'pharmacy.activeMedicationDays': number;
+  /** Alert severities that block dispensing until a pharmacist overrides them. */
+  'pharmacy.blockingSeverities': string[];
 }
 
 export type SettingKey = keyof SettingTypes;

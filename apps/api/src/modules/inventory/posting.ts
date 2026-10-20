@@ -51,7 +51,7 @@ export class StockRuleError extends BadRequestException {
  * Movement types that take stock out for use: they must not touch unusable
  * batches (held, expired, in a quarantine bin) or stock reserved for requisitions.
  */
-const CONSUMING: ReadonlySet<StockTxnType> = new Set([StockTxnType.TRANSFER_DISPATCH, StockTxnType.ISSUE]);
+const CONSUMING: ReadonlySet<StockTxnType> = new Set([StockTxnType.TRANSFER_DISPATCH, StockTxnType.ISSUE, StockTxnType.DISPENSE]);
 /**
  * Outflows that leave reserved stock alone. Returns to suppliers may take held,
  * expired or quarantined stock (that is usually why it goes back), but not
@@ -65,6 +65,7 @@ const COST_INFLOWS: ReadonlySet<StockTxnType> = new Set([
   StockTxnType.RECEIPT,
   StockTxnType.TRANSFER_RECEIPT,
   StockTxnType.RETURN_IN,
+  StockTxnType.DISPENSE_RETURN,
 ]);
 
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;

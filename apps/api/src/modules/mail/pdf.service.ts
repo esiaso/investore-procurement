@@ -18,19 +18,26 @@ export class PdfService implements OnModuleDestroy {
     return this.browser;
   }
 
-  async render(html: string): Promise<Buffer> {
+  /** A4 by default; `page` sets e.g. a thermal roll ({ width: '80mm' }, height fitted to the content). */
+  async render(html: string, page?: { width: string; marginMm?: number }): Promise<Buffer> {
     let browser: Browser;
     try {
       browser = await this.getBrowser();
     } catch (e) {
       throw new ServiceUnavailableException(`PDF rendering is unavailable (Chromium not installed?): ${(e as Error).message.split('\n')[0]}`);
     }
-    const page = await browser.newPage();
+    const tab = await browser.newPage();
     try {
-      await page.setContent(html, { waitUntil: 'load' });
-      return await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '12mm', right: '12mm' } });
+      await tab.setContent(html, { waitUntil: 'load' });
+      if (page) {
+        const m = `${page.marginMm ?? 3}mm`;
+        await tab.setViewportSize({ width: 302, height: 800 }); // 80 mm at 96 dpi
+        const height = await tab.evaluate(() => document.documentElement.scrollHeight);
+        return await tab.pdf({ width: page.width, height: `${Math.ceil((height * 25.4) / 96) + 2 * (page.marginMm ?? 3)}mm`, printBackground: true, margin: { top: m, bottom: m, left: m, right: m } });
+      }
+      return await tab.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '12mm', right: '12mm' } });
     } finally {
-      await page.close();
+      await tab.close();
     }
   }
 

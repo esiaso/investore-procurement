@@ -32,6 +32,8 @@ export interface Env {
    * `inline` = run immediately in the calling process (tests, development); `off`.
    */
   jobsMode: 'queue' | 'inline' | 'off';
+  /** Sample data only: URL of the mock-etims container for the sample outlets (empty = in-process mock). */
+  sampleEtimsUrl: string | null;
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -105,6 +107,7 @@ export function loadEnv(): Env {
     mailPollSeconds: int(e.MAIL_POLL_SECONDS, 10),
     chromiumPath: e.CHROMIUM_PATH || null,
     jobsMode: jobsMode(e.JOBS_MODE),
+    sampleEtimsUrl: e.SAMPLE_ETIMS_URL || null,
   };
   return cached;
 }

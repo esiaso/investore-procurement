@@ -1,7 +1,7 @@
 import { Check, Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { ControlledSchedule, SalesClass, type AttributeDefinition } from '@sil/shared';
 import { AppBaseEntity } from '../../common/entities/base.entity';
-import { MONEY, QUANTITY } from '../../common/entities/transformers';
+import { MONEY, numericTransformer, QUANTITY } from '../../common/entities/transformers';
 import { TaxCategory } from '../tax/tax.entities';
 
 /** International Non-proprietary Name + strength + form + route. */
@@ -44,6 +44,14 @@ export class Generic extends AppBaseEntity {
 
   @Column({ type: 'text', nullable: true })
   lactationNotes: string | null;
+
+  /** Dispensing checks: contraindicated in pregnancy. */
+  @Column({ type: 'boolean', default: false })
+  pregnancyContraindicated: boolean;
+
+  /** Dispensing checks: youngest patient age in years (null = no limit). */
+  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
+  minAgeYears: number | null;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
