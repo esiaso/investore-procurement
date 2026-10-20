@@ -30,6 +30,9 @@ const SKIPPED_ENTITIES = new Set([
   'BudgetEntry',
   // Job runs are themselves the log of background work.
   'JobRun',
+  // eTIMS keeps its own logs: every call (masked) and the outbox history.
+  'EtimsTransmission',
+  'EtimsOutbox',
 ]);
 
 function normalise(value: unknown): unknown {
