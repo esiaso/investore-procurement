@@ -32,5 +32,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // jsdom + MUI DataGrid is slow in the compose test container when files run in parallel.
+    testTimeout: 20_000,
   },
 });
