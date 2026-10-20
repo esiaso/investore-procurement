@@ -63,7 +63,7 @@ value is in [`.env.example`](.env.example) and in the `docker-compose.yml` defau
 | `accountant` | Finance / Accounts (second user, so capture ≠ approval) | all |
 | `tender` | Tender / Evaluation Committee Member | – |
 | `scm` | Supply Chain Manager | all |
-| `supplier` | Supplier (portal) | – |
+| `supplier`, `supplier2` | Supplier portal (linked to SUP0001 / SUP0002) | – |
 | `auditor` | Auditor (read-only) | all |
 | `management` | Hospital Management | all |
 
@@ -762,6 +762,114 @@ New permissions: `patients.read/manage`, `pharmacy.read/prescription/verify/disp
 `pharmacy.activeMedicationDays`, `pharmacy.blockingSeverities`; `stock.amcTxnTypes` now
 counts dispenses.
 
+## Strategic procurement (slice 7)
+
+Defaults suit a private hospital: the public-procurement (PPADA) steps are an optional
+rule set, **off** by default (`procurement.ppadaRuleSet`). Amounts are KES.
+
+### Forecasting and supply planning
+
+* **Demand forecast** per item × store from ledger consumption (`stock.amcTxnTypes`, less
+  department and patient returns), behind one `Forecaster` interface: **AMC**,
+  **moving average** and **Holt-Winters** (falls back to Holt's linear trend with under
+  two seasons of history). `AUTO` (default) back-tests the last 3 months and keeps the
+  method with the lowest MAPE per item. *Planning → Demand forecasting*.
+* **Adjustment factors** (morbidity, new services, programmes) per item or category, a
+  month range and optionally a store, multiply the forecast.
+* **Suggested order** = forecast demand over lead time + review period + safety stock −
+  position (available + on order + in transit). Selected suggestions become a draft PR
+  (or a transfer request for a satellite store).
+* **Accuracy**: each month, last month's actual consumption is compared with the forecast
+  made before that month began (MAPE by method, worst items). Jobs `forecast.run` and
+  `forecast.accuracy` run monthly.
+* **Supply planning**: months of stock and pipeline months of stock per item, against
+  `supply.minMonthsOfStock` / `supply.maxMonthsOfStock` (2 / 4), and a month-by-month
+  order schedule (order by, arrival month, quantity).
+* **Quantification** per programme: morbidity method (target population × coverage ×
+  regimen share × units per patient-month × months, plus wastage) shown next to the
+  consumption method (AMC × months), with the difference and the quantity to procure
+  after usable stock. The target population is patients treated per month.
+* **Funding sources** (donor stock): a batch's funding source can forbid **sale** and
+  limit the **stores** and **departments** it may go to. FEFO skips restricted batches
+  for sales, transfers and issues. *Donor stock* reports quantity, value, earliest expiry,
+  monthly use and months of stock per donor.
+
+### Plans and sourcing
+
+* **Annual procurement plan** per department and financial year, each line on one of the
+  department's **budget vote heads**, with a quarter and a sourcing method (blank = the
+  one recommended for the line value). Approval workflow `APP-1` (procurement →
+  finance → management). **Mid-year revisions** create a new version through approval;
+  the approved version stays in force meanwhile and is restored if the revision is
+  rejected. Every approved version is kept.
+* **Consolidation** (`plans.consolidate`): approved departmental plans are added up by item
+  and vote head into the hospital plan; the method is re-recommended for the combined value.
+* **Planned vs procured vs spent**: approved POs of the plan's departments in the year for
+  the same item, and approved/paid invoices against them.
+* **Sourcing methods** (`procurement.sourcingMethods`), with value bands (KES, VAT
+  inclusive): low-value < 50,000 · RFQ 50,000–1,000,000 (3 bidders) · open tender ≥
+  1,000,000 · restricted tender < 5,000,000 (3 invited, justification) · RFP
+  (justification) · direct (justification) · framework call-off (needs an active
+  framework agreement covering the items). Requisitions are checked on submission.
+
+### Tenders
+
+Notice → bid documents → clarifications and addenda (emailed to everyone holding the
+documents) → **sealed** bids (portal or the bid register; staff see who bid but no prices
+until opening; late bids refused) → **opening** after the closing time with attendees,
+minutes and price read-outs → **evaluation committee** (users with `tenders.evaluate`,
+exactly one chair), each member signs a **conflict-of-interest declaration** before
+scoring and a member with a conflict cannot score → **preliminary** (pass/fail by
+majority), **technical** (weighted criteria adding up to 100, pass mark) and **financial**
+(lowest qualified price ÷ price × 100) → combined score with the tender's technical
+weight (0 = lowest evaluated price) → the chair records the **recommendation** (at least
+`procurement.minEvaluationCommittee` = 3 scoring members) → **professional opinion** from
+outside the committee → award approval `TND-1` (supply chain → management) → award and
+regret emails → optional **standstill** (PPADA rule set, `procurement.standstillDays` =
+14) → **contract signing**. Scores cannot be changed once the evaluation is locked (trigger).
+
+### Contracts
+
+* Contracts and **framework agreements**: prices, quantities (or price-only lines),
+  validity, delivery and payment terms, **performance securities**, **milestones**.
+* **Call-off orders** become draft POs at the contract prices within the remaining
+  balances (`CONTRACT_BALANCE`) and the contract value (`CONTRACT_CEILING`), then follow
+  the normal PO approval. Ordinary POs for a contract item from that supplier also use
+  the contract price and count against the balance.
+* **Variations** (end date, value, line prices and quantities) apply only after approval
+  `CV-1` (procurement → finance).
+* `contracts.alerts` (daily): contracts ending in 90 / 30 days and securities expiring in
+  30 / 7 days notify contract managers; contracts past their end date become EXPIRED.
+
+### Suppliers, agencies and KPIs
+
+* **Scorecards** (monthly, `suppliers.scorecards`): on time, in full, quality (100 −
+  reject rate), price compliance, documents, weighted 30 / 25 / 25 / 10 / 10. A score below
+  60 opens a **corrective action** automatically.
+* **Suspension, blacklisting and reinstatement** go through approval `SSN-1` (supply chain
+  → management) and apply on their effective date; suspensions with an end date are
+  lifted by `suppliers.sanctions`. Optional AGPO category and certificate on suppliers.
+* **KEMSA / MEDS**: mark the supplier as a national agency, define **order templates**
+  (store, cycle, fixed or forecast quantities); `agency.ordercycle` raises the draft POs
+  when due. Delivery tracking (acknowledged → processing → dispatched → in transit; the
+  GRN confirms delivery).
+* **KPIs** for a period: PR → PO → GRN lead times, plan execution, savings against the
+  requisition estimates, spend by supplier / category / method, % spend under contract,
+  OTIF, forecast accuracy. With the PPADA rule set on: AGPO spend and a PPRA-style award
+  report (`/procurement/ppra-report`).
+
+### Supplier portal
+
+Users linked to a supplier (`supplier`, `supplier2` in the sample data) get the portal
+only: their own RFQs (quote), open tenders and those they are invited to (documents,
+questions, bid, withdraw before closing), their own purchase orders (acknowledge, delivery
+status, send delivery notes / invoices as metadata), invoices and payment status. Every
+portal query is scoped to the user's supplier; other suppliers' records answer **404**.
+
+New permissions: `forecasting.read/manage`, `plans.read/manage/consolidate`,
+`tenders.read/manage/evaluate`, `contracts.read/manage`, `suppliers.performance`,
+`procurement.kpis`, `portal.access`. New document types: APP, TND, CTR, CV, SSN.
+
 ## Known limitations / next slices
 
 * Redis holds sessions and the BullMQ job queue. The mail outbox is still sent by a
@@ -771,7 +879,9 @@ counts dispenses.
   creates these for every item with ledger history in a store; add one by hand
   (Stock levels → PUT `/stock-planning/settings/:storeId/:itemId`) for a new item with
   no history.
-* Full contracts and the supplier portal are later slices. Patients are a local cache
+* PPADA disposal and the full public-sector reporting set are not implemented (only the
+  optional standstill, AGPO tracking and PPRA award report). Portal documents and tender
+  documents are metadata until file uploads arrive. Patients are a local cache
   and patient references on requisitions are free text until the HMIS link (slice 9).
 * eTIMS has been exercised against the mock control unit only. KRA sandbox
   certification (OSCU or VSCU) still has to be done with the hospital's PIN and device;
