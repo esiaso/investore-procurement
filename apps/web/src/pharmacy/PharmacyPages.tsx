@@ -52,16 +52,12 @@ function useDateTime() {
 export function PharmacyWorklistPage() {
   const navigate = useNavigate();
   const { can } = useAuth();
-  const stores = useStores();
+  // Default: every outlet the user works in (store scope applies server-side).
   const [storeId, setStoreId] = useState('');
   const [status, setStatus] = useState(OPEN);
   const [search, setSearch] = useState('');
   const [paging, setPaging] = useState({ page: 0, pageSize: 25 });
   const q = useDebounced(search);
-  useEffect(() => {
-    const pharmacy = stores.data?.find((s) => s.type.includes('PHARMACY'));
-    if (!storeId && pharmacy) setStoreId(pharmacy.id);
-  }, [storeId, stores.data]);
   const { data, isFetching } = useQuery({
     queryKey: ['/pharmacy/prescriptions', storeId, status, q, paging],
     queryFn: () => {
