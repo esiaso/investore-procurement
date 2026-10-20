@@ -22,7 +22,22 @@ import { StockTakeDetailPage, StockTakesPage } from './inventory/StockTakesPage'
 import { TransfersPage } from './inventory/TransfersPage';
 import { ValuationPage } from './inventory/ValuationPage';
 import { AppLayout } from './layout/AppLayout';
-import { STORES_SEE } from './layout/nav';
+import {
+  PortalHomePage,
+  PortalOrderPage,
+  PortalOrdersPage,
+  PortalPaymentsPage,
+  PortalRfqsPage,
+  PortalSubmissionsPage,
+  PortalTenderPage,
+  PortalTendersPage,
+} from './portal/PortalPages';
+import { ContractDetailPage, ContractsPage } from './strategic/ContractPages';
+import { ForecastsPage, FundingSourcesPage, QuantificationPage, SupplyPlanPage } from './strategic/ForecastPages';
+import { AgencyOrdersPage, KpiPage, SupplierPerformancePage } from './strategic/PerformancePages';
+import { PlanDetailPage, PlanFormPage, PlansPage } from './strategic/PlanPages';
+import { TenderDetailPage, TenderFormPage, TendersPage } from './strategic/TenderPages';
+import { isPortalUser, STORES_SEE } from './layout/nav';
 import { AlertsPage, ExpiryPage, JobsPage, ReorderPage, StockLevelsPage } from './planning/PlanningPages';
 import { IssueFormPage, IssueVoucherDetailPage, IssueVouchersPage } from './stores/IssuePages';
 import { BatchTracePage, ConsumptionPage } from './stores/ReportPages';
@@ -75,6 +90,25 @@ export function App() {
   if (!user) return <LoginPage />;
   if (user.mustChangePassword) return <ForcedPasswordChangePage />;
 
+  if (isPortalUser(user)) {
+    // Supplier portal: nothing of the staff application is routed.
+    return (
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route index element={guarded([Permissions.PORTAL_ACCESS], <PortalHomePage />)} />
+          <Route path="portal/rfqs" element={guarded([Permissions.PORTAL_ACCESS], <PortalRfqsPage />)} />
+          <Route path="portal/tenders" element={guarded([Permissions.PORTAL_ACCESS], <PortalTendersPage />)} />
+          <Route path="portal/tenders/:id" element={guarded([Permissions.PORTAL_ACCESS], <PortalTenderPage />)} />
+          <Route path="portal/orders" element={guarded([Permissions.PORTAL_ACCESS], <PortalOrdersPage />)} />
+          <Route path="portal/orders/:id" element={guarded([Permissions.PORTAL_ACCESS], <PortalOrderPage />)} />
+          <Route path="portal/payments" element={guarded([Permissions.PORTAL_ACCESS], <PortalPaymentsPage />)} />
+          <Route path="account" element={<AccountPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       <Route element={<AppLayout />}>
@@ -96,6 +130,24 @@ export function App() {
         <Route path="invoices/:id" element={guarded([Permissions.PURCHASING_READ], <InvoiceDetailPage />)} />
         <Route path="suppliers" element={guarded([Permissions.SUPPLIERS_READ], <SuppliersPage />)} />
         <Route path="budgets" element={guarded([Permissions.BUDGETS_READ], <BudgetsPage />)} />
+        <Route path="procurement-plans" element={guarded([Permissions.PLANS_READ], <PlansPage />)} />
+        <Route path="procurement-plans/new" element={guarded([Permissions.PLANS_MANAGE], <PlanFormPage mode="new" />)} />
+        <Route path="procurement-plans/:id/edit" element={guarded([Permissions.PLANS_MANAGE], <PlanFormPage mode="edit" />)} />
+        <Route path="procurement-plans/:id/revise" element={guarded([Permissions.PLANS_MANAGE], <PlanFormPage mode="revise" />)} />
+        <Route path="procurement-plans/:id" element={guarded([Permissions.PLANS_READ], <PlanDetailPage />)} />
+        <Route path="tenders" element={guardedAny([Permissions.TENDERS_READ, Permissions.TENDERS_EVALUATE], <TendersPage />)} />
+        <Route path="tenders/new" element={guarded([Permissions.TENDERS_MANAGE], <TenderFormPage />)} />
+        <Route path="tenders/:id" element={guardedAny([Permissions.TENDERS_READ, Permissions.TENDERS_EVALUATE], <TenderDetailPage />)} />
+        <Route path="contracts" element={guarded([Permissions.CONTRACTS_READ], <ContractsPage />)} />
+        <Route path="contracts/:id" element={guarded([Permissions.CONTRACTS_READ], <ContractDetailPage />)} />
+        <Route path="supplier-performance" element={guardedAny([Permissions.SUPPLIERS_PERFORMANCE, Permissions.SUPPLIERS_READ], <SupplierPerformancePage />)} />
+        <Route path="agency-orders" element={guarded([Permissions.PURCHASING_READ], <AgencyOrdersPage />)} />
+        <Route path="portal-documents" element={guarded([Permissions.PURCHASING_READ], <PortalSubmissionsPage />)} />
+        <Route path="procurement-kpis" element={guarded([Permissions.PROCUREMENT_KPIS], <KpiPage />)} />
+        <Route path="forecasting" element={guarded([Permissions.FORECASTING_READ], <ForecastsPage />)} />
+        <Route path="supply-planning" element={guarded([Permissions.FORECASTING_READ], <SupplyPlanPage />)} />
+        <Route path="quantification" element={guarded([Permissions.FORECASTING_READ], <QuantificationPage />)} />
+        <Route path="funding-sources" element={guarded([Permissions.FORECASTING_READ], <FundingSourcesPage />)} />
         <Route path="pharmacy" element={guarded([Permissions.PHARMACY_READ], <PharmacyWorklistPage />)} />
         <Route path="pharmacy/new" element={guarded([Permissions.PHARMACY_PRESCRIPTION], <PrescriptionFormPage />)} />
         <Route path="pharmacy/prescriptions/:id" element={guarded([Permissions.PHARMACY_READ], <PrescriptionDetailPage />)} />

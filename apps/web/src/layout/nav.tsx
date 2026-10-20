@@ -41,6 +41,17 @@ import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import PriceChangeIcon from '@mui/icons-material/PriceChange';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import CalculateIcon from '@mui/icons-material/Calculate';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import DescriptionIcon from '@mui/icons-material/Description';
+import GavelIcon from '@mui/icons-material/Gavel';
+import LeaderboardIcon from '@mui/icons-material/Leaderboard';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import StarHalfIcon from '@mui/icons-material/StarHalf';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import TimelineIcon from '@mui/icons-material/Timeline';
+import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
+import WaterfallChartIcon from '@mui/icons-material/WaterfallChart';
 import type { ReactNode } from 'react';
 import { PermissionCode, Permissions } from '@sil/shared';
 
@@ -53,11 +64,16 @@ export interface NavItem {
   /** At least one required (in addition to `permissions`). */
   anyOf?: PermissionCode[];
   section: string;
+  /** Supplier portal item: shown only to users linked to a supplier (who see nothing else). */
+  portal?: boolean;
 }
 
 const P = Permissions;
 /** Department staff, issuing stores and read-only roles see department documents. */
 export const STORES_SEE: PermissionCode[] = [P.INVENTORY_REQUISITION, P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_READ];
+
+/** A user linked to a supplier uses the supplier portal only. */
+export const isPortalUser = (user: { supplierId?: string | null } | null | undefined) => !!user?.supplierId;
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: <DashboardIcon />, permissions: [], section: '' },
@@ -69,6 +85,13 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Invoices', path: '/invoices', icon: <ReceiptLongIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
   { label: 'Suppliers', path: '/suppliers', icon: <HandshakeIcon />, permissions: [Permissions.SUPPLIERS_READ], section: 'Procurement' },
   { label: 'Budgets', path: '/budgets', icon: <AccountBalanceIcon />, permissions: [Permissions.BUDGETS_READ], section: 'Procurement' },
+  { label: 'Procurement plans', path: '/procurement-plans', icon: <CalendarMonthIcon />, permissions: [P.PLANS_READ], section: 'Sourcing & contracts' },
+  { label: 'Tenders', path: '/tenders', icon: <GavelIcon />, permissions: [], anyOf: [P.TENDERS_READ, P.TENDERS_EVALUATE], section: 'Sourcing & contracts' },
+  { label: 'Contracts', path: '/contracts', icon: <DescriptionIcon />, permissions: [P.CONTRACTS_READ], section: 'Sourcing & contracts' },
+  { label: 'Supplier performance', path: '/supplier-performance', icon: <StarHalfIcon />, permissions: [], anyOf: [P.SUPPLIERS_PERFORMANCE, P.SUPPLIERS_READ], section: 'Sourcing & contracts' },
+  { label: 'KEMSA / MEDS orders', path: '/agency-orders', icon: <LocalShippingIcon />, permissions: [P.PURCHASING_READ], section: 'Sourcing & contracts' },
+  { label: 'Portal documents', path: '/portal-documents', icon: <UploadFileIcon />, permissions: [P.PURCHASING_READ], section: 'Sourcing & contracts' },
+  { label: 'Procurement KPIs', path: '/procurement-kpis', icon: <LeaderboardIcon />, permissions: [P.PROCUREMENT_KPIS], section: 'Sourcing & contracts' },
   { label: 'Pharmacy worklist', path: '/pharmacy', icon: <LocalPharmacyIcon />, permissions: [P.PHARMACY_READ], section: 'Pharmacy & billing' },
   { label: 'Patients', path: '/patients', icon: <PersonIcon />, permissions: [], anyOf: [P.PATIENTS_READ, P.PHARMACY_READ], section: 'Pharmacy & billing' },
   { label: 'Drug interactions', path: '/pharmacy/interactions', icon: <WarningAmberIcon />, permissions: [P.PHARMACY_READ], section: 'Pharmacy & billing' },
@@ -86,6 +109,15 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Near expiry', path: '/stock-planning/expiry', icon: <EventBusyIcon />, permissions: [P.INVENTORY_READ], section: 'Planning' },
   { label: 'Stock levels', path: '/stock-planning/settings', icon: <StackedLineChartIcon />, permissions: [P.INVENTORY_READ], section: 'Planning' },
   { label: 'Stock alerts', path: '/stock-planning/alerts', icon: <NotificationsActiveIcon />, permissions: [], anyOf: [P.INVENTORY_READ, P.INVENTORY_ALERTS], section: 'Planning' },
+  { label: 'Demand forecasting', path: '/forecasting', icon: <TimelineIcon />, permissions: [P.FORECASTING_READ], section: 'Planning' },
+  { label: 'Supply planning', path: '/supply-planning', icon: <WaterfallChartIcon />, permissions: [P.FORECASTING_READ], section: 'Planning' },
+  { label: 'Quantification', path: '/quantification', icon: <CalculateIcon />, permissions: [P.FORECASTING_READ], section: 'Planning' },
+  { label: 'Donor stock', path: '/funding-sources', icon: <VolunteerActivismIcon />, permissions: [P.FORECASTING_READ], section: 'Planning' },
+  { label: 'Supplier home', path: '/', icon: <StorefrontIcon />, permissions: [P.PORTAL_ACCESS], section: '', portal: true },
+  { label: 'Requests for quotation', path: '/portal/rfqs', icon: <RequestQuoteIcon />, permissions: [P.PORTAL_ACCESS], section: 'Supplier portal', portal: true },
+  { label: 'Tenders', path: '/portal/tenders', icon: <GavelIcon />, permissions: [P.PORTAL_ACCESS], section: 'Supplier portal', portal: true },
+  { label: 'Purchase orders', path: '/portal/orders', icon: <ShoppingCartIcon />, permissions: [P.PORTAL_ACCESS], section: 'Supplier portal', portal: true },
+  { label: 'Invoices & payments', path: '/portal/payments', icon: <PaymentsIcon />, permissions: [P.PORTAL_ACCESS], section: 'Supplier portal', portal: true },
   { label: 'Stock on hand', path: '/stock', icon: <WarehouseIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Receipts', path: '/receipts', icon: <MoveToInboxIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Transfers', path: '/transfers', icon: <SwapHorizIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
@@ -103,8 +135,13 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Background jobs', path: '/jobs', icon: <ScheduleIcon />, permissions: [P.JOBS_RUN], section: 'Administration' },
   { label: 'Audit log', path: '/audit', icon: <HistoryIcon />, permissions: [Permissions.AUDIT_READ], section: 'Administration' },
   { label: 'My account', path: '/account', icon: <AssignmentIcon />, permissions: [], section: 'Administration' },
+  { label: 'My account', path: '/account', icon: <AssignmentIcon />, permissions: [], section: 'Supplier portal', portal: true },
 ];
 
-export function visibleNav(can: (...p: PermissionCode[]) => boolean): NavItem[] {
-  return NAV_ITEMS.filter((i) => can(...i.permissions) && (!i.anyOf?.length || i.anyOf.some((p) => can(p))));
+/**
+ * Menu for the user. Portal users (linked to a supplier) see only the portal;
+ * staff never see portal items.
+ */
+export function visibleNav(can: (...p: PermissionCode[]) => boolean, portalUser = false): NavItem[] {
+  return NAV_ITEMS.filter((i) => !!i.portal === portalUser && can(...i.permissions) && (!i.anyOf?.length || i.anyOf.some((p) => can(p))));
 }

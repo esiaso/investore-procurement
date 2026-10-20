@@ -24,14 +24,14 @@ import { Fragment, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { NotificationBell } from '../purchasing/NotificationBell';
-import { visibleNav } from './nav';
+import { isPortalUser, visibleNav } from './nav';
 
 const DRAWER_WIDTH = 240;
 
 export function NavList({ onNavigate }: { onNavigate?(): void }) {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const location = useLocation();
-  const items = visibleNav(can);
+  const items = visibleNav(can, isPortalUser(user));
   const sections = [...new Set(items.map((i) => i.section))];
 
   return (
