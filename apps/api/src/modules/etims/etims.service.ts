@@ -121,7 +121,9 @@ export class EtimsService implements OnModuleInit {
       if (deviceChanged) Object.assign(existing, { initialisedAt: null, cuId: null, mrcNo: null, cmcKeyEnc: null });
       return repo.save(existing);
     }
-    return repo.save(repo.create({ ...dto, baseUrl: dto.baseUrl ?? null, isActive: dto.isActive ?? true }));
+    // Go-live: movements are reported from now on (earlier history is not replayed to KRA).
+    const [{ last }] = await this.ds.query(`SELECT COALESCE(max(id), 0)::text AS last FROM stock_transaction WHERE store_id = $1`, [dto.storeId]);
+    return repo.save(repo.create({ ...dto, baseUrl: dto.baseUrl ?? null, isActive: dto.isActive ?? true, lastStockTxnId: Number(last) }));
   }
 
   private async withKey(m: EntityManager, configId: string): Promise<EtimsConfig> {
@@ -184,7 +186,7 @@ export class EtimsService implements OnModuleInit {
     if (c) {
       await this.ds.transaction(async (m) => {
         const cfg = await this.withKey(m, c.id);
-        const now = etimsDateTime(new Date(), 'UTC');
+        const now = etimsDateTime(new Date(), await this.settings.get('locale.timezone', m));
         const r1 = await this.transmit(m, cfg, 'codes', { lastReqDt: cfg.lastRequest.codes ?? '20180101000000' }, null);
         if (r1.ok) {
           for (const cls of (r1.data?.clsList as Record<string, unknown>[]) ?? []) {
@@ -793,7 +795,7 @@ export class EtimsService implements OnModuleInit {
     for (const c of await this.activeConfigs()) {
       await this.ds.transaction(async (m) => {
         const config = await this.withKey(m, c.id);
-        const now = etimsDateTime(new Date(), 'UTC');
+        const now = etimsDateTime(new Date(), await this.settings.get('locale.timezone', m));
         const res = await this.transmit(m, config, 'purchases', { lastReqDt: config.lastRequest.purchases ?? '20180101000000' }, null);
         if (!res.ok) return;
         for (const s of (res.data?.saleList as Record<string, unknown>[]) ?? []) {
@@ -925,7 +927,7 @@ export class EtimsService implements OnModuleInit {
           );
           fetched++;
         }
-        config.lastRequest = { ...config.lastRequest, imports: etimsDateTime(new Date(), 'UTC') };
+        config.lastRequest = { ...config.lastRequest, imports: etimsDateTime(new Date(), await this.settings.get('locale.timezone', m)) };
         await m.save(config);
       });
     }

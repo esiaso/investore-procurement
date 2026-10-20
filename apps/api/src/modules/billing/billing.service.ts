@@ -259,7 +259,7 @@ export class BillingService {
    */
   async creditNote(invoiceId: string, dto: CreateCreditNoteDto, actor: SessionUser, inTx?: (m: EntityManager, cn: SalesInvoice) => Promise<void>) {
     const r = await this.ds.transaction(async (m) => {
-      const orig = await m.findOne(SalesInvoice, { where: { id: invoiceId }, relations: { lines: true, payments: true }, lock: { mode: 'pessimistic_write' } });
+      const orig = await m.findOne(SalesInvoice, { where: { id: invoiceId }, relations: { lines: true, payments: true }, lock: { mode: 'pessimistic_write', tables: ['sales_invoice'] } });
       if (!orig) throw new NotFoundException('Invoice not found');
       if (orig.docType !== SalesDocType.INVOICE) throw new BadRequestException('Credit notes are raised against invoices');
       StoreScope.assert(orig.storeId);

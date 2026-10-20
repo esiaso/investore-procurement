@@ -210,7 +210,8 @@ export class MockEtims {
         return this.ok();
       case 'purchases': {
         const since = String(body.lastReqDt ?? '00000000000000');
-        const list = this.offeredPurchases.filter((p) => p.buyerTin === tin && p.at > since).map(({ buyerTin: _b, at: _a, ...p }) => p);
+        // Inclusive of the second asked for: the caller ignores duplicates.
+        const list = this.offeredPurchases.filter((p) => p.buyerTin === tin && p.at >= since).map(({ buyerTin: _b, at: _a, ...p }) => p);
         return list.length ? this.ok({ saleList: list }) : this.err(RESULT.NO_DATA, 'There is no search result');
       }
       case 'savePurchase':

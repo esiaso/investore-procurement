@@ -64,8 +64,9 @@ export class ApiClientsService {
  */
 export function apiKeyMiddleware(clients: ApiClientsService, pathPrefix: string) {
   return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.path.startsWith(pathPrefix)) return next();
     const key = req.get(API_KEY_HEADER);
-    if (!key || !req.path.startsWith(pathPrefix)) return next();
+    if (!key) return void res.status(401).json({ statusCode: 401, message: `Send the API key in the ${API_KEY_HEADER} header`, code: 'API_KEY' });
     clients
       .authenticate(key)
       .then((auth) => {
