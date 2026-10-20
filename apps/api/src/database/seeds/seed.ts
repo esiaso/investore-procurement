@@ -83,6 +83,11 @@ export async function seedDatabase(dataSource: DataSource, options: SeedOptions)
         // Suppliers and budgets arrived with slice 3.
         const [{ s }] = await m.query(`SELECT count(*)::int AS s FROM supplier`);
         if (s === 0 && sample > 0) await seedSampleSuppliers(m, tz, log);
+        // Supplier portal (slice 7): the sample supplier users act for the first two suppliers.
+        await m.query(
+          `UPDATE app_user u SET supplier_id = s.id FROM supplier s
+            WHERE u.supplier_id IS NULL AND ((u.username = 'supplier' AND s.code = 'SUP0001') OR (u.username = 'supplier2' AND s.code = 'SUP0002'))`,
+        );
       }
     }),
   );

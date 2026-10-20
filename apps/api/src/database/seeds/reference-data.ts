@@ -20,6 +20,32 @@ export const ETIMS_SCHEDULES: Record<string, string> = {
   'etims.codes': '0 3 * * *',
 };
 
+/** Slice 7 jobs (also merged into existing installations by a migration). */
+export const PROCUREMENT_SCHEDULES: Record<string, string> = {
+  'forecast.run': '0 4 1 * *',
+  'forecast.accuracy': '30 4 1 * *',
+  'tenders.close': '*/5 * * * *',
+  'contracts.alerts': '0 7 * * *',
+  'suppliers.sanctions': '5 0 * * *',
+  'suppliers.scorecards': '0 5 1 * *',
+  'agency.ordercycle': '0 6 * * *',
+};
+
+/**
+ * Sourcing methods for a private hospital: the hospital's own policy (not
+ * PPADA). Bands are estimated values in KES, VAT inclusive; edit them in settings.
+ * Order matters: the first competitive method whose band fits is recommended.
+ */
+export const DEFAULT_SOURCING_METHODS = [
+  { code: 'LOW_VALUE', label: 'Low-value procurement', minAmount: null, maxAmount: 50_000, minBidders: 1, requiresJustification: false, isActive: true },
+  { code: 'RFQ', label: 'Request for quotations', minAmount: 50_000, maxAmount: 1_000_000, minBidders: 3, requiresJustification: false, isActive: true },
+  { code: 'OPEN_TENDER', label: 'Open tender', minAmount: 1_000_000, maxAmount: null, minBidders: 1, requiresJustification: false, isActive: true },
+  { code: 'RESTRICTED_TENDER', label: 'Restricted tender', minAmount: null, maxAmount: 5_000_000, minBidders: 3, requiresJustification: true, isActive: true },
+  { code: 'RFP', label: 'Request for proposals', minAmount: null, maxAmount: null, minBidders: 3, requiresJustification: true, isActive: true },
+  { code: 'DIRECT', label: 'Direct procurement', minAmount: null, maxAmount: null, minBidders: 1, requiresJustification: true, isActive: true },
+  { code: 'FRAMEWORK', label: 'Call-off under a framework agreement', minAmount: null, maxAmount: null, minBidders: 1, requiresJustification: false, isActive: true },
+];
+
 /**
  * Default configuration for a private hospital in Kenya. Everything here is
  * data: it is inserted once and can then be changed through the API.
@@ -86,6 +112,7 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
       'stock.expiry': '15 0 * * *',
       'stock.reorder': '0 6-20 * * *',
       ...ETIMS_SCHEDULES,
+      ...PROCUREMENT_SCHEDULES,
     },
     description: 'Background job schedules (cron, in locale.timezone). Remove a job to stop scheduling it.',
     isPublic: false,
@@ -108,6 +135,23 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'etims.stockReporting', value: true, description: 'eTIMS: report stock movements and stock master (job etims.stock)', isPublic: false },
   { key: 'billing.defaultPriceListCode', value: 'RETAIL', description: 'Price list for walk-in / cash customers', isPublic: false },
   { key: 'billing.patientCreditMode', value: 'CREDIT', description: 'Payment mode that carries an unpaid patient balance (on account)', isPublic: false },
+  { key: 'forecast.historyMonths', value: 24, description: 'Forecasting: months of consumption history used', isPublic: false },
+  { key: 'forecast.horizonMonths', value: 12, description: 'Forecasting: months forecast ahead', isPublic: false },
+  { key: 'forecast.movingAverageMonths', value: 3, description: 'Forecasting: window of the moving average', isPublic: false },
+  { key: 'forecast.defaultMethod', value: 'AUTO', description: 'AMC, MOVING_AVERAGE, HOLT_WINTERS, or AUTO (lowest back-tested MAPE per item)', isPublic: false },
+  { key: 'forecast.holtWinters', value: { alpha: 0.4, beta: 0.1, gamma: 0.3, seasonLength: 12 }, description: 'Holt-Winters smoothing (level, trend, season) and season length in months', isPublic: false },
+  { key: 'supply.minMonthsOfStock', value: 2, description: 'Supply planning: order when stock would fall below this many months', isPublic: true },
+  { key: 'supply.maxMonthsOfStock', value: 4, description: 'Supply planning: order up to this many months', isPublic: true },
+  { key: 'procurement.sourcingMethods', value: DEFAULT_SOURCING_METHODS, description: 'Sourcing methods and the estimated-value bands (KES, VAT inclusive) in which each may be used', isPublic: true },
+  { key: 'procurement.ppadaRuleSet', value: false, description: 'Optional public-procurement (PPADA) steps: standstill before contract, PPRA award report, AGPO tracking. Off for a private hospital', isPublic: true },
+  { key: 'procurement.standstillDays', value: 14, description: 'PPADA rule set: days between award notification and contract signature', isPublic: false },
+  { key: 'procurement.bidValidityDays', value: 120, description: 'Default tender bid validity (days)', isPublic: false },
+  { key: 'procurement.minEvaluationCommittee', value: 3, description: 'Evaluation committee members (without a conflict of interest) needed to recommend an award', isPublic: false },
+  { key: 'contracts.expiryAlertDays', value: [90, 30], description: 'Alert contract managers this many days before a contract ends', isPublic: false },
+  { key: 'contracts.securityAlertDays', value: [30, 7], description: 'Alert this many days before a performance security expires', isPublic: false },
+  { key: 'suppliers.scorecardWeights', value: { onTime: 30, inFull: 25, quality: 25, price: 10, documents: 10 }, description: 'Supplier scorecard weights (on time, in full, quality, price compliance, documents)', isPublic: false },
+  { key: 'suppliers.requiredDocumentTypes', value: ['TAX_COMPLIANCE', 'BUSINESS_PERMIT'], description: 'Supplier documents that must be current for document compliance', isPublic: false },
+  { key: 'suppliers.scorecardActionThreshold', value: 60, description: 'A corrective action is opened when a monthly score is below this', isPublic: false },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
   {
     key: 'pharmacy.blockingSeverities',
@@ -182,6 +226,11 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.CREDIT_NOTE, prefix: 'CN', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.PRESCRIPTION, prefix: 'RX', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 6, resetEachYear: true },
   { documentType: DocumentType.DISPENSE, prefix: 'DSP', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 6, resetEachYear: true },
+  { documentType: DocumentType.PROCUREMENT_PLAN, prefix: 'APP', format: '{PREFIX}/{FY}/{SEQ}', padding: 3, resetEachYear: true },
+  { documentType: DocumentType.TENDER, prefix: 'TND', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.CONTRACT, prefix: 'CTR', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.CONTRACT_VARIATION, prefix: 'CV', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.SUPPLIER_SANCTION, prefix: 'SSN', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
 ];
 
 export const DEFAULT_UOMS: [code: string, name: string][] = [
@@ -262,8 +311,11 @@ const READ_ALL: PermissionCode[] = [
   P.SETTINGS_READ, P.AUDIT_READ, P.USERS_READ, P.ROLES_READ, P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.NUMBERING_READ,
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
   P.PATIENTS_READ, P.PHARMACY_READ, P.BILLING_READ, P.ETIMS_READ,
+  P.FORECASTING_READ, P.PLANS_READ, P.TENDERS_READ, P.CONTRACTS_READ, P.PROCUREMENT_KPIS,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
+/** Strategic procurement (slice 7) for procurement staff. */
+const SOURCING: PermissionCode[] = [P.PLANS_READ, P.TENDERS_READ, P.TENDERS_MANAGE, P.CONTRACTS_READ, P.FORECASTING_READ, P.PROCUREMENT_KPIS, P.SUPPLIERS_PERFORMANCE];
 /** Day-to-day store operations in assigned stores. */
 const STORE_OPS: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_RECEIVE, P.INVENTORY_ADJUST, P.INVENTORY_TRANSFER_REQUEST, P.INVENTORY_TRANSFER_DISPATCH,
@@ -279,14 +331,15 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     name: 'Procurement Officer',
     description: 'Raises requisitions and purchase orders; maintains the catalog',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.INVENTORY_READ, P.INVENTORY_VALUATION,
-      P.INVENTORY_PLANNING, ...BUYING, P.PURCHASING_REQUISITION],
+      P.INVENTORY_PLANNING, ...BUYING, P.PURCHASING_REQUISITION, ...SOURCING],
   },
   {
     code: RoleCodes.PROCUREMENT_MANAGER,
     name: 'Procurement Manager / Approver',
     description: 'Approves procurement documents',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ,
-      P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_CONSUMPTION, ...BUYING],
+      P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_CONSUMPTION, ...BUYING,
+      ...SOURCING, P.PLANS_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE],
   },
   {
     code: RoleCodes.STOREKEEPER,
@@ -294,7 +347,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     description: 'Receives, stores and issues stock in assigned stores',
     permissions: [
       P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, ...STORE_OPS, P.INVENTORY_HANDLE_COLD_CHAIN, P.SUPPLIERS_READ, P.PURCHASING_READ,
-      P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_EMERGENCY_RECEIPT,
+      P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_EMERGENCY_RECEIPT, P.FORECASTING_READ,
     ],
   },
   {
@@ -308,6 +361,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
       P.PATIENTS_READ, P.PATIENTS_MANAGE, P.PHARMACY_READ, P.PHARMACY_PRESCRIPTION, P.PHARMACY_VERIFY, P.PHARMACY_DISPENSE,
       P.PHARMACY_INTERACTIONS, P.BILLING_READ, P.BILLING_INVOICE,
+      P.FORECASTING_READ, P.FORECASTING_MANAGE, P.PLANS_READ, P.PLANS_MANAGE,
     ],
   },
   {
@@ -335,7 +389,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     code: RoleCodes.WARD_IN_CHARGE,
     name: 'Department / Ward In-charge',
     description: 'Requests stock for a department or ward and approves its internal requisitions',
-    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION],
+    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION, P.PLANS_READ, P.PLANS_MANAGE],
   },
   {
     code: RoleCodes.WARD_STAFF,
@@ -350,13 +404,14 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
       P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
-      P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE],
+      P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE,
+      P.PLANS_READ, P.CONTRACTS_READ, P.TENDERS_READ, P.PROCUREMENT_KPIS],
   },
   {
     code: RoleCodes.TENDER_COMMITTEE,
     name: 'Tender / Evaluation Committee Member',
     description: 'Evaluates tenders and quotations',
-    permissions: [P.CATALOG_READ, P.SUPPLIERS_READ, P.PURCHASING_READ, P.PURCHASING_INSPECT],
+    permissions: [P.CATALOG_READ, P.SUPPLIERS_READ, P.PURCHASING_READ, P.PURCHASING_INSPECT, P.TENDERS_READ, P.TENDERS_EVALUATE],
   },
   {
     code: RoleCodes.SUPPLY_CHAIN_MANAGER,
@@ -369,9 +424,10 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_HANDLE_CONTROLLED, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_BATCH_HOLD, P.INVENTORY_PERIOD_LOCK,
       P.INVENTORY_RECONCILE, P.INVENTORY_CONSUMPTION, P.JOBS_RUN, ...BUYING, P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
       P.PURCHASING_EMERGENCY_RECEIPT, P.APPROVALS_MANAGE,
+      ...SOURCING, P.FORECASTING_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE,
     ],
   },
-  { code: RoleCodes.SUPPLIER, name: 'Supplier (portal)', description: 'External supplier portal user', permissions: [] },
+  { code: RoleCodes.SUPPLIER, name: 'Supplier (portal)', description: 'External supplier portal user', permissions: [P.PORTAL_ACCESS] },
   { code: RoleCodes.AUDITOR, name: 'Auditor (read-only)', description: 'Read-only access to all records', permissions: READ_ALL },
   { code: RoleCodes.HOSPITAL_MANAGEMENT, name: 'Hospital Management', description: 'Read-only oversight', permissions: READ_ALL },
 ];
@@ -400,4 +456,8 @@ export const DEFAULT_WORKFLOWS: {
   { code: 'PO-3', name: 'Purchase orders over 5,000,000', documentType: DocumentType.PURCHASE_ORDER, minAmount: 5_000_000, maxAmount: null, steps: [['Procurement approval', RoleCodes.PROCUREMENT_MANAGER], ['Finance approval', RoleCodes.FINANCE], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
   { code: 'INV-1', name: 'Supplier invoices', documentType: DocumentType.SUPPLIER_INVOICE, minAmount: null, maxAmount: null, steps: [['Finance approval', RoleCodes.FINANCE]] },
   { code: 'SR-1', name: 'Internal requisitions', documentType: DocumentType.STORE_REQUISITION, minAmount: null, maxAmount: null, steps: [['Department in-charge', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE]] },
+  { code: 'APP-1', name: 'Annual procurement plans and revisions', documentType: DocumentType.PROCUREMENT_PLAN, minAmount: null, maxAmount: null, steps: [['Procurement review', RoleCodes.PROCUREMENT_MANAGER], ['Finance (budget) review', RoleCodes.FINANCE], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
+  { code: 'TND-1', name: 'Tender awards', documentType: DocumentType.TENDER, minAmount: null, maxAmount: null, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
+  { code: 'CV-1', name: 'Contract variations', documentType: DocumentType.CONTRACT_VARIATION, minAmount: null, maxAmount: null, steps: [['Procurement approval', RoleCodes.PROCUREMENT_MANAGER], ['Finance approval', RoleCodes.FINANCE]] },
+  { code: 'SSN-1', name: 'Supplier suspension / blacklisting / reinstatement', documentType: DocumentType.SUPPLIER_SANCTION, minAmount: null, maxAmount: null, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
 ];

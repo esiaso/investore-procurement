@@ -88,6 +88,9 @@ import {
   Prescription,
   PrescriptionLine,
 } from '../modules/pharmacy/pharmacy.entities';
+import { DemandForecast, ForecastAccuracy, ForecastAdjustment, Programme, ProgrammeCommodity, Quantification } from '../modules/forecasting/forecasting.entities';
+import { FundingSource } from '../modules/inventory/funding';
+import { PROCUREMENT_ENTITIES } from '../modules/procurement/entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
 
 export const ENTITIES = [
@@ -191,6 +194,14 @@ export const ENTITIES = [
   DrugInteraction,
   ClinicalAlert,
   InteractionOverride,
+  FundingSource,
+  ForecastAdjustment,
+  DemandForecast,
+  ForecastAccuracy,
+  Programme,
+  ProgrammeCommodity,
+  Quantification,
+  ...PROCUREMENT_ENTITIES,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

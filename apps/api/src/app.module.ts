@@ -26,6 +26,8 @@ import { TaxModule } from './modules/tax/tax.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { EtimsModule } from './modules/etims/etims.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
+import { ForecastingModule } from './modules/forecasting/forecasting.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -54,6 +56,8 @@ import { UsersModule } from './modules/users/users.module';
     EtimsModule,
     BillingModule,
     PharmacyModule,
+    ForecastingModule,
+    ProcurementModule,
   ],
   controllers: [HealthController],
   providers: [

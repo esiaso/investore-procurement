@@ -68,6 +68,7 @@ export const SAMPLE_USERS: { username: string; fullName: string; role: string; s
   { username: 'tender', fullName: 'Hassan Committee', role: RoleCodes.TENDER_COMMITTEE, stores: [] },
   { username: 'scm', fullName: 'Wafula Supply Chain', role: RoleCodes.SUPPLY_CHAIN_MANAGER, stores: [] },
   { username: 'supplier', fullName: 'Sample Supplier Ltd', role: RoleCodes.SUPPLIER, stores: [] },
+  { username: 'supplier2', fullName: 'Second Sample Supplier', role: RoleCodes.SUPPLIER, stores: [] },
   { username: 'auditor', fullName: 'Internal Auditor', role: RoleCodes.AUDITOR, stores: [] },
   { username: 'management', fullName: 'Medical Director', role: RoleCodes.HOSPITAL_MANAGEMENT, stores: [] },
 ];
