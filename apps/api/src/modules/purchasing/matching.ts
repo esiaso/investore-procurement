@@ -19,8 +19,9 @@ export interface MatchTolerances {
 }
 
 export interface Variance {
+  /** Empty for invoice-level variances (e.g. NOT_ON_ETIMS). */
   poLineId: string;
-  code: 'NOT_RECEIVED' | 'QTY_EXCEEDS_RECEIVED' | 'QTY_EXCEEDS_ORDERED' | 'PRICE_VARIANCE';
+  code: 'NOT_RECEIVED' | 'QTY_EXCEEDS_RECEIVED' | 'QTY_EXCEEDS_ORDERED' | 'PRICE_VARIANCE' | 'NOT_ON_ETIMS';
   message: string;
 }
 

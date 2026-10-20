@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BudgetsModule } from '../budgets/budgets.module';
 import { CatalogModule } from '../catalog/catalog.module';
+import { EtimsModule } from '../etims/etims.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { NumberingModule } from '../numbering/numbering.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
@@ -65,6 +66,7 @@ import { SupplierReturnsService } from './supplier-returns.service';
     SuppliersModule,
     BudgetsModule,
     InventoryModule,
+    EtimsModule,
   ],
   controllers: [RequisitionsController, RfqsController, PurchaseOrdersController, GrnsController, InvoicesController, SupplierReturnsController],
   providers: [RequisitionsService, RfqsService, PurchaseOrdersService, GrnsService, InvoicesService, SupplierReturnsService],

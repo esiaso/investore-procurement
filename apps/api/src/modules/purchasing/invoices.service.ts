@@ -7,6 +7,7 @@ import { ApprovalRequest } from '../approvals/approvals.entities';
 import { ApprovalHandler, ApprovalsService } from '../approvals/approvals.service';
 import { DocumentLinksService } from '../approvals/document-links.service';
 import { BudgetsService } from '../budgets/budgets.service';
+import { EtimsService } from '../etims/etims.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { SettingsService } from '../settings/settings.service';
 import { MatchLineInput, threeWayMatch } from './matching';
@@ -27,6 +28,7 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
     private readonly links: DocumentLinksService,
     private readonly budgets: BudgetsService,
     private readonly settings: SettingsService,
+    private readonly etims: EtimsService,
   ) {}
 
   onModuleInit() {
@@ -67,6 +69,15 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
       quantityPct: await this.settings.get('purchasing.matchQtyTolerancePct', m),
       pricePct: await this.settings.get('purchasing.matchPriceTolerancePct', m),
     });
+    // Fourth leg: the supplier's sale must be on KRA eTIMS.
+    if (invoice.etimsStatus === EtimsStatus.NOT_ON_ETIMS) {
+      const reverse = await this.etims.reverseInvoiceCheck(m, invoice.id);
+      variances.push({
+        poLineId: '',
+        code: 'NOT_ON_ETIMS',
+        message: `Invoice ${invoice.supplierInvoiceNo} is not on KRA eTIMS for this supplier's PIN${reverse.note ? `. ${reverse.note}` : ' — ask the supplier to transmit it'}`,
+      });
+    }
     invoice.variances = variances;
     invoice.matchStatus = variances.length ? MatchStatus.VARIANCE : MatchStatus.MATCHED;
     await m.save(invoice);
@@ -118,11 +129,21 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
       }
       return inv.id;
     });
+    await this.verifyOnEtims(id);
     return this.get(id);
+  }
+
+  /** Looks the invoice up among the supplier sales on eTIMS (fetching the latest first), then re-matches. */
+  private async verifyOnEtims(id: string) {
+    const status = await this.etims.verifySupplierInvoice(id);
+    if (status === EtimsStatus.NOT_CHECKED) return;
+    await this.ds.transaction(async (m) => this.match(m, await this.lock(m, id)));
   }
 
   /** Re-runs the match (e.g. after more goods were received). */
   async rematch(id: string): Promise<SupplierInvoice> {
+    const current = await this.ds.getRepository(SupplierInvoice).findOneBy({ id });
+    if (current && current.etimsStatus !== EtimsStatus.VERIFIED) await this.etims.verifySupplierInvoice(id);
     await this.ds.transaction(async (m) => {
       const inv = await this.lock(m, id);
       if (![InvoiceStatus.CAPTURED, InvoiceStatus.RETURNED].includes(inv.status)) throw new ConflictException(`Invoice is ${inv.status}`);
