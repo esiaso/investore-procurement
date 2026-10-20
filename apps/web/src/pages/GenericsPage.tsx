@@ -20,7 +20,7 @@ import { ControlledSchedule, GenericInput, genericSchema, Permissions } from '@s
 import { useApiMutation, usePaged } from '../api/hooks';
 import type { Generic } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { enumOptions, RHFSelect, RHFSwitch, RHFText } from '../components/form';
+import { enumOptions, RHFNumber, RHFSelect, RHFSwitch, RHFText } from '../components/form';
 import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
 import { emptyToNull, formatMoney, humanise } from '../lib/format';
@@ -45,6 +45,8 @@ export function GenericDialog({ generic, onClose }: { generic: Generic | 'new'; 
           storageRequirements: generic.storageRequirements ?? '',
           pregnancyNotes: generic.pregnancyNotes ?? '',
           lactationNotes: generic.lactationNotes ?? '',
+          pregnancyContraindicated: generic.pregnancyContraindicated ?? false,
+          minAgeYears: generic.minAgeYears ?? null,
           isActive: generic.isActive,
         },
   });
@@ -84,6 +86,10 @@ export function GenericDialog({ generic, onClose }: { generic: Generic | 'new'; 
       <RHFText control={control} name="storageRequirements" label="Storage requirements" />
       <RHFText control={control} name="pregnancyNotes" label="Pregnancy notes" multiline minRows={2} />
       <RHFText control={control} name="lactationNotes" label="Lactation notes" multiline minRows={2} />
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+        <RHFSwitch control={control} name="pregnancyContraindicated" label="Contraindicated in pregnancy (dispensing alert)" />
+        <RHFNumber control={control} name="minAgeYears" label="Minimum age (years)" />
+      </Stack>
       <Stack direction="row" spacing={2}>
         <RHFSwitch control={control} name="isKeml" label="On KEML" />
         <RHFSwitch control={control} name="isActive" label="Active" />
