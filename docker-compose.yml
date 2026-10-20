@@ -28,6 +28,8 @@ x-api-env: &api-env
   MAIL_POLL_SECONDS: ${MAIL_POLL_SECONDS:-10}
   # Background jobs go to BullMQ (Redis) and run in the worker service.
   JOBS_MODE: ${JOBS_MODE:-queue}
+  # Sample pharmacy outlets talk to the mock control unit below (not KRA).
+  SAMPLE_ETIMS_URL: ${SAMPLE_ETIMS_URL:-http://mock-etims:8088/etims-api}
 
 services:
   postgres:
@@ -70,6 +72,7 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       mailpit: { condition: service_started }
+      mock-etims: { condition: service_started }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -104,6 +107,17 @@ services:
     ports:
       - "${MAILPIT_UI_PORT:-8025}:8025"
       - "${MAILPIT_SMTP_PORT:-1025}:1025"
+
+  # Mock KRA eTIMS control unit (OSCU paths under /etims-api, VSCU paths at the root).
+  # NOT KRA. Inject failures: POST http://localhost:8088/_mock/failure {"mode":"offline"|"timeout"|"http500"|"business"}
+  mock-etims:
+    build: { context: ., target: api }
+    command: ["node", "dist/mock-etims.js"]
+    environment:
+      MOCK_ETIMS_PORT: 8088
+    ports:
+      - "${MOCK_ETIMS_PORT:-8088}:8088"
+    restart: unless-stopped
 
   # MinIO (S3 attachments) arrives with the slice that needs it.
 
