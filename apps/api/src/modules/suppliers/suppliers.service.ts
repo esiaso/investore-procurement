@@ -167,14 +167,25 @@ export class SuppliersService {
     return repo.save(repo.create({ ...dto, supplierId, validTo: dto.validTo ?? null, contractRef: dto.contractRef ?? null }));
   }
 
-  /** Contract price in force for supplier × item on a date. */
-  async priceOn(m: EntityManager, supplierId: string, itemId: string, on: string): Promise<ContractPrice | null> {
-    return m
+  /**
+   * Contract price in force for supplier × item on a date: an active contract or
+   * framework agreement (slice 7) first, then the simple contract price list.
+   */
+  async priceOn(m: EntityManager, supplierId: string, itemId: string, on: string): Promise<{ unitPrice: number; contractRef: string | null; contractLineId: string | null } | null> {
+    const [line] = await m.query(
+      `SELECT cl.id, cl.unit_price::float AS unit_price, c.number FROM contract_line cl JOIN contract c ON c.id = cl.contract_id
+        WHERE c.supplier_id = $1 AND cl.item_id = $2 AND c.status = 'ACTIVE' AND c.start_date <= $3 AND c.end_date >= $3
+        ORDER BY c.end_date DESC LIMIT 1`,
+      [supplierId, itemId, on],
+    );
+    if (line) return { unitPrice: line.unit_price, contractRef: line.number, contractLineId: line.id };
+    const p = await m
       .getRepository(ContractPrice)
       .createQueryBuilder('p')
       .where('p.supplier_id = :s AND p.item_id = :i', { s: supplierId, i: itemId })
       .andWhere('p.valid_from <= :on AND (p.valid_to IS NULL OR p.valid_to >= :on)', { on })
       .getOne();
+    return p ? { unitPrice: p.unitPrice, contractRef: p.contractRef, contractLineId: null } : null;
   }
 
   /** Performance figures are computed by purchasing from posted GRNs. */

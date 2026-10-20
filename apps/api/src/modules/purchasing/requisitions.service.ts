@@ -8,6 +8,8 @@ import { ApprovalHandler, ApprovalsService } from '../approvals/approvals.servic
 import { DocumentLinksService } from '../approvals/document-links.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NumberingService } from '../numbering/numbering.service';
+import { methodProblem, recommendMethod } from '../procurement/sourcing';
+import { SettingsService } from '../settings/settings.service';
 import { CreateRequisitionDto, DocListQueryDto } from './purchasing.dto';
 import { PurchaseRequisition, PurchaseRequisitionLine } from './purchasing.entities';
 
@@ -21,6 +23,7 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
     private readonly approvals: ApprovalsService,
     private readonly links: DocumentLinksService,
     private readonly budgets: BudgetsService,
+    private readonly settings: SettingsService,
   ) {}
 
   onModuleInit() {
@@ -78,6 +81,8 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
           priority: dto.priority ?? RequisitionPriority.ROUTINE,
           requiredBy: dto.requiredBy ?? null,
           justification: dto.justification,
+          sourcingMethod: dto.sourcingMethod ?? null,
+          sourcingJustification: dto.sourcingJustification ?? null,
           requestedBy: actor.id,
           status: RequisitionStatus.DRAFT,
           estimatedTotal: round2(lines.reduce((s, l) => s + l.quantity! * l.estimatedUnitPrice!, 0)),
@@ -105,6 +110,8 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
         priority: dto.priority ?? pr.priority,
         requiredBy: dto.requiredBy ?? null,
         justification: dto.justification,
+        sourcingMethod: dto.sourcingMethod ?? null,
+        sourcingJustification: dto.sourcingJustification ?? null,
         estimatedTotal: round2(lines.reduce((s, l) => s + l.quantity! * l.estimatedUnitPrice!, 0)),
       });
       await m.save(pr);
@@ -113,12 +120,37 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
     return this.get(id);
   }
 
+  /**
+   * Sourcing method against the configured value bands (procurement.sourcingMethods).
+   * Without one, the recommended method is recorded (a framework agreement when
+   * one covers every item).
+   */
+  private async checkSourcing(m: EntityManager, pr: PurchaseRequisition) {
+    const rules = await this.settings.get('procurement.sourcingMethods', m);
+    const today = await this.settings.today(m);
+    const [cov] = await m.query(
+      `SELECT (SELECT count(DISTINCT item_id) FROM purchase_requisition_line WHERE requisition_id = $1)::int AS items,
+              (SELECT count(DISTINCT l.item_id) FROM purchase_requisition_line l
+                WHERE l.requisition_id = $1 AND EXISTS (SELECT 1 FROM contract_line cl JOIN contract c ON c.id = cl.contract_id
+                  WHERE cl.item_id = l.item_id AND c.type = 'FRAMEWORK' AND c.status = 'ACTIVE' AND c.start_date <= $2 AND c.end_date >= $2))::int AS covered`,
+      [pr.id, today],
+    );
+    const framework = cov.items > 0 && cov.items === cov.covered;
+    if (!pr.sourcingMethod) {
+      pr.sourcingMethod = recommendMethod(rules, pr.estimatedTotal, framework)?.code ?? null;
+      return;
+    }
+    const problem = methodProblem(rules, pr.sourcingMethod, pr.estimatedTotal, pr.sourcingJustification, framework);
+    if (problem) throw new BadRequestException({ code: 'SOURCING_METHOD', message: problem });
+  }
+
   async submit(id: string, actor: SessionUser): Promise<PurchaseRequisition & { budgetWarning?: string | null }> {
     let budgetWarning: string | null = null;
     await this.ds.transaction(async (m) => {
       const pr = await this.lock(m, id);
       if (pr.requestedBy !== actor.id) throw new ForbiddenException('Only the requester can submit this requisition');
       if (![RequisitionStatus.DRAFT, RequisitionStatus.RETURNED].includes(pr.status)) throw new ConflictException(`Requisition is ${pr.status}`);
+      await this.checkSourcing(m, pr);
       if (pr.budgetId) {
         const check = await this.budgets.check(m, pr.budgetId, pr.estimatedTotal);
         if (check.blocked) throw new BadRequestException({ message: check.message, code: 'BUDGET_EXCEEDED' });

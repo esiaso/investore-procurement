@@ -66,6 +66,13 @@ export class PurchaseRequisition extends AppBaseEntity {
   @Column({ ...MONEY, default: 0 })
   estimatedTotal: number;
 
+  /** Sourcing method (procurement.sourcingMethods), checked against the value bands on submission. */
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  sourcingMethod: string | null;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  sourcingJustification: string | null;
+
   @Column({ type: 'varchar', length: 1000, nullable: true })
   lastComment: string | null;
 
@@ -327,6 +334,18 @@ export class PurchaseOrder extends AppBaseEntity {
   @Column({ type: 'timestamptz', nullable: true })
   sentAt: Date | null;
 
+  /** Call-off order against this contract / framework agreement. */
+  @Column({ type: 'uuid', nullable: true })
+  contractId: string | null;
+
+  /** Supplier acknowledged the order (portal or recorded by staff). */
+  @Column({ type: 'timestamptz', nullable: true })
+  acknowledgedAt: Date | null;
+
+  /** Latest delivery tracking stage (see purchase_order_delivery). */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  deliveryStage: string | null;
+
   @OneToMany(() => PurchaseOrderLine, (l) => l.purchaseOrder, { cascade: true })
   lines?: PurchaseOrderLine[];
 }
@@ -393,6 +412,10 @@ export class PurchaseOrderLine extends AppBaseEntity {
 
   @Column({ type: 'uuid', nullable: true })
   rfqLineId: string | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  contractLineId: string | null;
 }
 
 /** Snapshot of a PO at each version (amendments keep the history). */

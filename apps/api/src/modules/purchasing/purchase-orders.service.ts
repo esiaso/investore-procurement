@@ -37,6 +37,7 @@ export interface DraftLine {
   unitPrice: number;
   requisitionLineId?: string | null;
   rfqLineId?: string | null;
+  contractLineId?: string | null;
 }
 
 export interface DraftHeader {
@@ -49,6 +50,7 @@ export interface DraftHeader {
   rfqId?: string | null;
   expectedDelivery?: string | null;
   notes?: string | null;
+  contractId?: string | null;
 }
 
 const OPEN_FOR_RECEIPT = [PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.SENT, PurchaseOrderStatus.PARTIALLY_RECEIVED];
@@ -104,6 +106,7 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
       lineTotal: round2(subtotal + lineTax),
       requisitionLineId: l.requisitionLineId ?? null,
       rfqLineId: l.rfqLineId ?? null,
+      contractLineId: l.contractLineId ?? null,
     };
   }
 
@@ -131,6 +134,7 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         ...header,
         requisitionId: header.requisitionId ?? null,
         rfqId: header.rfqId ?? null,
+        contractId: header.contractId ?? null,
         expectedDelivery: header.expectedDelivery ?? null,
         notes: header.notes ?? null,
         orderDate: today,
@@ -171,7 +175,8 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
           if (round4(quantity * factor) > remaining) throw new BadRequestException(`Ordering more than the remaining ${remaining} base units requested`);
           const contract = await this.suppliers.priceOn(m, dto.supplierId, prLine.itemId, today);
           const unitPrice = l.unitPrice ?? (contract ? round4(contract.unitPrice * factor) : round4(prLine.estimatedUnitPrice * factor));
-          lines.push({ itemId: prLine.itemId, uomId, quantity, unitPrice, requisitionLineId: prLine.id });
+          // Priced from a contract: the order counts against that contract line's balance.
+          lines.push({ itemId: prLine.itemId, uomId, quantity, unitPrice, requisitionLineId: prLine.id, contractLineId: l.unitPrice === undefined ? (contract?.contractLineId ?? null) : null });
         }
         const po = await this.createDraft(
           m,
@@ -198,7 +203,7 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         const contract = await this.suppliers.priceOn(m, dto.supplierId, l.itemId, today);
         if (!contract) throw new BadRequestException(`No contract price for this supplier and item on ${today}`);
         const factor = l.uomId ? await this.units.factorToBase(l.itemId, l.uomId) : 1;
-        lines.push({ itemId: l.itemId, uomId: l.uomId ?? null, quantity: l.quantity, unitPrice: round4(contract.unitPrice * factor) });
+        lines.push({ itemId: l.itemId, uomId: l.uomId ?? null, quantity: l.quantity, unitPrice: round4(contract.unitPrice * factor), contractLineId: contract.contractLineId });
       }
       const po = await this.createDraft(
         m,
@@ -353,7 +358,7 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         if (l.lineId && !old) throw new BadRequestException(`Line ${l.lineId} is not on this PO`);
         const itemId = old?.itemId ?? l.itemId;
         if (!itemId) throw new BadRequestException('New lines need an item');
-        const line = await this.buildLine(m, { itemId, uomId: old?.uomId ?? l.uomId, quantity: l.quantity, unitPrice: l.unitPrice, requisitionLineId: old?.requisitionLineId, rfqLineId: old?.rfqLineId }, i + 1, today);
+        const line = await this.buildLine(m, { itemId, uomId: old?.uomId ?? l.uomId, quantity: l.quantity, unitPrice: l.unitPrice, requisitionLineId: old?.requisitionLineId, rfqLineId: old?.rfqLineId, contractLineId: old?.contractLineId }, i + 1, today);
         if (old && round4(l.quantity * line.conversionFactor!) < old.receivedBaseQty) {
           throw new BadRequestException(`Line ${old.lineNo}: cannot order less than already received`);
         }

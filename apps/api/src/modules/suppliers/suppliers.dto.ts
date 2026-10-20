@@ -18,7 +18,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { KRA_PIN_PATTERN, PrequalificationStatus, SupplierStatus } from '@sil/shared';
+import { AgpoCategory, KRA_PIN_PATTERN, NationalAgency, PrequalificationStatus, SupplierStatus } from '@sil/shared';
 import { PageQueryDto } from '../../common/pagination';
 
 const emptyToNull = ({ value }: { value: unknown }) => (value === '' ? null : value);
@@ -48,6 +48,10 @@ export class CreateSupplierDto {
   @ApiPropertyOptional({ description: 'Stored encrypted' }) @IsOptional() @Transform(emptyToNull) @Matches(/^[0-9 -]{5,34}$/) bankAccountNo?: string | null;
   @ApiPropertyOptional({ type: [SupplierContactDto] }) @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SupplierContactDto)
   contacts?: SupplierContactDto[];
+  @ApiPropertyOptional({ enum: NationalAgency, nullable: true, description: 'KEMSA / MEDS' }) @IsOptional() @Transform(emptyToNull) @IsEnum(NationalAgency) nationalAgency?: NationalAgency | null;
+  @ApiPropertyOptional({ enum: AgpoCategory, nullable: true, description: 'Optional PPADA rule set' }) @IsOptional() @Transform(emptyToNull) @IsEnum(AgpoCategory) agpoCategory?: AgpoCategory | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(60) agpoCertificateNo?: string | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsDateString({ strict: true }) agpoValidUntil?: string | null;
 }
 
 export class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}

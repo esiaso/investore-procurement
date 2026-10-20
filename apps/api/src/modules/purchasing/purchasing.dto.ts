@@ -50,6 +50,8 @@ export class CreateRequisitionDto {
   @ApiPropertyOptional({ enum: RequisitionPriority }) @IsOptional() @IsEnum(RequisitionPriority) priority?: RequisitionPriority;
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsDateString({ strict: true }) requiredBy?: string | null;
   @ApiProperty() @IsString() @MaxLength(2000) justification: string;
+  @ApiPropertyOptional({ description: 'Sourcing method code (setting procurement.sourcingMethods); default: the recommended one' }) @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(40) sourcingMethod?: string | null;
+  @ApiPropertyOptional({ description: 'Required for methods such as direct procurement' }) @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(2000) sourcingJustification?: string | null;
   @ApiProperty({ type: [RequisitionLineDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => RequisitionLineDto)
   lines: RequisitionLineDto[];
 }

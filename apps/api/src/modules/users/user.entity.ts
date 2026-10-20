@@ -55,6 +55,10 @@ export class User extends AppBaseEntity {
   @JoinColumn({ name: 'department_id' })
   department?: Department | null;
 
+  /** Supplier portal users act for this supplier only. */
+  @Column({ type: 'uuid', nullable: true })
+  supplierId: string | null;
+
   @ManyToMany(() => Role)
   @JoinTable({
     name: 'user_role',

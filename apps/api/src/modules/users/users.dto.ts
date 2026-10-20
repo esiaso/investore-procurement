@@ -51,6 +51,8 @@ export class CreateUserDto {
   storeIds?: string[];
 
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @Transform(emptyToNull) @IsUUID() departmentId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, description: 'Supplier portal users: the supplier they act for' }) @IsOptional() @Transform(emptyToNull) @IsUUID() supplierId?: string | null;
 }
 
 export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['username', 'password'] as const)) {}

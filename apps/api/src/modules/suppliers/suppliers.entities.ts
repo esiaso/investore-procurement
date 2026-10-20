@@ -1,5 +1,5 @@
 import { Check, Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
-import { PrequalificationStatus, SupplierStatus } from '@sil/shared';
+import { AgpoCategory, NationalAgency, PrequalificationStatus, SupplierStatus } from '@sil/shared';
 import { AppBaseEntity } from '../../common/entities/base.entity';
 import { MONEY, numericTransformer } from '../../common/entities/transformers';
 import { Item } from '../catalog/catalog.entities';
@@ -71,6 +71,20 @@ export class Supplier extends AppBaseEntity {
 
   @Column({ type: 'int', default: 0 })
   grnCount: number;
+
+  /** KEMSA / MEDS: national agency with order templates and order cycles. */
+  @Column({ type: 'enum', enum: NationalAgency, enumName: 'national_agency', nullable: true })
+  nationalAgency: NationalAgency | null;
+
+  /** Optional PPADA rule set: AGPO category and certificate. */
+  @Column({ type: 'enum', enum: AgpoCategory, enumName: 'agpo_category', nullable: true })
+  agpoCategory: AgpoCategory | null;
+
+  @Column({ type: 'varchar', length: 60, nullable: true })
+  agpoCertificateNo: string | null;
+
+  @Column({ type: 'date', nullable: true })
+  agpoValidUntil: string | null;
 
   @OneToMany(() => SupplierContact, (c) => c.supplier, { cascade: true })
   contacts?: SupplierContact[];

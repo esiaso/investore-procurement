@@ -22,6 +22,7 @@ export function toSessionUser(user: User): SessionUser {
     permissions: [...permissions].sort(),
     storeIds: permissions.has(Permissions.STORE_ALL) ? null : (user.stores ?? []).map((s) => s.id),
     departmentId: user.departmentId,
+    supplierId: user.supplierId ?? null,
     totpEnabled: user.totpEnabled,
     mustChangePassword: user.mustChangePassword,
   };
@@ -104,6 +105,7 @@ export class UsersService {
           phone: dto.phone ?? null,
           isActive: dto.isActive ?? true,
           departmentId: dto.departmentId ?? null,
+          supplierId: dto.supplierId ?? null,
           passwordHash,
           mustChangePassword: true,
           passwordChangedAt: new Date(),
@@ -124,6 +126,7 @@ export class UsersService {
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.isActive !== undefined) user.isActive = dto.isActive;
     if (dto.departmentId !== undefined) user.departmentId = dto.departmentId;
+    if (dto.supplierId !== undefined) user.supplierId = dto.supplierId;
     if (dto.roleIds) user.roles = await this.rbac.findRolesByIds(dto.roleIds);
     if (dto.storeIds) user.stores = await this.resolveStores(dto.storeIds);
     return this.users.manager.transaction(async (manager) => {
