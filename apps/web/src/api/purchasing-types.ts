@@ -101,6 +101,8 @@ export interface Requisition extends Base {
   requestedBy: string;
   estimatedTotal: number;
   lastComment: string | null;
+  sourcingMethod?: string | null;
+  sourcingJustification?: string | null;
   lines?: (Base & { itemId: string; item?: Item; quantity: number; estimatedUnitPrice: number; orderedQty: number; notes: string | null })[];
 }
 

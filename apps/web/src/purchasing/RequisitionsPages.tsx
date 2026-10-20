@@ -36,6 +36,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ItemPicker, StatusChip } from '../inventory/components';
 import { humanise } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
+import { useSourcingMethods } from '../strategic/api';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate, useMoney } from './common';
 
 const schema = z.object({
@@ -45,6 +46,8 @@ const schema = z.object({
   priority: z.nativeEnum(RequisitionPriority),
   requiredBy: z.string().optional(),
   justification: z.string().trim().min(5, 'Explain why this is needed').max(2000),
+  sourcingMethod: z.string().optional(),
+  sourcingJustification: z.string().max(2000).optional(),
   lines: z
     .array(z.object({ item: z.custom<Item>((v) => !!v, 'Choose an item'), quantity: z.coerce.number().positive('> 0'), estimatedUnitPrice: z.coerce.number().min(0).optional() }))
     .min(1),
@@ -71,13 +74,18 @@ export function RequisitionFormPage() {
           priority: existing.data.priority as RequisitionPriority,
           requiredBy: existing.data.requiredBy ?? '',
           justification: existing.data.justification,
+          sourcingMethod: existing.data.sourcingMethod ?? '',
+          sourcingJustification: existing.data.sourcingJustification ?? '',
           lines: (existing.data.lines ?? []).map((l) => ({ item: l.item as Item, quantity: l.quantity, estimatedUnitPrice: l.estimatedUnitPrice })),
         }
       : undefined,
-    defaultValues: { departmentId: '', storeId: '', budgetId: '', priority: RequisitionPriority.ROUTINE, requiredBy: '', justification: '', lines: [{ item: null as unknown as Item, quantity: 0 }] },
+    defaultValues: { departmentId: '', storeId: '', budgetId: '', priority: RequisitionPriority.ROUTINE, requiredBy: '', justification: '', sourcingMethod: '', sourcingJustification: '', lines: [{ item: null as unknown as Item, quantity: 0 }] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
   const departmentId = useWatch({ control, name: 'departmentId' });
+  const method = useWatch({ control, name: 'sourcingMethod' });
+  const methods = useSourcingMethods();
+  const needsJustification = !!methods.data?.find((m) => m.code === method)?.requiresJustification;
   const budgets = useList<{ id: string; label: string }>('/budgets/options', { departmentId }, !!departmentId);
   const save = useApiMutation<FormValues, Requisition>(
     (v) => [
@@ -91,6 +99,8 @@ export function RequisitionFormPage() {
           priority: v.priority,
           requiredBy: v.requiredBy || null,
           justification: v.justification,
+          sourcingMethod: v.sourcingMethod || null,
+          sourcingJustification: v.sourcingJustification || null,
           lines: v.lines.map((l) => ({ itemId: l.item.id, quantity: l.quantity, estimatedUnitPrice: l.estimatedUnitPrice || undefined })),
         },
       },
@@ -128,7 +138,18 @@ export function RequisitionFormPage() {
                 </TextField>
               )} />
               <Controller control={control} name="requiredBy" render={({ field }) => <TextField label="Required by" type="date" {...field} slotProps={{ inputLabel: { shrink: true } }} />} />
+              <Controller control={control} name="sourcingMethod" render={({ field }) => (
+                <TextField select label="Sourcing method" {...field} value={field.value ?? ''} helperText="Checked against the value bands when submitted" sx={{ minWidth: 240 }}>
+                  <MenuItem value="">Recommended for the value</MenuItem>
+                  {(methods.data ?? []).filter((m) => m.isActive).map((m) => <MenuItem key={m.code} value={m.code}>{m.label}</MenuItem>)}
+                </TextField>
+              )} />
             </Stack>
+            {needsJustification && (
+              <Controller control={control} name="sourcingJustification" render={({ field }) => (
+                <TextField label="Why this method (required)" multiline minRows={2} {...field} value={field.value ?? ''} />
+              )} />
+            )}
             <Controller control={control} name="justification" render={({ field, fieldState }) => (
               <TextField label="Justification" multiline minRows={2} {...field} error={!!fieldState.error} helperText={fieldState.error?.message} />
             )} />
@@ -243,7 +264,9 @@ export function RequisitionDetailPage() {
                 <Field label="Estimated total">{money(pr.estimatedTotal)}</Field>
                 <Field label="Required by">{date(pr.requiredBy) || '—'}</Field>
                 <Field label="Raised">{date(pr.createdAt)}</Field>
+                <Field label="Sourcing method">{pr.sourcingMethod ? humanise(pr.sourcingMethod) : 'Recommended on submission'}</Field>
               </Stack>
+              {pr.sourcingJustification && <Typography variant="body2" sx={{ mb: 1 }}>Method justification: {pr.sourcingJustification}</Typography>}
               <Typography variant="body2" sx={{ mb: 2 }}>{pr.justification}</Typography>
               <Table size="small" aria-label="Requisition lines">
                 <TableHead>
