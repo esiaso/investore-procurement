@@ -78,6 +78,10 @@ export enum DocumentType {
   RETURN_TO_SUPPLIER = 'RTS',
   PAYMENT_VOUCHER = 'PV',
   DEPARTMENT_RETURN = 'DRT',
+  SALES_INVOICE = 'SI',
+  CREDIT_NOTE = 'CN',
+  PRESCRIPTION = 'RX',
+  DISPENSE = 'DSP',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -218,6 +222,8 @@ export enum EtimsStatus {
   NOT_CHECKED = 'NOT_CHECKED',
   VERIFIED = 'VERIFIED',
   FAILED = 'FAILED',
+  /** No matching sale by the supplier was found on eTIMS. */
+  NOT_ON_ETIMS = 'NOT_ON_ETIMS',
 }
 
 export enum EmailStatus {
@@ -250,6 +256,10 @@ export enum StockTxnType {
   RETURN_IN = 'RETURN_IN',
   /** Stock sent back to a supplier (negative). */
   SUPPLIER_RETURN = 'SUPPLIER_RETURN',
+  /** Dispensed / sold to a patient or customer (negative). */
+  DISPENSE = 'DISPENSE',
+  /** Dispensed stock returned by the patient (positive). */
+  DISPENSE_RETURN = 'DISPENSE_RETURN',
 }
 
 export enum ValuationMethod {
@@ -380,10 +390,104 @@ export enum NotificationCategory {
   STOCKOUT = 'STOCKOUT',
   EXPIRY = 'EXPIRY',
   JOBS = 'JOBS',
+  /** eTIMS documents not accepted in time. */
+  ETIMS = 'ETIMS',
 }
 
 export enum JobRunStatus {
   RUNNING = 'RUNNING',
   SUCCEEDED = 'SUCCEEDED',
   FAILED = 'FAILED',
+}
+
+// ------------------------------------------------------------------ pharmacy, billing, eTIMS (slice 6)
+
+export enum Sex {
+  F = 'F',
+  M = 'M',
+  OTHER = 'OTHER',
+}
+
+export enum PayerType {
+  INSURANCE = 'INSURANCE',
+  CORPORATE = 'CORPORATE',
+}
+
+export enum PrescriptionStatus {
+  RECEIVED = 'RECEIVED',
+  VERIFIED = 'VERIFIED',
+  PARTIALLY_DISPENSED = 'PARTIALLY_DISPENSED',
+  DISPENSED = 'DISPENSED',
+  CLOSED = 'CLOSED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum InteractionSeverity {
+  CONTRAINDICATED = 'CONTRAINDICATED',
+  MAJOR = 'MAJOR',
+  MODERATE = 'MODERATE',
+  MINOR = 'MINOR',
+}
+
+export enum ClinicalAlertType {
+  INTERACTION = 'INTERACTION',
+  ALLERGY = 'ALLERGY',
+  DUPLICATE_THERAPY = 'DUPLICATE_THERAPY',
+  AGE = 'AGE',
+  PREGNANCY = 'PREGNANCY',
+}
+
+export enum PriceListType {
+  RETAIL = 'RETAIL',
+  STAFF = 'STAFF',
+  CORPORATE = 'CORPORATE',
+  INSURANCE = 'INSURANCE',
+}
+
+export enum SalesDocType {
+  INVOICE = 'INVOICE',
+  CREDIT_NOTE = 'CREDIT_NOTE',
+}
+
+export enum SalesSource {
+  DISPENSE = 'DISPENSE',
+  OTC = 'OTC',
+  CONSUMABLE = 'CONSUMABLE',
+  HMIS = 'HMIS',
+  RETURN = 'RETURN',
+}
+
+export enum SalesInvoiceStatus {
+  ISSUED = 'ISSUED',
+  CANCELLED = 'CANCELLED',
+}
+
+/** eTIMS state of a local document. */
+export enum EtimsSyncStatus {
+  NOT_REQUIRED = 'NOT_REQUIRED',
+  PENDING = 'PENDING',
+  SENT = 'SENT',
+  ACCEPTED = 'ACCEPTED',
+  FAILED = 'FAILED',
+}
+
+export enum EtimsAdapterKind {
+  OSCU = 'OSCU',
+  VSCU = 'VSCU',
+  MOCK = 'MOCK',
+}
+
+export enum EtimsOutboxKind {
+  ITEM = 'ITEM',
+  SALE = 'SALE',
+  STOCK_IO = 'STOCK_IO',
+  STOCK_MASTER = 'STOCK_MASTER',
+  PURCHASE = 'PURCHASE',
+  IMPORT_ITEM = 'IMPORT_ITEM',
+}
+
+export enum EtimsPurchaseStatus {
+  RECEIVED = 'RECEIVED',
+  CONFIRMED = 'CONFIRMED',
+  REJECTED = 'REJECTED',
 }

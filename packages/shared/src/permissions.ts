@@ -57,6 +57,24 @@ export const Permissions = {
   INVENTORY_ALERTS: 'inventory.alerts',
   /** See and run background jobs. */
   JOBS_RUN: 'jobs.run',
+  PATIENTS_READ: 'patients.read',
+  PATIENTS_MANAGE: 'patients.manage',
+  PHARMACY_READ: 'pharmacy.read',
+  /** Enter prescriptions. */
+  PHARMACY_PRESCRIPTION: 'pharmacy.prescription',
+  /** Verify prescriptions and override interaction alerts (pharmacist). */
+  PHARMACY_VERIFY: 'pharmacy.verify',
+  PHARMACY_DISPENSE: 'pharmacy.dispense',
+  /** Curate the drug interaction table. */
+  PHARMACY_INTERACTIONS: 'pharmacy.interactions',
+  BILLING_READ: 'billing.read',
+  /** Issue sales invoices, take payments, raise credit notes. */
+  BILLING_INVOICE: 'billing.invoice',
+  /** Price lists, payers and payment modes. */
+  BILLING_MANAGE: 'billing.manage',
+  ETIMS_READ: 'etims.read',
+  /** eTIMS configuration, code mapping, reprocessing and purchase confirmation. */
+  ETIMS_MANAGE: 'etims.manage',
   /** Configure approval workflows and see everyone's delegations. */
   APPROVALS_MANAGE: 'approvals.manage',
   SUPPLIERS_READ: 'suppliers.read',
@@ -122,6 +140,18 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'inventory.planning': 'Manage reorder settings; reorder and expiry reports and actions',
   'inventory.alerts': 'Receive reorder, stock-out and expiry alerts',
   'jobs.run': 'View and run background jobs',
+  'patients.read': 'View cached patient records',
+  'patients.manage': 'Create and edit cached patient records',
+  'pharmacy.read': 'View prescriptions and dispenses',
+  'pharmacy.prescription': 'Enter prescriptions',
+  'pharmacy.verify': 'Verify prescriptions and override interaction alerts',
+  'pharmacy.dispense': 'Dispense medicines',
+  'pharmacy.interactions': 'Maintain the drug interaction table',
+  'billing.read': 'View sales invoices, receipts and credit notes',
+  'billing.invoice': 'Issue invoices, take payments and raise credit notes',
+  'billing.manage': 'Manage price lists, payers and payment modes',
+  'etims.read': 'View eTIMS status, transmissions and reports',
+  'etims.manage': 'Configure eTIMS, map codes, reprocess and confirm purchases',
   'approvals.manage': 'Configure approval workflows and delegations',
   'suppliers.read': 'View suppliers',
   'suppliers.manage': 'Create and edit suppliers, documents and contract prices',
