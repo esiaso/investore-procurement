@@ -21,6 +21,9 @@ export const DOC_ROUTES: Partial<Record<string, (id: string) => string>> = {
   SR: (id) => `/store-requisitions/${id}`,
   ISS: (id) => `/issues/${id}`,
   DRT: (id) => `/department-returns/${id}`,
+  APP: (id) => `/procurement-plans/${id}`,
+  TND: (id) => `/tenders/${id}`,
+  CTR: (id) => `/contracts/${id}`,
 };
 
 export const DOC_LABELS: Record<string, string> = {
@@ -34,9 +37,14 @@ export const DOC_LABELS: Record<string, string> = {
   SR: 'Internal requisition',
   ISS: 'Issue voucher',
   DRT: 'Department return',
+  APP: 'Procurement plan',
+  TND: 'Tender',
+  CTR: 'Contract',
+  CV: 'Contract variation',
+  SSN: 'Supplier sanction',
 };
 
-const ORDER = ['PR', 'RFQ', 'PO', 'GRN', 'RTS', 'INV', 'PV', 'SR', 'ISS', 'DRT'];
+const ORDER = ['APP', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'GRN', 'RTS', 'INV', 'PV', 'SR', 'ISS', 'DRT'];
 
 export function useMoney() {
   const { currency } = useSettings();
@@ -96,7 +104,7 @@ export function ApprovalPanel({ type, id }: { type: string; id: string }) {
   const inbox = useQuery({ queryKey: ['/approvals/inbox'], queryFn: () => api<ApprovalInboxRow[]>('/approvals/inbox') });
   const mine = inbox.data?.find((r) => r.documentId === id && r.documentType === type);
   const decide = useApiMutation<'approve' | 'reject' | 'return'>((action) => [`/approvals/${mine!.id}/${action}`, { method: 'POST', body: { comment: comment || undefined } }], {
-    invalidate: ['/approvals', '/requisitions', '/purchase-orders', '/invoices', '/budgets', '/documents', '/notifications', '/store-requisitions'],
+    invalidate: ['/approvals', '/requisitions', '/purchase-orders', '/invoices', '/budgets', '/documents', '/notifications', '/store-requisitions', '/procurement-plans', '/tenders', '/contracts', '/supplier-performance'],
     success: 'Decision recorded',
   });
   const latest = history.data?.at(-1);
