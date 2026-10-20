@@ -54,6 +54,8 @@ export class CreateGenericDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) storageRequirements?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) pregnancyNotes?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) lactationNotes?: string | null;
+  @ApiPropertyOptional({ description: 'Dispensing check: contraindicated in pregnancy' }) @IsOptional() @IsBoolean() pregnancyContraindicated?: boolean;
+  @ApiPropertyOptional({ description: 'Dispensing check: youngest age in years', nullable: true }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(120) minAgeYears?: number | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateGenericDto extends PartialType(CreateGenericDto) {}
