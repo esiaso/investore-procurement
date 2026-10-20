@@ -28,7 +28,7 @@ export class ReservationsService {
       if (need <= 0) continue;
       // Lock the item's balance rows so two approvals cannot reserve the same stock.
       await m.query(`SELECT id FROM stock_balance WHERE store_id = $1 AND item_id = $2 ORDER BY id FOR UPDATE`, [sr.storeId, line.itemId]);
-      const fefo = allocateFefo(await loadFefoCandidates(m, line.itemId, sr.storeId), need, asOf);
+      const fefo = allocateFefo(await loadFefoCandidates(m, line.itemId, sr.storeId, { purpose: 'ISSUE', departmentId: sr.departmentId }), need, asOf);
       if (fefo.shortfall > 0) shortfall.set(line.id, fefo.shortfall);
       if (!fefo.allocations.length) continue;
       await changeReserved(

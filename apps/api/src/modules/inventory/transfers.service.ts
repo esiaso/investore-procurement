@@ -84,7 +84,7 @@ export class TransfersService {
         const qty = round4(req?.quantity ?? line.requestedQty);
         if (qty === 0) continue;
         if (qty > line.requestedQty) throw new BadRequestException('Cannot dispatch more than requested');
-        const candidates = await loadFefoCandidates(m, line.itemId, t.fromStoreId);
+        const candidates = await loadFefoCandidates(m, line.itemId, t.fromStoreId, { purpose: 'TRANSFER', toStoreId: t.toStoreId });
         const fefo = allocateFefo(candidates, qty, ctx.effectiveDate);
         let picks = fefo.allocations.map((a) => ({ batchId: a.batchId, binId: a.binId, quantity: a.quantity }));
         if (req?.picks?.length) {

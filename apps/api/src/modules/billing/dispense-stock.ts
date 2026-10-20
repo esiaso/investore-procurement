@@ -25,9 +25,13 @@ export async function takeStock(
   const plan: { key: string; itemId: string; batchId: string; binId: string | null; quantity: number; patientRef: string | null; override: string | null }[] = [];
   let overridden = false;
   for (const l of lines) {
-    const fefo = allocateFefo(await loadFefoCandidates(m, l.itemId, storeId), l.quantity, ctx.effectiveDate);
+    // Donor stock that may not be sold (funding-source rules) is never a candidate.
+    const candidates = await loadFefoCandidates(m, l.itemId, storeId, { purpose: 'SALE', storeId });
+    const fefo = allocateFefo(candidates, l.quantity, ctx.effectiveDate);
     let picks = fefo.allocations.map((a) => ({ batchId: a.batchId, binId: a.binId, quantity: a.quantity }));
     if (l.picks?.length) {
+      const allowed = new Set(candidates.map((c) => c.batchId));
+      if (l.picks.some((p) => !allowed.has(p.batchId))) throw new StockRuleError('FUNDING_RESTRICTED', 'A chosen batch is not available for sale (funding source restriction, hold or no stock)');
       const total = Math.round(l.picks.reduce((s, p) => s + p.quantity, 0) * 10_000) / 10_000;
       if (total !== Math.round(l.quantity * 10_000) / 10_000) throw new StockRuleError('PICKS_MISMATCH', `Picks must add up to ${l.quantity}`);
       if (!matchesFefo(l.picks, fefo.allocations)) overridden = true;

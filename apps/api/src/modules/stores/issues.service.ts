@@ -72,7 +72,7 @@ export class IssuesService implements OnModuleInit {
       const lines = [];
       for (const l of sr.lines) {
         const need = outstanding(l);
-        const candidates = need > 0 ? (await loadFefoCandidates(m, l.itemId, sr.storeId)).filter((c) => isUsable(c, today)).sort(fefoCompare) : [];
+        const candidates = need > 0 ? (await loadFefoCandidates(m, l.itemId, sr.storeId, { purpose: 'ISSUE', departmentId: sr.departmentId })).filter((c) => isUsable(c, today)).sort(fefoCompare) : [];
         const fefo = allocateFefo(candidates, need, today);
         const binIds = [...new Set(candidates.map((c) => c.binId).filter(Boolean))];
         const bins: { id: string; code: string }[] = binIds.length ? await m.query(`SELECT id, code FROM bin WHERE id = ANY($1::uuid[])`, [binIds]) : [];
@@ -137,7 +137,7 @@ export class IssuesService implements OnModuleInit {
         const qty = round4(req?.quantity ?? pickTotal ?? owed);
         if (qty === 0) continue;
         if (qty > owed) throw new BadRequestException(`Line ${line.lineNo}: only ${owed} outstanding`);
-        const fefo = allocateFefo(await loadFefoCandidates(m, line.itemId, sr.storeId), qty, today);
+        const fefo = allocateFefo(await loadFefoCandidates(m, line.itemId, sr.storeId, { purpose: 'ISSUE', departmentId: sr.departmentId }), qty, today);
         let picks: { batchId: string; binId: string | null; quantity: number; scannedCode?: string }[];
         if (req?.picks?.length) {
           if (pickTotal !== qty) throw new BadRequestException(`Line ${line.lineNo}: picks must add up to ${qty}`);
