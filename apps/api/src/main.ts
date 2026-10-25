@@ -11,6 +11,7 @@ import { seedSampleStores } from './database/seeds/sample-stores';
 import { seedSamplePlanning } from './database/seeds/sample-planning';
 import { seedSamplePharmacy } from './database/seeds/sample-pharmacy';
 import { seedSampleStrategic } from './database/seeds/sample-strategic';
+import { seedSampleLogistics } from './database/seeds/sample-logistics';
 
 async function main() {
   const env = loadEnv();
@@ -28,6 +29,7 @@ async function main() {
     await seedSamplePlanning(app);
     await seedSamplePharmacy(app);
     await seedSampleStrategic(app);
+    await seedSampleLogistics(app);
   }
 
   await app.listen(env.port);
