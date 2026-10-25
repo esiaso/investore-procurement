@@ -213,6 +213,12 @@ export class DisposalsController {
     return this.disposals.list(q);
   }
 
+  /** Users who may sit on a disposal committee (disposals.manage). */
+  @Get('committee-candidates') @RequirePermissions(P.DISPOSALS_MANAGE)
+  candidates() {
+    return this.disposals.candidates();
+  }
+
   @Get(':id') @RequireAnyPermission(P.DISPOSALS_MANAGE, P.INVENTORY_READ)
   get(@Param('id', ParseUUIDPipe) id: string) {
     return this.disposals.get(id);

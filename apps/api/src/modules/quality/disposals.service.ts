@@ -296,6 +296,14 @@ export class DisposalsService implements OnModuleInit, ApprovalHandler {
     return { ...d, members: (d.members ?? []).map((x) => ({ ...x, fullName: users.find((u: { id: string }) => u.id === x.userId)?.fullName })), files };
   }
 
+  candidates(): Promise<{ id: string; fullName: string; username: string }[]> {
+    return this.ds.query(
+      `SELECT DISTINCT u.id, u.full_name AS "fullName", u.username FROM app_user u JOIN user_role ur ON ur.user_id = u.id
+         JOIN role_permission rp ON rp.role_id = ur.role_id AND rp.permission_code = $1 WHERE u.is_active ORDER BY 2`,
+      [Permissions.DISPOSALS_MANAGE],
+    );
+  }
+
   list(q: { status?: string; storeId?: string }) {
     const qb = this.ds.getRepository(Disposal).createQueryBuilder('d').leftJoinAndSelect('d.store', 'store').orderBy('d.createdAt', 'DESC').take(500);
     StoreScope.apply(qb, 'd.store_id');
