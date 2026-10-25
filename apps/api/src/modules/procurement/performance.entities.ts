@@ -59,6 +59,13 @@ export class SupplierScorecard {
   @Column(PCT)
   overallScore: number | null;
 
+  /** Average days from PO sent to GRN for orders received in the month, and shipments that slipped. */
+  @Column({ type: 'numeric', precision: 7, scale: 1, nullable: true, transformer: { to: (v: number | null) => v, from: (v: string | null) => (v === null ? null : Number(v)) } })
+  avgLeadTimeDays: number | null;
+
+  @Column({ type: 'int', default: 0 })
+  delayedShipments: number;
+
   @CreateDateColumn({ type: 'timestamptz' })
   computedAt: Date;
 }

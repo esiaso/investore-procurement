@@ -127,7 +127,9 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
     await this.assertSupplier(m, header.supplierId, today);
     const built: Partial<PurchaseOrderLine>[] = [];
     for (const [i, l] of lines.entries()) built.push(await this.buildLine(m, l, i + 1, today));
-    const [supplier] = await m.query(`SELECT payment_terms_days FROM supplier WHERE id = $1`, [header.supplierId]);
+    const [supplier] = await m.query(`SELECT payment_terms_days, observed_lead_time_days FROM supplier WHERE id = $1`, [header.supplierId]);
+    // No date given: the supplier's observed lead time (shipment history) sets it.
+    const defaultExpected = supplier?.observed_lead_time_days != null ? new Date(Date.parse(`${today}T00:00:00Z`) + supplier.observed_lead_time_days * 86_400_000).toISOString().slice(0, 10) : null;
     const po = await m.save(
       m.create(PurchaseOrder, {
         number: await this.numbering.next(DocumentType.PURCHASE_ORDER, { storeId: header.storeId, date: today, manager: m }),
@@ -135,7 +137,7 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         requisitionId: header.requisitionId ?? null,
         rfqId: header.rfqId ?? null,
         contractId: header.contractId ?? null,
-        expectedDelivery: header.expectedDelivery ?? null,
+        expectedDelivery: header.expectedDelivery ?? defaultExpected,
         notes: header.notes ?? null,
         orderDate: today,
         currency: await this.settings.get('locale.currency', m),

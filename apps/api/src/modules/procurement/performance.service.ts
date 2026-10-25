@@ -149,6 +149,17 @@ export class PerformanceService implements OnModuleInit, ApprovalHandler {
              document_compliance_rate = EXCLUDED.document_compliance_rate, overall_score = EXCLUDED.overall_score, computed_at = now()`,
           [s.id, period, r.ordersDue, r.grnLines, r.invoiceLines, r.rates.onTimeRate, r.rates.inFullRate, r.otifRate, r.rates.qualityRejectRate, r.rates.priceComplianceRate, r.rates.documentComplianceRate, overall],
         );
+        // Lead time of orders first received in the month, and shipments of the month that slipped.
+        await m.query(
+          `UPDATE supplier_scorecard sc SET
+             avg_lead_time_days = (SELECT round(avg(g.d - COALESCE(po.sent_at::date, po.order_date))::numeric, 1)
+                                     FROM purchase_order po JOIN (SELECT purchase_order_id, MIN(received_date) AS d FROM goods_received_note WHERE status = 'POSTED' GROUP BY purchase_order_id) g ON g.purchase_order_id = po.id
+                                    WHERE po.supplier_id = $1 AND g.d BETWEEN ($2 || '-01')::date AND $3::date),
+             delayed_shipments = (SELECT count(*)::int FROM inbound_shipment sh WHERE sh.supplier_id = $1 AND sh.expected_on BETWEEN ($2 || '-01')::date AND $3::date
+                                     AND (sh.status = 'DELAYED' OR jsonb_array_length(sh.expected_history) > 0))
+           WHERE sc.supplier_id = $1 AND sc.period = $2`,
+          [s.id, period, monthEnd(period)],
+        );
         if (overall !== null && overall < threshold) {
           const card = await m.findOneByOrFail(SupplierScorecard, { supplierId: s.id, period });
           if (!(await m.existsBy(CorrectiveAction, { scorecardId: card.id }))) {

@@ -59,6 +59,10 @@ export class Supplier extends AppBaseEntity {
   @Column({ type: 'varchar', length: 40, nullable: true })
   bankAccountMasked: string | null;
 
+  /** Average days from PO sent to first GRN (job suppliers.leadtimes); default delivery date on new POs. */
+  @Column({ type: 'int', nullable: true })
+  observedLeadTimeDays: number | null;
+
   // Performance, recomputed from posted GRNs.
   @Column({ type: 'numeric', precision: 7, scale: 4, nullable: true, transformer: numericTransformer })
   onTimeDeliveryRate: number | null;
