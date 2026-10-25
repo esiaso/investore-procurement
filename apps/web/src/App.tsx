@@ -22,6 +22,9 @@ import { StockTakeDetailPage, StockTakesPage } from './inventory/StockTakesPage'
 import { TransfersPage } from './inventory/TransfersPage';
 import { ValuationPage } from './inventory/ValuationPage';
 import { AppLayout } from './layout/AppLayout';
+import { AssetDetailPage, AssetsPage, LabelsPage } from './assets/AssetPages';
+import { DistributionPage, RunDetailPage, ServiceCertificateDetailPage, ServiceCertificatesPage, ShipmentsPage } from './logistics/LogisticsPages';
+import { ColdChainPage, ComplaintsPage, DisposalDetailPage, DisposalsPage, HoldDetailPage, HoldsPage, RecallDetailPage, RecallsPage } from './quality/QualityPages';
 import {
   PortalHomePage,
   PortalOrderPage,
@@ -144,6 +147,22 @@ export function App() {
         <Route path="agency-orders" element={guarded([Permissions.PURCHASING_READ], <AgencyOrdersPage />)} />
         <Route path="portal-documents" element={guarded([Permissions.PURCHASING_READ], <PortalSubmissionsPage />)} />
         <Route path="procurement-kpis" element={guarded([Permissions.PROCUREMENT_KPIS], <KpiPage />)} />
+        <Route path="quality/holds" element={guardedAny([Permissions.QUALITY_READ, Permissions.QUALITY_RELEASE], <HoldsPage />)} />
+        <Route path="quality/holds/:id" element={guardedAny([Permissions.QUALITY_READ, Permissions.QUALITY_RELEASE], <HoldDetailPage />)} />
+        <Route path="quality/complaints" element={guardedAny([Permissions.QUALITY_READ, Permissions.QUALITY_MANAGE, Permissions.PHARMACY_READ, Permissions.INVENTORY_READ], <ComplaintsPage />)} />
+        <Route path="cold-chain" element={guardedAny([Permissions.QUALITY_READ, Permissions.INVENTORY_HANDLE_COLD_CHAIN], <ColdChainPage />)} />
+        <Route path="recalls" element={guardedAny([Permissions.QUALITY_READ, Permissions.RECALLS_MANAGE], <RecallsPage />)} />
+        <Route path="recalls/:id" element={guardedAny([Permissions.QUALITY_READ, Permissions.RECALLS_MANAGE], <RecallDetailPage />)} />
+        <Route path="disposals" element={guardedAny([Permissions.DISPOSALS_MANAGE, Permissions.INVENTORY_READ], <DisposalsPage />)} />
+        <Route path="disposals/:id" element={guardedAny([Permissions.DISPOSALS_MANAGE, Permissions.INVENTORY_READ], <DisposalDetailPage />)} />
+        <Route path="distribution" element={guardedAny([Permissions.DISTRIBUTION_MANAGE, Permissions.INVENTORY_READ], <DistributionPage />)} />
+        <Route path="distribution/:id" element={guardedAny([Permissions.DISTRIBUTION_MANAGE, Permissions.INVENTORY_READ], <RunDetailPage />)} />
+        <Route path="shipments" element={guarded([Permissions.PURCHASING_READ], <ShipmentsPage />)} />
+        <Route path="service-certificates" element={guarded([Permissions.PURCHASING_READ], <ServiceCertificatesPage />)} />
+        <Route path="service-certificates/:id" element={guarded([Permissions.PURCHASING_READ], <ServiceCertificateDetailPage />)} />
+        <Route path="assets" element={guarded([Permissions.ASSETS_READ], <AssetsPage />)} />
+        <Route path="assets/:id" element={guarded([Permissions.ASSETS_READ], <AssetDetailPage />)} />
+        <Route path="labels" element={guarded([Permissions.INVENTORY_READ], <LabelsPage />)} />
         <Route path="forecasting" element={guarded([Permissions.FORECASTING_READ], <ForecastsPage />)} />
         <Route path="supply-planning" element={guarded([Permissions.FORECASTING_READ], <SupplyPlanPage />)} />
         <Route path="quantification" element={guarded([Permissions.FORECASTING_READ], <QuantificationPage />)} />

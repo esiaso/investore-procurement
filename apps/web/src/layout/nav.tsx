@@ -52,6 +52,16 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import WaterfallChartIcon from '@mui/icons-material/WaterfallChart';
+import AcUnitIcon from '@mui/icons-material/AcUnit';
+import BlockIcon from '@mui/icons-material/Block';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import DevicesOtherIcon from '@mui/icons-material/DevicesOther';
+import EngineeringIcon from '@mui/icons-material/Engineering';
+import FeedbackIcon from '@mui/icons-material/Feedback';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
+import ReportIcon from '@mui/icons-material/Report';
+import RouteIcon from '@mui/icons-material/Route';
+import SailingIcon from '@mui/icons-material/Sailing';
 import type { ReactNode } from 'react';
 import { PermissionCode, Permissions } from '@sil/shared';
 
@@ -118,6 +128,16 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Tenders', path: '/portal/tenders', icon: <GavelIcon />, permissions: [P.PORTAL_ACCESS], section: 'Supplier portal', portal: true },
   { label: 'Purchase orders', path: '/portal/orders', icon: <ShoppingCartIcon />, permissions: [P.PORTAL_ACCESS], section: 'Supplier portal', portal: true },
   { label: 'Invoices & payments', path: '/portal/payments', icon: <PaymentsIcon />, permissions: [P.PORTAL_ACCESS], section: 'Supplier portal', portal: true },
+  { label: 'Quarantine & holds', path: '/quality/holds', icon: <BlockIcon />, permissions: [], anyOf: [P.QUALITY_READ, P.QUALITY_RELEASE], section: 'Quality & safety' },
+  { label: 'Cold chain', path: '/cold-chain', icon: <AcUnitIcon />, permissions: [], anyOf: [P.QUALITY_READ, P.INVENTORY_HANDLE_COLD_CHAIN], section: 'Quality & safety' },
+  { label: 'Recalls', path: '/recalls', icon: <ReportIcon />, permissions: [], anyOf: [P.QUALITY_READ, P.RECALLS_MANAGE], section: 'Quality & safety' },
+  { label: 'Complaints', path: '/quality/complaints', icon: <FeedbackIcon />, permissions: [], anyOf: [P.QUALITY_READ, P.QUALITY_MANAGE, P.PHARMACY_READ], section: 'Quality & safety' },
+  { label: 'Disposals', path: '/disposals', icon: <DeleteSweepIcon />, permissions: [], anyOf: [P.DISPOSALS_MANAGE, P.INVENTORY_READ], section: 'Quality & safety' },
+  { label: 'Distribution', path: '/distribution', icon: <RouteIcon />, permissions: [], anyOf: [P.DISTRIBUTION_MANAGE, P.INVENTORY_READ], section: 'Logistics' },
+  { label: 'Inbound shipments', path: '/shipments', icon: <SailingIcon />, permissions: [P.PURCHASING_READ], section: 'Logistics' },
+  { label: 'Service certificates', path: '/service-certificates', icon: <EngineeringIcon />, permissions: [P.PURCHASING_READ], section: 'Logistics' },
+  { label: 'Assets', path: '/assets', icon: <DevicesOtherIcon />, permissions: [P.ASSETS_READ], section: 'Logistics' },
+  { label: 'Labels', path: '/labels', icon: <QrCode2Icon />, permissions: [P.INVENTORY_READ], section: 'Logistics' },
   { label: 'Stock on hand', path: '/stock', icon: <WarehouseIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Receipts', path: '/receipts', icon: <MoveToInboxIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },
   { label: 'Transfers', path: '/transfers', icon: <SwapHorizIcon />, permissions: [Permissions.INVENTORY_READ], section: 'Inventory' },

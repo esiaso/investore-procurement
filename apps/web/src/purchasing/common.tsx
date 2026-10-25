@@ -24,6 +24,10 @@ export const DOC_ROUTES: Partial<Record<string, (id: string) => string>> = {
   APP: (id) => `/procurement-plans/${id}`,
   TND: (id) => `/tenders/${id}`,
   CTR: (id) => `/contracts/${id}`,
+  DSL: (id) => `/disposals/${id}`,
+  RCL: (id) => `/recalls/${id}`,
+  SCC: (id) => `/service-certificates/${id}`,
+  DRN: (id) => `/distribution/${id}`,
 };
 
 export const DOC_LABELS: Record<string, string> = {
@@ -42,9 +46,14 @@ export const DOC_LABELS: Record<string, string> = {
   CTR: 'Contract',
   CV: 'Contract variation',
   SSN: 'Supplier sanction',
+  DSL: 'Disposal',
+  RCL: 'Recall',
+  SCC: 'Service certificate',
+  SHP: 'Inbound shipment',
+  DRN: 'Delivery run',
 };
 
-const ORDER = ['APP', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'GRN', 'RTS', 'INV', 'PV', 'SR', 'ISS', 'DRT'];
+const ORDER = ['APP', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'SHP', 'GRN', 'SCC', 'RTS', 'INV', 'PV', 'SR', 'ISS', 'DRT', 'DRN', 'RCL', 'DSL'];
 
 export function useMoney() {
   const { currency } = useSettings();
@@ -104,7 +113,7 @@ export function ApprovalPanel({ type, id }: { type: string; id: string }) {
   const inbox = useQuery({ queryKey: ['/approvals/inbox'], queryFn: () => api<ApprovalInboxRow[]>('/approvals/inbox') });
   const mine = inbox.data?.find((r) => r.documentId === id && r.documentType === type);
   const decide = useApiMutation<'approve' | 'reject' | 'return'>((action) => [`/approvals/${mine!.id}/${action}`, { method: 'POST', body: { comment: comment || undefined } }], {
-    invalidate: ['/approvals', '/requisitions', '/purchase-orders', '/invoices', '/budgets', '/documents', '/notifications', '/store-requisitions', '/procurement-plans', '/tenders', '/contracts', '/supplier-performance'],
+    invalidate: ['/approvals', '/requisitions', '/purchase-orders', '/invoices', '/budgets', '/documents', '/notifications', '/store-requisitions', '/procurement-plans', '/tenders', '/contracts', '/supplier-performance', '/disposals'],
     success: 'Decision recorded',
   });
   const latest = history.data?.at(-1);
