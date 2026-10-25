@@ -870,18 +870,102 @@ New permissions: `forecasting.read/manage`, `plans.read/manage/consolidate`,
 `tenders.read/manage/evaluate`, `contracts.read/manage`, `suppliers.performance`,
 `procurement.kpis`, `portal.access`. New document types: APP, TND, CTR, CV, SSN.
 
+## Logistics, quality and assets (slice 8)
+
+### File storage (MinIO)
+
+* Attachments live in **MinIO** (S3-compatible; compose service `minio`, console on
+  port 9001). MinIO no longer publishes community images on Docker Hub or quay.io, so
+  compose uses Bitnami's build of the 2024-10-13 release (`bitnamilegacy/minio`,
+  unmaintained): **use a maintained MinIO build or another S3-compatible store in
+  production** (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`).
+  `STORAGE_DRIVER=local` stores files in `STORAGE_LOCAL_DIR` instead.
+* `attachment` rows are polymorphic (owner type + id), **versioned** (same owner,
+  category and file name → new version; old versions stay downloadable) and keep the
+  SHA-256 (checked on every download), MIME type, size and uploader. Limits:
+  `files.maxSizeMb` (20) and `files.allowedMimeTypes`; PDF / PNG / JPEG content is
+  sniffed so a renamed file is refused. Each owner type decides who may read and
+  upload (permission + record visibility, e.g. store scope).
+* Wired into supplier documents (scans), tender documents (downloadable by bidders in
+  the portal), GRN delivery notes / certificates of analysis, write-off and disposal
+  certificates, complaints, recalls, assets and service certificates; suppliers attach
+  the scanned delivery note or invoice when they submit it in the portal. Full document
+  management screens come in slice 12.
+
+### Quality
+
+* **Holds** (`quality.manage` places, `quality.release` decides; the person who placed a
+  hold cannot decide it): inspection, investigation, complaint, excursion, recall. While
+  any hold is open the batch is unusable in every store (issues, dispenses, sales,
+  transfers); write-offs are still allowed. **Reject** raises a draft disposal.
+* **Cold chain**: fridges / freezers / cold rooms per store (optionally mapped to bins),
+  ranges per type (`coldChain.ranges`: fridge and cold room 2–8 °C, freezer −25 to
+  −15 °C, ambient 15–25 °C). Manual readings and **logger CSV import** (a timestamp
+  and a temperature column; local times are Nairobi). Out-of-range readings for at
+  least `coldChain.excursionMinutes` (0 = any reading) open an **excursion** that
+  **quarantines** the batches in the unit (cold-chain items of the store when the unit
+  has no bins) when `coldChain.autoQuarantine` is on. A temperature entered on a GRN
+  outside the fridge range holds the received cold-chain batches.
+* **Complaints** with PPB fields (PQM / ADR report type, reference, date sent) and a
+  printable report; anyone handling stock or patients can report, quality staff
+  investigate and may quarantine the batch.
+* **Recalls**: the notice (PPB, supplier, manufacturer or internal; item and batch
+  numbers, or all batches) quarantines every affected batch in every store at once and
+  alerts pharmacy and stores staff. The **trace** lists every store holding the batches
+  and every issue to a department, dispense and sale (with the patient and phone) and
+  transfer. Returns from wards or patients can be posted back into a store (still on
+  recall hold). Closing rejects the holds (stock stays unusable until disposed of or
+  returned) or releases them if the recall was withdrawn. Recall dashboard.
+* **Disposal** of rejected, recalled, expired or obsolete stock: method (destruction,
+  sale, return to supplier, donation, transfer), committee sign-offs
+  (`disposal.minCommittee`, 2), approval workflows **DSL-1** (≤ 100,000: supply chain →
+  finance) and **DSL-2** (above: + management). On approval the stock is written off
+  (reason `DISPOSAL`); completion (place, agent / licensed handler, waste-transfer note,
+  proceeds of a sale) generates the **certificate PDF stored in MinIO**. With the PPADA
+  rule set on, a sale needs the public notice reference.
+
+### Logistics
+
+* **Distribution** from the main store to satellite stores: delivery routes (stop
+  order), runs of transfer requests, **FEFO picking list** (bin, batch, expiry),
+  confirmed picks (quantities can be cut), packing (packages), dispatch of the whole run
+  (each transfer dispatched with its picks) with a **dispatch note / manifest PDF**, and
+  **proof of delivery** per stop (received by, name as signed, time, discrepancies with a
+  reason), which posts the transfer receipt.
+* **Inbound shipments** against POs: shipped and expected dates (changes kept with the
+  reason), carrier and tracking, partial receipts (GRNs name the shipment), delays
+  (job `shipments.delays`, daily). **Lead-time history** per supplier (PO sent → first
+  GRN: average, min, max, 90th percentile, late orders, slipped shipments); the monthly
+  job `suppliers.leadtimes` stores the average, which becomes the default delivery date
+  of new POs, and the scorecards show the average lead time and slipped shipments.
+* **Service and works orders**: items in `services.categoryCodes` (`SVC`) cannot be
+  received on a GRN; a **completion certificate** (period, work done, rating, quantities
+  in the order unit) by someone who did not raise or approve the PO counts as received,
+  so the invoice is three-way matched against it.
+* **Assets**: items in `assets.categoryCodes` (`EQUIP`) become tagged assets on GRN
+  posting (one per unit, tag `AST…`), with serial, location (store or department),
+  custodian, warranty end and maintenance interval; moves and maintenance are logged and
+  `assets.alerts` (daily) warns `assets.warrantyAlertDays` (60) / `assets.maintenanceAlertDays`
+  (14) ahead, once per date. No depreciation.
+* **Labels**: shelf labels (Code128 of the barcode, GTIN or item code, with the bin) and
+  batch labels (**GS1 DataMatrix** with (01) GTIN, (17) expiry, (10) batch when the item
+  has a valid GTIN, otherwise Code128 of code and batch), size `labels.size`.
+
+New permissions: `quality.read/manage/release`, `recalls.manage`, `disposals.manage`,
+`distribution.manage`, `shipments.manage`, `assets.read/manage`, `services.certify`,
+`files.upload`. New document types: QH, PQC, RCL, DSL, DRN, SHP, AST, SCC.
+
 ## Known limitations / next slices
 
 * Redis holds sessions and the BullMQ job queue. The mail outbox is still sent by a
-  poller in the API process. MinIO arrives with the slice that needs file uploads.
+  poller in the API process.
 * Schedule changes in `jobs.schedules` apply when the worker restarts.
 * The reorder engine evaluates items that have a store item setting. The AMC job
   creates these for every item with ledger history in a store; add one by hand
   (Stock levels → PUT `/stock-planning/settings/:storeId/:itemId`) for a new item with
   no history.
 * PPADA disposal and the full public-sector reporting set are not implemented (only the
-  optional standstill, AGPO tracking and PPRA award report). Portal documents and tender
-  documents are metadata until file uploads arrive. Patients are a local cache
+  optional standstill, AGPO tracking and PPRA award report). Patients are a local cache
   and patient references on requisitions are free text until the HMIS link (slice 9).
 * eTIMS has been exercised against the mock control unit only. KRA sandbox
   certification (OSCU or VSCU) still has to be done with the hospital's PIN and device;
@@ -892,7 +976,8 @@ New permissions: `forecasting.read/manage`, `plans.read/manage/consolidate`,
   stock arrives. An adjustment or count that removes reserved stock leaves
   the reservation in place until the next issue re-plans it (reconciliation reports
   such rows as `overReservedCount`).
-* Supplier documents are metadata only; file uploads arrive with MinIO.
+* Attachments are not virus-scanned; add a scanner (e.g. ClamAV) in front of MinIO before go-live.
+* A quality hold applies to the batch in every store (the safe choice); there is no hold on one store's stock only.
 * The `uq_stock_balance_location` constraint (`UNIQUE NULLS NOT DISTINCT`) and the
   ledger trigger are hand-written in the inventory migration; TypeORM cannot express
   them. Review any future `migration:generate` output so it does not drop them.
