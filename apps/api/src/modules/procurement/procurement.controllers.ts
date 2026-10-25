@@ -1,4 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -56,6 +58,7 @@ import {
   UpdatePlanDto,
   VariationDto,
 } from './procurement.dto';
+import { sendFile, UPLOAD_HARD_LIMIT } from '../files/files.module';
 import { recommendMethod } from './sourcing';
 import { TendersService } from './tenders.service';
 
@@ -491,9 +494,22 @@ export class PortalController {
     return this.portal.trackDelivery(u, id, dto);
   }
 
+  /** JSON, or multipart/form-data with the scanned document in ile. */
   @Post('purchase-orders/:id/documents') @RequirePermissions(P.PORTAL_ACCESS)
-  submit(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SubmissionDto, @CurrentUser() u: SessionUser) {
-    return this.portal.submitDocument(u, id, dto);
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: UPLOAD_HARD_LIMIT } }))
+  submit(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SubmissionDto, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() u: SessionUser) {
+    return this.portal.submitDocument(u, id, dto, file);
+  }
+
+  @Get('tenders/:id/files') @RequirePermissions(P.PORTAL_ACCESS)
+  tenderFiles(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
+    return this.portal.tenderFiles(u, id);
+  }
+
+  @Get('files/:id') @RequirePermissions(P.PORTAL_ACCESS)
+  async file(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser, @Res({ passthrough: true }) res: Response) {
+    const { attachment, body } = await this.portal.download(u, id);
+    return sendFile(res, attachment, body);
   }
 
   @Get('submissions') @RequirePermissions(P.PORTAL_ACCESS)

@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
-import { BidStatus, DeliveryStage, RfqStatus, SessionUser, SourcingMethod, SupplierSubmissionType, TenderStatus } from '@sil/shared';
+import { AttachmentOwner, BidStatus, DeliveryStage, RfqStatus, SessionUser, SourcingMethod, SupplierSubmissionType, TenderStatus } from '@sil/shared';
+import { AttachmentsService } from '../files/attachments.service';
 import { RfqsService } from '../purchasing/rfqs.service';
 import { PurchaseOrder, PurchaseOrderLine, Quotation, Rfq } from '../purchasing/purchasing.entities';
 import { AgenciesService } from './agencies.service';
@@ -22,6 +23,7 @@ export class PortalService {
     private readonly rfqs: RfqsService,
     private readonly tenders: TendersService,
     private readonly agencies: AgenciesService,
+    private readonly attachments: AttachmentsService,
   ) {}
 
   supplierOf(actor: SessionUser): string {
@@ -208,14 +210,53 @@ export class PortalService {
   }
 
   /** Delivery note or invoice metadata against an order (files arrive with object storage). */
-  async submitDocument(actor: SessionUser, id: string, dto: { type: SupplierSubmissionType; reference: string; documentDate: string; amount?: number; fileName?: string; notes?: string }) {
+  /** Delivery note or invoice against an order, optionally with the scanned document (stored in object storage). */
+  async submitDocument(
+    actor: SessionUser,
+    id: string,
+    dto: { type: SupplierSubmissionType; reference: string; documentDate: string; amount?: number; fileName?: string; notes?: string },
+    file?: { originalname: string; mimetype: string; buffer: Buffer },
+  ) {
     const po = await this.ownOrder(actor, id);
-    const repo = this.ds.getRepository(SupplierSubmission);
-    return repo.save(repo.create({ supplierId: po.supplierId, type: dto.type, purchaseOrderId: id, reference: dto.reference, documentDate: dto.documentDate, amount: dto.amount ?? null, fileName: dto.fileName ?? null, notes: dto.notes ?? null, submittedBy: actor.id }));
+    if (file) await this.attachments.validate({ mimeType: file.mimetype, body: file.buffer, fileName: file.originalname });
+    return this.ds.transaction(async (m) => {
+      const row = await m.save(
+        m.create(SupplierSubmission, { supplierId: po.supplierId, type: dto.type, purchaseOrderId: id, reference: dto.reference, documentDate: dto.documentDate, amount: dto.amount ?? null, fileName: file?.originalname ?? dto.fileName ?? null, notes: dto.notes ?? null, submittedBy: actor.id }),
+      );
+      if (file) {
+        await this.attachments.attach(m, { ownerType: AttachmentOwner.PORTAL_SUBMISSION, ownerId: row.id, category: dto.type, fileName: file.originalname, mimeType: file.mimetype, body: file.buffer }, actor.id, false);
+      }
+      return row;
+    });
   }
 
   async submissions(actor: SessionUser) {
-    return this.ds.getRepository(SupplierSubmission).find({ where: { supplierId: this.supplierOf(actor) }, order: { createdAt: 'DESC' }, take: 500 });
+    const rows = await this.ds.getRepository(SupplierSubmission).find({ where: { supplierId: this.supplierOf(actor) }, order: { createdAt: 'DESC' }, take: 500 });
+    const files: { owner_id: string; id: string; file_name: string }[] = rows.length
+      ? await this.ds.query(`SELECT owner_id, id, file_name FROM attachment WHERE owner_type = $1 AND is_current AND owner_id = ANY($2::uuid[])`, [AttachmentOwner.PORTAL_SUBMISSION, rows.map((r) => r.id)])
+      : [];
+    return rows.map((r) => ({ ...r, files: files.filter((f) => f.owner_id === r.id).map((f) => ({ id: f.id, fileName: f.file_name })) }));
+  }
+
+  /** Documents the hospital issued for a tender the supplier can see. */
+  async tenderFiles(actor: SessionUser, id: string) {
+    await this.tender(actor, id);
+    return this.attachments.list(AttachmentOwner.TENDER, id, null);
+  }
+
+  /** Downloads a tender document or one of the supplier's own submissions; anything else is 404. */
+  async download(actor: SessionUser, attachmentId: string) {
+    const a = await this.attachments.get(attachmentId);
+    if (!a) throw new NotFoundException('File not found');
+    if (a.ownerType === AttachmentOwner.TENDER) {
+      await this.tender(actor, a.ownerId);
+    } else if (a.ownerType === AttachmentOwner.PORTAL_SUBMISSION) {
+      const own = await this.ds.getRepository(SupplierSubmission).existsBy({ id: a.ownerId, supplierId: this.supplierOf(actor) });
+      if (!own) throw new NotFoundException('File not found');
+    } else {
+      throw new NotFoundException('File not found');
+    }
+    return this.attachments.download(attachmentId, null);
   }
 
   /** Invoices and their payment status. */

@@ -13,3 +13,10 @@ process.env.SEED_DEFAULT_PASSWORD = process.env.TEST_SEED_PASSWORD ?? 'Test#Pass
 
 export const TEST_PASSWORD = process.env.SEED_DEFAULT_PASSWORD;
 process.env.JOBS_MODE = 'inline';
+// Attachments: MinIO in the compose test profile, a temporary directory otherwise.
+process.env.STORAGE_DRIVER = process.env.TEST_STORAGE_DRIVER ?? 'local';
+process.env.STORAGE_LOCAL_DIR = process.env.TEST_STORAGE_LOCAL_DIR ?? '/tmp/silp-test-attachments';
+process.env.S3_BUCKET = process.env.TEST_S3_BUCKET ?? 'silp-test-attachments';
+if (process.env.TEST_S3_ENDPOINT) process.env.S3_ENDPOINT = process.env.TEST_S3_ENDPOINT;
+if (process.env.TEST_S3_ACCESS_KEY) process.env.S3_ACCESS_KEY = process.env.TEST_S3_ACCESS_KEY;
+if (process.env.TEST_S3_SECRET_KEY) process.env.S3_SECRET_KEY = process.env.TEST_S3_SECRET_KEY;

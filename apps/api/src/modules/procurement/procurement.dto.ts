@@ -375,7 +375,7 @@ export class SubmissionDto {
   @ApiProperty({ enum: SupplierSubmissionType }) @IsEnum(SupplierSubmissionType) type: SupplierSubmissionType;
   @ApiProperty() @IsString() @MaxLength(60) reference: string;
   @ApiProperty() @IsDateString({ strict: true }) documentDate: string;
-  @ApiPropertyOptional() @IsOptional() @IsNumber(MONEY) @Min(0) amount?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber(MONEY) @Min(0) amount?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(300) fileName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }

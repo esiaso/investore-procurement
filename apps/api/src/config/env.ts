@@ -34,7 +34,21 @@ export interface Env {
   jobsMode: 'queue' | 'inline' | 'off';
   /** Sample data only: URL of the mock-etims container for the sample outlets (empty = in-process mock). */
   sampleEtimsUrl: string | null;
+  /**
+   * Attachment storage: s3 (MinIO or any S3-compatible store) or local
+   * (a directory; development and tests without MinIO).
+   */
+  storage: {
+    driver: 's3' | 'local';
+    endpoint: string | null;
+    region: string;
+    bucket: string;
+    accessKey: string | null;
+    secretKey: string | null;
+    localDir: string;
+  };
 }
+
 
 function bool(v: string | undefined, def: boolean): boolean {
   if (v === undefined || v === '') return def;
@@ -52,6 +66,12 @@ function jobsMode(v: string | undefined): Env['jobsMode'] {
   const mode = (v || 'inline').toLowerCase();
   if (mode !== 'queue' && mode !== 'inline' && mode !== 'off') throw new Error(`JOBS_MODE must be queue, inline or off (got ${v})`);
   return mode;
+}
+
+function storageDriver(v: string | undefined): Env['storage']['driver'] {
+  const d = (v || 'local').toLowerCase();
+  if (d !== 's3' && d !== 'local') throw new Error(`STORAGE_DRIVER must be s3 or local (got ${v})`);
+  return d;
 }
 
 const DEV_SECRET = 'dev-only-session-secret-change-me-0123456789';
@@ -108,6 +128,15 @@ export function loadEnv(): Env {
     chromiumPath: e.CHROMIUM_PATH || null,
     jobsMode: jobsMode(e.JOBS_MODE),
     sampleEtimsUrl: e.SAMPLE_ETIMS_URL || null,
+    storage: {
+      driver: storageDriver(e.STORAGE_DRIVER),
+      endpoint: e.S3_ENDPOINT || null,
+      region: e.S3_REGION || 'us-east-1',
+      bucket: e.S3_BUCKET || 'silp-attachments',
+      accessKey: e.S3_ACCESS_KEY || null,
+      secretKey: e.S3_SECRET_KEY || null,
+      localDir: e.STORAGE_LOCAL_DIR || './var/attachments',
+    },
   };
   return cached;
 }
