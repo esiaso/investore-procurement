@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -160,6 +161,8 @@ export class CreateGrnDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) deliveryNoteNo?: string;
   @ApiPropertyOptional({ description: 'Required for emergency receipts' }) @IsOptional() @IsString() @MaxLength(1000) emergencyReason?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+  @ApiPropertyOptional({ description: 'Cold-chain goods: temperature on arrival (°C)' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(-90) @Max(80) receiptTemperatureC?: number;
+  @ApiPropertyOptional({ description: 'Inbound shipment being received' }) @IsOptional() @IsUUID() shipmentId?: string;
   @ApiProperty({ type: [GrnLineDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => GrnLineDto)
   lines: GrnLineDto[];
 }

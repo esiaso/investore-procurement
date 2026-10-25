@@ -508,6 +508,14 @@ export class GoodsReceivedNote extends AppBaseEntity {
   @Column({ type: 'varchar', length: 1000, nullable: true })
   notes: string | null;
 
+  /** Temperature of cold-chain goods on arrival (°C); out of range puts the received batches on hold. */
+  @Column({ type: 'numeric', precision: 6, scale: 2, nullable: true, transformer: { to: (v: number | null) => v, from: (v: string | null) => (v === null ? null : Number(v)) } })
+  receiptTemperatureC: number | null;
+
+  /** Inbound shipment (advance notice) this delivery belongs to. */
+  @Column({ type: 'uuid', nullable: true })
+  shipmentId: string | null;
+
   @OneToMany(() => GrnLine, (l) => l.grn, { cascade: true })
   lines?: GrnLine[];
 }

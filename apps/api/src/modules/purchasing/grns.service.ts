@@ -36,8 +36,18 @@ const round6 = (n: number) => Math.round(n * 1_000_000) / 1_000_000;
  * rejected) → POSTED (accepted base quantities go to stock through
  * postMovements; rejections produce a return-to-supplier note).
  */
+/** Called inside the posting transaction with the GRN and its lines (batch ids set). */
+export type GrnPostHook = (m: EntityManager, grn: GoodsReceivedNote, lines: GrnLine[], actor: SessionUser) => Promise<void>;
+
 @Injectable()
 export class GrnsService implements OnModuleInit {
+  private readonly postHooks: GrnPostHook[] = [];
+
+  /** Cold chain (receipt temperature), assets (tagging) and shipments react to posted receipts. */
+  registerPostHook(hook: GrnPostHook) {
+    this.postHooks.push(hook);
+  }
+
   constructor(
     @InjectDataSource() private readonly ds: DataSource,
     private readonly numbering: NumberingService,
@@ -100,8 +110,14 @@ export class GrnsService implements OnModuleInit {
         if (po && !poLine) throw new BadRequestException(`${where}: choose the PO line being received`);
         const itemId = poLine?.itemId ?? l.itemId;
         if (!itemId) throw new BadRequestException(`${where}: item is required`);
-        const [item] = await m.query(`SELECT id, code, is_batch_tracked, base_uom_id, tax_category_id FROM item WHERE id = $1`, [itemId]);
+        const [item] = await m.query(
+          `SELECT i.id, i.code, i.is_batch_tracked, i.base_uom_id, i.tax_category_id, c.code AS category_code FROM item i JOIN item_category c ON c.id = i.category_id WHERE i.id = $1`,
+          [itemId],
+        );
         if (!item) throw new NotFoundException(`${where}: item not found`);
+        if ((await this.settings.get('services.categoryCodes', m)).includes(item.category_code)) {
+          throw new BadRequestException({ code: 'SERVICE_ITEM', message: `${where}: ${item.code} is a service; certify its completion instead of receiving it` });
+        }
         if (item.is_batch_tracked) {
           if (!l.batchNo?.trim() || !l.expiryDate) throw new BadRequestException(`${where}: ${item.code} needs batch number and expiry date`);
           if (l.expiryDate <= receivedDate) throw new BadRequestException(`${where}: batch ${l.batchNo} is already expired`);
@@ -158,6 +174,8 @@ export class GrnsService implements OnModuleInit {
           regularisationStatus: po ? RegularisationStatus.NOT_REQUIRED : RegularisationStatus.PENDING,
           emergencyReason: po ? null : dto.emergencyReason!.trim(),
           notes: dto.notes ?? null,
+          receiptTemperatureC: dto.receiptTemperatureC ?? null,
+          shipmentId: dto.shipmentId ?? null,
           status: GrnStatus.DRAFT,
           lines: lines.map((l) => m.create(GrnLine, l)),
         }),
@@ -284,6 +302,7 @@ export class GrnsService implements OnModuleInit {
       grn.status = GrnStatus.POSTED;
       grn.postedAt = new Date();
       await m.save(grn);
+      for (const hook of this.postHooks) await hook(m, grn, lines, actor);
       await this.refreshSupplierPerformance(m, grn.supplierId);
     });
     await this.inventory.stockArrived(pre.storeId, (pre.lines ?? []).filter((l) => l.acceptedBaseQty > 0).map((l) => l.itemId));
