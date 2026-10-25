@@ -199,14 +199,14 @@ export class ColdChainService {
   }
 
   readings(unitId: string, from?: string, to?: string) {
-    const qb = this.ds.getRepository(TemperatureReading).createQueryBuilder('r').where('r.unit_id = :u', { u: unitId }).orderBy('r.recorded_at', 'DESC').take(2000);
+    const qb = this.ds.getRepository(TemperatureReading).createQueryBuilder('r').where('r.unit_id = :u', { u: unitId }).orderBy('r.recordedAt', 'DESC').take(2000);
     if (from) qb.andWhere('r.recorded_at >= :f', { f: from });
     if (to) qb.andWhere('r.recorded_at < (:t::date + 1)', { t: to });
     return qb.getMany();
   }
 
   async excursions(q: { status?: string; unitId?: string }) {
-    const qb = this.ds.getRepository(TemperatureExcursion).createQueryBuilder('e').leftJoinAndSelect('e.unit', 'unit').leftJoinAndSelect('unit.store', 'store').orderBy('e.started_at', 'DESC').take(500);
+    const qb = this.ds.getRepository(TemperatureExcursion).createQueryBuilder('e').leftJoinAndSelect('e.unit', 'unit').leftJoinAndSelect('unit.store', 'store').orderBy('e.startedAt', 'DESC').take(500);
     StoreScope.apply(qb, 'unit.store_id');
     if (q.status) qb.andWhere('e.status = :s', { s: q.status });
     if (q.unitId) qb.andWhere('e.unit_id = :u', { u: q.unitId });

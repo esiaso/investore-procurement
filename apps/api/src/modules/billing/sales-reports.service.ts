@@ -149,6 +149,8 @@ export class SalesReportsService {
          JOIN etims_config c ON c.store_id = si.store_id
          LEFT JOIN etims_outbox o ON o.kind = 'SALE' AND o.doc_id = si.id
         WHERE si.status = 'ISSUED' AND ${p.sql} ${f}
+          -- Issued before the outlet had a control unit: not part of the eTIMS reconciliation.
+          AND si.etims_status <> 'NOT_REQUIRED'
         GROUP BY s.name, si.doc_type ORDER BY s.name, si.doc_type`,
       p.params,
     );

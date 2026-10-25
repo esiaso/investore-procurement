@@ -200,7 +200,7 @@ export class RecallsService {
         }),
       );
       if (dto.intoStoreId && dto.source !== RecallReturnSource.STORE) {
-        const [b] = await m.query(`SELECT item_id FROM batch WHERE id = $1`, [dto.batchId]);
+        const [b] = await m.query(`SELECT item_id, unit_cost::float AS unit_cost FROM batch WHERE id = $1`, [dto.batchId]);
         const ctx = await this.inventory.postingContext(actor, { type: DocumentType.RECALL, id: r.id, number: r.number }, undefined, null, m);
         await postMovements(
           m,
@@ -211,6 +211,7 @@ export class RecallsService {
             itemId: b.item_id,
             batchId: dto.batchId,
             quantity: dto.quantity,
+            unitCost: b.unit_cost,
             departmentId: dto.source === RecallReturnSource.DEPARTMENT ? (dto.fromId ?? null) : null,
             patientRef: dto.source === RecallReturnSource.PATIENT ? (dto.fromName ?? dto.fromId ?? null) : null,
             reasonCode: 'RECALL',

@@ -235,6 +235,8 @@ export class DisposalsService implements OnModuleInit, ApprovalHandler {
     // Controlled drugs: a committee member other than the approver co-signs.
     const coSigner = members.find((x) => x.userId !== actor.id && x.signedAt)?.userId ?? null;
     const ctx = await this.inventory.postingContext(actor, { type: DocumentType.DISPOSAL, id: d.id, number: d.number }, undefined, coSigner, m);
+    // The write-off is authorised by the approved workflow, not by the last approver's handling rights.
+    ctx.permissions = null;
     const movements: MovementLine[] = lines.map((l) => ({ txnType: StockTxnType.ADJUSTMENT, storeId: d.storeId, binId: l.binId, itemId: l.itemId, batchId: l.batchId, quantity: -l.quantity, reasonCode: 'DISPOSAL' }));
     const posted = await postMovements(m, movements, ctx);
     for (const [i, l] of lines.entries()) await m.update(DisposalLine, l.id, { unitCost: posted[i].unitCost });
@@ -295,7 +297,7 @@ export class DisposalsService implements OnModuleInit, ApprovalHandler {
   }
 
   list(q: { status?: string; storeId?: string }) {
-    const qb = this.ds.getRepository(Disposal).createQueryBuilder('d').leftJoinAndSelect('d.store', 'store').orderBy('d.created_at', 'DESC').take(500);
+    const qb = this.ds.getRepository(Disposal).createQueryBuilder('d').leftJoinAndSelect('d.store', 'store').orderBy('d.createdAt', 'DESC').take(500);
     StoreScope.apply(qb, 'd.store_id');
     if (q.status) qb.andWhere('d.status = :s', { s: q.status });
     if (q.storeId) qb.andWhere('d.store_id = :st', { st: q.storeId });

@@ -293,7 +293,7 @@ export class DistributionService {
   }
 
   list(q: { status?: string; storeId?: string }) {
-    const qb = this.ds.getRepository(DistributionRun).createQueryBuilder('r').leftJoinAndSelect('r.fromStore', 'fromStore').leftJoinAndSelect('r.stops', 'stops').leftJoinAndSelect('stops.toStore', 'toStore').orderBy('r.run_date', 'DESC').addOrderBy('stops.sequence', 'ASC').take(300);
+    const qb = this.ds.getRepository(DistributionRun).createQueryBuilder('r').leftJoinAndSelect('r.fromStore', 'fromStore').leftJoinAndSelect('r.stops', 'stops').leftJoinAndSelect('stops.toStore', 'toStore').orderBy('r.runDate', 'DESC').addOrderBy('stops.sequence', 'ASC').take(300);
     const scope = StoreScope.current();
     if (scope !== null) qb.andWhere('(r.from_store_id IN (:...sc) OR EXISTS (SELECT 1 FROM distribution_stop x WHERE x.run_id = r.id AND x.to_store_id IN (:...sc)))', { sc: scope.length ? scope : ['00000000-0000-0000-0000-000000000000'] });
     if (q.status) qb.andWhere('r.status = :s', { s: q.status });

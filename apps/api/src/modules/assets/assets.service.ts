@@ -145,7 +145,7 @@ export class AssetsService implements OnModuleInit {
   }
 
   list(q: { search?: string; storeId?: string; departmentId?: string; status?: string; due?: string }) {
-    const qb = this.ds.getRepository(Asset).createQueryBuilder('a').leftJoinAndSelect('a.item', 'item').leftJoinAndSelect('a.store', 'store').leftJoinAndSelect('a.department', 'department').orderBy('a.tag_no').take(2000);
+    const qb = this.ds.getRepository(Asset).createQueryBuilder('a').leftJoinAndSelect('a.item', 'item').leftJoinAndSelect('a.store', 'store').leftJoinAndSelect('a.department', 'department').orderBy('a.tagNo').take(2000);
     if (q.search) qb.andWhere('(a.tag_no ILIKE :q OR a.serial_no ILIKE :q OR a.description ILIKE :q)', { q: `%${q.search}%` });
     if (q.storeId) qb.andWhere('a.store_id = :s', { s: q.storeId });
     if (q.departmentId) qb.andWhere('a.department_id = :d', { d: q.departmentId });
