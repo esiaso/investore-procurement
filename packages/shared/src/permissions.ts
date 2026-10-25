@@ -114,6 +114,26 @@ export const Permissions = {
   PROCUREMENT_KPIS: 'procurement.kpis',
   /** Supplier portal (users linked to a supplier). */
   PORTAL_ACCESS: 'portal.access',
+  QUALITY_READ: 'quality.read',
+  /** Place quality holds, log complaints, temperature readings and excursions. */
+  QUALITY_MANAGE: 'quality.manage',
+  /** Release or reject held stock (Quality Officer). */
+  QUALITY_RELEASE: 'quality.release',
+  /** Receive recall notices, trace and record recall returns. */
+  RECALLS_MANAGE: 'recalls.manage',
+  /** Raise disposals, sit on the disposal committee, record completion. */
+  DISPOSALS_MANAGE: 'disposals.manage',
+  /** Plan distribution runs, pick, pack, dispatch and record proof of delivery. */
+  DISTRIBUTION_MANAGE: 'distribution.manage',
+  /** Track inbound shipments against purchase orders. */
+  SHIPMENTS_MANAGE: 'shipments.manage',
+  ASSETS_READ: 'assets.read',
+  /** Tag assets, move them between locations / custodians, log maintenance. */
+  ASSETS_MANAGE: 'assets.manage',
+  /** Certify completion of services and works against service POs. */
+  SERVICES_CERTIFY: 'services.certify',
+  /** Upload and download attachments on records the user can see. */
+  FILES_UPLOAD: 'files.upload',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -201,6 +221,17 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'suppliers.performance': 'Supplier scorecards, corrective actions and sanction requests',
   'procurement.kpis': 'View procurement KPIs',
   'portal.access': 'Use the supplier portal (own supplier only)',
+  'quality.read': 'View quality holds, cold chain, complaints and recalls',
+  'quality.manage': 'Place quality holds; record temperatures, excursions and complaints',
+  'quality.release': 'Release or reject held stock',
+  'recalls.manage': 'Receive recalls, trace affected stock and patients, record returns',
+  'disposals.manage': 'Raise disposals, sit on the disposal committee and record completion',
+  'distribution.manage': 'Plan distribution runs; pick, pack, dispatch and record proof of delivery',
+  'shipments.manage': 'Track inbound shipments against purchase orders',
+  'assets.read': 'View the asset register',
+  'assets.manage': 'Tag, move and maintain assets',
+  'services.certify': 'Certify completion of services and works',
+  'files.upload': 'Upload attachments to records',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

@@ -87,6 +87,14 @@ export enum DocumentType {
   CONTRACT = 'CTR',
   CONTRACT_VARIATION = 'CV',
   SUPPLIER_SANCTION = 'SSN',
+  QUALITY_HOLD = 'QH',
+  QUALITY_COMPLAINT = 'PQC',
+  RECALL = 'RCL',
+  DISPOSAL = 'DSL',
+  DISTRIBUTION_RUN = 'DRN',
+  SHIPMENT = 'SHP',
+  ASSET = 'AST',
+  SERVICE_CERTIFICATE = 'SCC',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -629,4 +637,147 @@ export enum SupplierSubmissionType {
 export enum QuantificationMethod {
   CONSUMPTION = 'CONSUMPTION',
   MORBIDITY = 'MORBIDITY',
+}
+
+// ------------------------------------------------------------------ slice 8: logistics, quality, assets
+
+export enum HoldReason {
+  INSPECTION = 'INSPECTION',
+  INVESTIGATION = 'INVESTIGATION',
+  RECALL = 'RECALL',
+  EXCURSION = 'EXCURSION',
+  COMPLAINT = 'COMPLAINT',
+}
+
+export enum HoldStatus {
+  OPEN = 'OPEN',
+  RELEASED = 'RELEASED',
+  REJECTED = 'REJECTED',
+}
+
+export enum StorageUnitType {
+  FRIDGE = 'FRIDGE',
+  FREEZER = 'FREEZER',
+  COLD_ROOM = 'COLD_ROOM',
+  AMBIENT = 'AMBIENT',
+}
+
+export enum ReadingSource {
+  MANUAL = 'MANUAL',
+  CSV = 'CSV',
+  RECEIPT = 'RECEIPT',
+}
+
+export enum ExcursionStatus {
+  OPEN = 'OPEN',
+  REVIEWED = 'REVIEWED',
+}
+
+export enum ComplaintCategory {
+  QUALITY_DEFECT = 'QUALITY_DEFECT',
+  SUSPECTED_FALSIFIED = 'SUSPECTED_FALSIFIED',
+  ADVERSE_REACTION = 'ADVERSE_REACTION',
+  PACKAGING = 'PACKAGING',
+  LABELLING = 'LABELLING',
+  OTHER = 'OTHER',
+}
+
+export enum ComplaintStatus {
+  OPEN = 'OPEN',
+  INVESTIGATING = 'INVESTIGATING',
+  CLOSED = 'CLOSED',
+}
+
+export enum RecallSource {
+  PPB = 'PPB',
+  SUPPLIER = 'SUPPLIER',
+  MANUFACTURER = 'MANUFACTURER',
+  INTERNAL = 'INTERNAL',
+}
+
+export enum RecallClass {
+  CLASS_I = 'CLASS_I',
+  CLASS_II = 'CLASS_II',
+  CLASS_III = 'CLASS_III',
+}
+
+export enum RecallStatus {
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED',
+}
+
+export enum RecallReturnSource {
+  STORE = 'STORE',
+  DEPARTMENT = 'DEPARTMENT',
+  PATIENT = 'PATIENT',
+}
+
+export enum DisposalMethod {
+  DESTRUCTION = 'DESTRUCTION',
+  SALE = 'SALE',
+  RETURN_TO_SUPPLIER = 'RETURN_TO_SUPPLIER',
+  DONATION = 'DONATION',
+  TRANSFER = 'TRANSFER',
+}
+
+export enum DisposalStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  APPROVED = 'APPROVED',
+  COMPLETED = 'COMPLETED',
+  REJECTED = 'REJECTED',
+  RETURNED = 'RETURNED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum DistributionRunStatus {
+  PLANNED = 'PLANNED',
+  PICKING = 'PICKING',
+  DISPATCHED = 'DISPATCHED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum StopStatus {
+  PENDING = 'PENDING',
+  PICKED = 'PICKED',
+  PACKED = 'PACKED',
+  DISPATCHED = 'DISPATCHED',
+  DELIVERED = 'DELIVERED',
+  DELIVERED_WITH_DISCREPANCY = 'DELIVERED_WITH_DISCREPANCY',
+}
+
+export enum ShipmentStatus {
+  EXPECTED = 'EXPECTED',
+  IN_TRANSIT = 'IN_TRANSIT',
+  DELAYED = 'DELAYED',
+  PARTIALLY_RECEIVED = 'PARTIALLY_RECEIVED',
+  RECEIVED = 'RECEIVED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum AssetStatus {
+  ACTIVE = 'ACTIVE',
+  IN_REPAIR = 'IN_REPAIR',
+  DISPOSED = 'DISPOSED',
+}
+
+export enum CertificateStatus {
+  DRAFT = 'DRAFT',
+  POSTED = 'POSTED',
+  CANCELLED = 'CANCELLED',
+}
+
+/** Kinds of record a file can be attached to (polymorphic owner). */
+export enum AttachmentOwner {
+  SUPPLIER_DOCUMENT = 'SUPPLIER_DOCUMENT',
+  PORTAL_SUBMISSION = 'PORTAL_SUBMISSION',
+  TENDER = 'TENDER',
+  GRN = 'GRN',
+  DISPOSAL = 'DISPOSAL',
+  COMPLAINT = 'COMPLAINT',
+  RECALL = 'RECALL',
+  ASSET = 'ASSET',
+  SERVICE_CERTIFICATE = 'SERVICE_CERTIFICATE',
+  STOCK_ADJUSTMENT = 'STOCK_ADJUSTMENT',
 }

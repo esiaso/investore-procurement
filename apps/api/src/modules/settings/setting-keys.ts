@@ -97,6 +97,30 @@ export interface SettingTypes {
   'suppliers.requiredDocumentTypes': string[];
   /** Overall score below which a corrective action is opened automatically. */
   'suppliers.scorecardActionThreshold': number;
+  /** Attachments: largest file accepted (MB) and the MIME types allowed. */
+  'files.maxSizeMb': number;
+  'files.allowedMimeTypes': string[];
+  /** Acceptable temperature range (°C) per storage unit type. */
+  'coldChain.ranges': Record<string, { min: number; max: number }>;
+  /** Readings out of range for at least this many minutes make an excursion (0 = any single reading). */
+  'coldChain.excursionMinutes': number;
+  /** Quarantine the batches in a unit automatically when an excursion is detected. */
+  'coldChain.autoQuarantine': boolean;
+  /** Committee members needed to approve a disposal (PPADA rule set: at least this many). */
+  'disposal.minCommittee': number;
+  /** Months of completed orders used for supplier lead-time history. */
+  'shipments.leadTimeHistoryMonths': number;
+  /** Days after the expected date before an open shipment is flagged as delayed. */
+  'shipments.delayGraceDays': number;
+  /** Days ahead to warn about asset warranties ending / maintenance falling due. */
+  'assets.warrantyAlertDays': number;
+  'assets.maintenanceAlertDays': number;
+  /** Item category codes whose items become assets on receipt (one per unit). */
+  'assets.categoryCodes': string[];
+  /** Item category codes that are services / works (completion certificate instead of a GRN). */
+  'services.categoryCodes': string[];
+  /** Shelf / batch label size in millimetres. */
+  'labels.size': { widthMm: number; heightMm: number };
 }
 
 export interface SourcingMethodRule {
