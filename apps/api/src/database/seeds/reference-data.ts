@@ -29,6 +29,9 @@ export const PROCUREMENT_SCHEDULES: Record<string, string> = {
   'suppliers.sanctions': '5 0 * * *',
   'suppliers.scorecards': '0 5 1 * *',
   'agency.ordercycle': '0 6 * * *',
+  'assets.alerts': '0 7 * * *',
+  'shipments.delays': '0 8 * * *',
+  'suppliers.leadtimes': '30 5 1 * *',
 };
 
 /**
@@ -152,6 +155,19 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'suppliers.scorecardWeights', value: { onTime: 30, inFull: 25, quality: 25, price: 10, documents: 10 }, description: 'Supplier scorecard weights (on time, in full, quality, price compliance, documents)', isPublic: false },
   { key: 'suppliers.requiredDocumentTypes', value: ['TAX_COMPLIANCE', 'BUSINESS_PERMIT'], description: 'Supplier documents that must be current for document compliance', isPublic: false },
   { key: 'suppliers.scorecardActionThreshold', value: 60, description: 'A corrective action is opened when a monthly score is below this', isPublic: false },
+  { key: 'files.maxSizeMb', value: 20, description: 'Largest attachment accepted (MB)', isPublic: true },
+  { key: 'files.allowedMimeTypes', value: ['application/pdf', 'image/png', 'image/jpeg', 'text/csv', 'text/plain', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], description: 'MIME types accepted as attachments', isPublic: true },
+  { key: 'coldChain.ranges', value: { FRIDGE: { min: 2, max: 8 }, FREEZER: { min: -25, max: -15 }, COLD_ROOM: { min: 2, max: 8 }, AMBIENT: { min: 15, max: 25 } }, description: 'Acceptable temperature range (°C) per storage unit type', isPublic: true },
+  { key: 'coldChain.excursionMinutes', value: 0, description: 'Out-of-range readings must last this many minutes to count as an excursion (0 = any reading)', isPublic: false },
+  { key: 'coldChain.autoQuarantine', value: true, description: 'Hold the batches in a fridge / cold room automatically when an excursion is detected', isPublic: false },
+  { key: 'disposal.minCommittee', value: 2, description: 'Disposal committee sign-offs needed before a disposal goes for approval', isPublic: false },
+  { key: 'shipments.leadTimeHistoryMonths', value: 12, description: 'Months of receipts used for supplier lead-time history', isPublic: false },
+  { key: 'shipments.delayGraceDays', value: 0, description: 'Days after the expected date before a shipment counts as delayed', isPublic: false },
+  { key: 'assets.warrantyAlertDays', value: 60, description: 'Alert this many days before an asset warranty ends', isPublic: false },
+  { key: 'assets.maintenanceAlertDays', value: 14, description: 'Alert this many days before asset maintenance is due', isPublic: false },
+  { key: 'assets.categoryCodes', value: ['EQUIP'], description: 'Item categories whose items become tagged assets on receipt (one per unit)', isPublic: true },
+  { key: 'services.categoryCodes', value: ['SVC'], description: 'Item categories that are services / works (completion certificate instead of a GRN)', isPublic: true },
+  { key: 'labels.size', value: { widthMm: 62, heightMm: 29 }, description: 'Shelf / batch label size (mm)', isPublic: false },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
   {
     key: 'pharmacy.blockingSeverities',
@@ -185,6 +201,7 @@ export const DEFAULT_ADJUSTMENT_REASONS: { code: string; name: string; direction
   { code: 'FOUND', name: 'Stock found', direction: AdjustmentDirection.INCREASE },
   { code: 'CORRECTION', name: 'Data correction', direction: AdjustmentDirection.BOTH },
   { code: 'TRANSIT_LOSS', name: 'Lost or damaged in transit', direction: AdjustmentDirection.DECREASE },
+  { code: 'DISPOSAL', name: 'Disposal (approved disposal)', direction: AdjustmentDirection.DECREASE },
   { code: 'COUNT_VARIANCE', name: 'Stock-take variance', direction: AdjustmentDirection.BOTH },
 ];
 
@@ -231,6 +248,14 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.CONTRACT, prefix: 'CTR', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
   { documentType: DocumentType.CONTRACT_VARIATION, prefix: 'CV', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
   { documentType: DocumentType.SUPPLIER_SANCTION, prefix: 'SSN', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.QUALITY_HOLD, prefix: 'QH', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.QUALITY_COMPLAINT, prefix: 'PQC', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.RECALL, prefix: 'RCL', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.DISPOSAL, prefix: 'DSL', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.DISTRIBUTION_RUN, prefix: 'DRN', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.SHIPMENT, prefix: 'SHP', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.ASSET, prefix: 'AST', format: '{PREFIX}{SEQ}', padding: 6, resetEachYear: false },
+  { documentType: DocumentType.SERVICE_CERTIFICATE, prefix: 'SCC', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
 ];
 
 export const DEFAULT_UOMS: [code: string, name: string][] = [
@@ -303,6 +328,8 @@ export const DEFAULT_CATEGORIES: { code: string; name: string; isDrug: boolean; 
   { code: 'SUP-SUTURE', name: 'Sutures', isDrug: false, attributeSchema: sutures, parent: 'SUP' },
   { code: 'SUP-LAB', name: 'Laboratory reagents & kits', isDrug: false, attributeSchema: lab, parent: 'SUP' },
   { code: 'SUP-GEN', name: 'General consumables', isDrug: false, attributeSchema: [], parent: 'SUP' },
+  { code: 'EQUIP', name: 'Medical equipment (tagged assets)', isDrug: false, attributeSchema: [] },
+  { code: 'SVC', name: 'Services & works', isDrug: false, attributeSchema: [] },
 ];
 
 const P = Permissions;
@@ -312,6 +339,7 @@ const READ_ALL: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
   P.PATIENTS_READ, P.PHARMACY_READ, P.BILLING_READ, P.ETIMS_READ,
   P.FORECASTING_READ, P.PLANS_READ, P.TENDERS_READ, P.CONTRACTS_READ, P.PROCUREMENT_KPIS,
+  P.QUALITY_READ, P.ASSETS_READ,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
 /** Strategic procurement (slice 7) for procurement staff. */
@@ -331,7 +359,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     name: 'Procurement Officer',
     description: 'Raises requisitions and purchase orders; maintains the catalog',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.INVENTORY_READ, P.INVENTORY_VALUATION,
-      P.INVENTORY_PLANNING, ...BUYING, P.PURCHASING_REQUISITION, ...SOURCING],
+      P.INVENTORY_PLANNING, ...BUYING, P.PURCHASING_REQUISITION, ...SOURCING, P.SHIPMENTS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ],
   },
   {
     code: RoleCodes.PROCUREMENT_MANAGER,
@@ -339,7 +367,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     description: 'Approves procurement documents',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ,
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_CONSUMPTION, ...BUYING,
-      ...SOURCING, P.PLANS_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE],
+      ...SOURCING, P.PLANS_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE, P.SHIPMENTS_MANAGE, P.FILES_UPLOAD, P.QUALITY_READ, P.ASSETS_READ],
   },
   {
     code: RoleCodes.STOREKEEPER,
@@ -348,6 +376,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [
       P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, ...STORE_OPS, P.INVENTORY_HANDLE_COLD_CHAIN, P.SUPPLIERS_READ, P.PURCHASING_READ,
       P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_EMERGENCY_RECEIPT, P.FORECASTING_READ,
+      P.DISTRIBUTION_MANAGE, P.QUALITY_READ, P.FILES_UPLOAD, P.ASSETS_READ,
     ],
   },
   {
@@ -362,6 +391,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.PATIENTS_READ, P.PATIENTS_MANAGE, P.PHARMACY_READ, P.PHARMACY_PRESCRIPTION, P.PHARMACY_VERIFY, P.PHARMACY_DISPENSE,
       P.PHARMACY_INTERACTIONS, P.BILLING_READ, P.BILLING_INVOICE,
       P.FORECASTING_READ, P.FORECASTING_MANAGE, P.PLANS_READ, P.PLANS_MANAGE,
+      P.QUALITY_READ, P.QUALITY_MANAGE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.DISTRIBUTION_MANAGE, P.FILES_UPLOAD,
     ],
   },
   {
@@ -383,13 +413,14 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [
       P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_BATCH_HOLD,
       P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.SUPPLIERS_READ, P.PURCHASING_READ, P.PURCHASING_INSPECT,
+      P.QUALITY_READ, P.QUALITY_MANAGE, P.QUALITY_RELEASE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.FILES_UPLOAD,
     ],
   },
   {
     code: RoleCodes.WARD_IN_CHARGE,
     name: 'Department / Ward In-charge',
     description: 'Requests stock for a department or ward and approves its internal requisitions',
-    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION, P.PLANS_READ, P.PLANS_MANAGE],
+    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION, P.PLANS_READ, P.PLANS_MANAGE, P.SERVICES_CERTIFY, P.ASSETS_READ],
   },
   {
     code: RoleCodes.WARD_STAFF,
@@ -405,7 +436,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
       P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
       P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE,
-      P.PLANS_READ, P.CONTRACTS_READ, P.TENDERS_READ, P.PROCUREMENT_KPIS],
+      P.PLANS_READ, P.CONTRACTS_READ, P.TENDERS_READ, P.PROCUREMENT_KPIS, P.DISPOSALS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ],
   },
   {
     code: RoleCodes.TENDER_COMMITTEE,
@@ -425,6 +456,8 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_RECONCILE, P.INVENTORY_CONSUMPTION, P.JOBS_RUN, ...BUYING, P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_INSPECT,
       P.PURCHASING_EMERGENCY_RECEIPT, P.APPROVALS_MANAGE,
       ...SOURCING, P.FORECASTING_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE,
+      P.QUALITY_READ, P.QUALITY_MANAGE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.DISTRIBUTION_MANAGE, P.SHIPMENTS_MANAGE,
+      P.ASSETS_READ, P.ASSETS_MANAGE, P.SERVICES_CERTIFY, P.FILES_UPLOAD,
     ],
   },
   { code: RoleCodes.SUPPLIER, name: 'Supplier (portal)', description: 'External supplier portal user', permissions: [P.PORTAL_ACCESS] },
@@ -460,4 +493,6 @@ export const DEFAULT_WORKFLOWS: {
   { code: 'TND-1', name: 'Tender awards', documentType: DocumentType.TENDER, minAmount: null, maxAmount: null, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
   { code: 'CV-1', name: 'Contract variations', documentType: DocumentType.CONTRACT_VARIATION, minAmount: null, maxAmount: null, steps: [['Procurement approval', RoleCodes.PROCUREMENT_MANAGER], ['Finance approval', RoleCodes.FINANCE]] },
   { code: 'SSN-1', name: 'Supplier suspension / blacklisting / reinstatement', documentType: DocumentType.SUPPLIER_SANCTION, minAmount: null, maxAmount: null, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
+  { code: 'DSL-1', name: 'Disposals up to 100,000', documentType: DocumentType.DISPOSAL, minAmount: null, maxAmount: 100_000, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Finance approval', RoleCodes.FINANCE]] },
+  { code: 'DSL-2', name: 'Disposals over 100,000', documentType: DocumentType.DISPOSAL, minAmount: 100_000, maxAmount: null, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Finance approval', RoleCodes.FINANCE], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
 ];

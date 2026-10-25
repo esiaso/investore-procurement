@@ -91,6 +91,10 @@ import {
 import { DemandForecast, ForecastAccuracy, ForecastAdjustment, Programme, ProgrammeCommodity, Quantification } from '../modules/forecasting/forecasting.entities';
 import { FundingSource } from '../modules/inventory/funding';
 import { PROCUREMENT_ENTITIES } from '../modules/procurement/entities';
+import { ASSET_ENTITIES } from '../modules/assets/assets.module';
+import { Attachment } from '../modules/files/attachment.entity';
+import { LOGISTICS_ENTITIES } from '../modules/logistics/logistics.module';
+import { QUALITY_ENTITIES } from '../modules/quality/entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
 
 export const ENTITIES = [
@@ -202,6 +206,10 @@ export const ENTITIES = [
   ProgrammeCommodity,
   Quantification,
   ...PROCUREMENT_ENTITIES,
+  Attachment,
+  ...QUALITY_ENTITIES,
+  ...LOGISTICS_ENTITIES,
+  ...ASSET_ENTITIES,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

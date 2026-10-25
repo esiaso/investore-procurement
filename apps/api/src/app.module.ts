@@ -28,6 +28,11 @@ import { EtimsModule } from './modules/etims/etims.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { ForecastingModule } from './modules/forecasting/forecasting.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
+import { AssetsModule } from './modules/assets/assets.module';
+import { FilesModule } from './modules/files/files.module';
+import { LabelsModule } from './modules/labels/labels.module';
+import { LogisticsModule } from './modules/logistics/logistics.module';
+import { QualityModule } from './modules/quality/quality.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -58,6 +63,11 @@ import { UsersModule } from './modules/users/users.module';
     PharmacyModule,
     ForecastingModule,
     ProcurementModule,
+    FilesModule,
+    QualityModule,
+    LogisticsModule,
+    AssetsModule,
+    LabelsModule,
   ],
   controllers: [HealthController],
   providers: [
