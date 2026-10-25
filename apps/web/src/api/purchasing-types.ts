@@ -201,6 +201,8 @@ export interface Grn extends Base {
   status: string;
   receivedDate: string;
   deliveryNoteNo: string | null;
+  receiptTemperatureC?: number | null;
+  shipmentId?: string | null;
   receivedBy: string;
   isEmergency: boolean;
   regularisationStatus: string;

@@ -1,11 +1,11 @@
-import { Alert, Box, Button, Card, CardActionArea, CardContent, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardActionArea, CardContent, Chip, Link, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import Grid from '@mui/material/Grid2';
 import { DataGrid } from '@mui/x-data-grid';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DeliveryStage, SupplierSubmissionType } from '@sil/shared';
-import { api } from '../api/client';
+import { api, buildUrl } from '../api/client';
 import { useApiMutation, useList } from '../api/hooks';
 import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
@@ -194,6 +194,7 @@ export function PortalTenderPage() {
   const when = useWhen();
   const money = useMoney();
   const { data: t } = useQuery({ queryKey: ['/portal/tenders', id], queryFn: () => api<PortalTender>(`/portal/tenders/${id}`) });
+  const files = useQuery({ queryKey: ['/portal/tenders', id, 'files'], queryFn: () => api<{ id: string; fileName: string; category: string; version: number }[]>(`/portal/tenders/${id}/files`) });
   const [question, setQuestion] = useState('');
   const docs = useApiMutation<void>(() => [`/portal/tenders/${id}/documents`, { method: 'POST' }], { invalidate: ['/portal'], success: 'Bid documents issued to you; you will be emailed any addenda' });
   const ask = useApiMutation<void>(() => [`/portal/tenders/${id}/clarifications`, { method: 'POST', body: { question } }], { invalidate: ['/portal'], success: 'Question sent; answers are shared with all bidders' });
@@ -221,6 +222,12 @@ export function PortalTenderPage() {
                 <TableHead><TableRow><TableCell>#</TableCell><TableCell>Description</TableCell><TableCell align="right">Qty</TableCell><TableCell>Specification</TableCell></TableRow></TableHead>
                 <TableBody>{t.lines.map((l) => <TableRow key={l.id}><TableCell>{l.lineNo}</TableCell><TableCell>{l.description}</TableCell><TableCell align="right">{l.quantity}</TableCell><TableCell>{l.specification}</TableCell></TableRow>)}</TableBody>
               </Table>
+              {(files.data ?? []).length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">Tender documents</Typography>
+                  {(files.data ?? []).map((f) => <Typography key={f.id} variant="body2"><Link href={buildUrl(`/portal/files/${f.id}`)}>{f.fileName}</Link> · {humanise(f.category)}{f.version > 1 ? ` (v${f.version})` : ''}</Typography>)}
+                </Box>
+              )}
               {open && <Button sx={{ mt: 2 }} disabled={docs.isPending} onClick={() => docs.mutate()}>Request bid documents</Button>}
             </Paper>
             {open ? <BidForm t={t} /> : t.myBid && (
@@ -288,12 +295,22 @@ export function PortalOrdersPage() {
   );
 }
 
+/** Multipart body for a portal document with its scanned file. */
+export function submissionForm(form: { type: string; reference: string; documentDate: string; amount: number | ''; notes: string }, file: File | null): FormData {
+  const f = new FormData();
+  f.set('type', form.type);
+  f.set('reference', form.reference);
+  f.set('documentDate', form.documentDate);
+  if (form.amount !== '') f.set('amount', String(form.amount));
+  if (form.notes) f.set('notes', form.notes);
+  if (file) f.set('file', file);
+  return f;
+}
+
 function SubmitDocumentDialog({ po, onClose }: { po: PortalOrder; onClose(): void }) {
-  const [form, setForm] = useState({ type: SupplierSubmissionType.DELIVERY_NOTE as string, reference: '', documentDate: todayStr(), amount: '' as number | '', fileName: '', notes: '' });
-  const save = useApiMutation<void>(
-    () => [`/portal/purchase-orders/${po.id}/documents`, { method: 'POST', body: { ...form, amount: form.amount === '' ? undefined : Number(form.amount), fileName: form.fileName || undefined, notes: form.notes || undefined } }],
-    { invalidate: ['/portal'], success: 'Sent to the hospital' },
-  );
+  const [form, setForm] = useState({ type: SupplierSubmissionType.DELIVERY_NOTE as string, reference: '', documentDate: todayStr(), amount: '' as number | '', notes: '' });
+  const [file, setFile] = useState<File | null>(null);
+  const save = useApiMutation<void>(() => [`/portal/purchase-orders/${po.id}/documents`, { method: 'POST', form: submissionForm(form, file) }], { invalidate: ['/portal'], success: 'Sent to the hospital' });
   return (
     <FormDialog open title={`Send a document for ${po.number}`} submitLabel="Send" onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <TextField select label="Document" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
@@ -304,12 +321,14 @@ function SubmitDocumentDialog({ po, onClose }: { po: PortalOrder; onClose(): voi
         <TextField label="Date" type="date" value={form.documentDate} onChange={(e) => setForm({ ...form, documentDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
       </Stack>
       <TextField label="Amount (invoices)" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value === '' ? '' : Number(e.target.value) })} />
-      <TextField label="File name" value={form.fileName} onChange={(e) => setForm({ ...form, fileName: e.target.value })} helperText="Bring or email the document itself; the hospital captures it against the order" />
+      <Button component="label" variant="outlined">
+        {file ? file.name : 'Attach the scanned document (PDF or image)'}
+        <input hidden type="file" accept="application/pdf,image/png,image/jpeg" aria-label="Scanned document" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      </Button>
       <TextField label="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
     </FormDialog>
   );
 }
-
 export function PortalOrderPage() {
   const { id } = useParams<{ id: string }>();
   const date = useDate();
@@ -484,6 +503,7 @@ export function PortalPaymentsPage() {
             { field: 'amount', headerName: 'Amount', type: 'number', width: 120, valueFormatter: (v: number | null) => (v == null ? '' : money(v)) },
             { field: 'status', headerName: 'Status', width: 120, renderCell: ({ value }) => <StatusChip status={value} /> },
             { field: 'reviewNote', headerName: 'Hospital note', flex: 1, minWidth: 160 },
+            { field: 'files', headerName: 'File', width: 200, sortable: false, renderCell: ({ row }) => ((row as PortalSubmission & { files?: { id: string; fileName: string }[] }).files ?? []).map((f) => <Link key={f.id} href={buildUrl(`/portal/files/${f.id}`)} sx={{ mr: 1 }}>{f.fileName}</Link>) },
           ]}
           disableRowSelectionOnClick
         />

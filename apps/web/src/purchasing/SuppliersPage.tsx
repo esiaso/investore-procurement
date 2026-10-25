@@ -32,6 +32,7 @@ import { useAuth } from '../auth/AuthContext';
 import { enumOptions, RHFMultiSelect, RHFNumber, RHFSelect, RHFText } from '../components/form';
 import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
+import { AttachmentsPanel } from '../files/AttachmentsPanel';
 import { ExpiryChip, ItemPicker } from '../inventory/components';
 import { emptyToNull, humanise } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
@@ -124,6 +125,7 @@ function SupplierDetails({ id, onClose, onEdit }: { id: string; onClose(): void;
   const [price, setPrice] = useState<{ item: Item | null; unitPrice: string; validFrom: string; validTo: string }>({ item: null, unitPrice: '', validFrom: '', validTo: '' });
   const [status, setStatus] = useState({ status: '', reason: '' });
   const addDoc = useApiMutation<void>(() => [`/suppliers/${id}/documents`, { method: 'POST', body: { ...doc, expiresOn: doc.expiresOn || null } }], { invalidate: ['/suppliers'], success: 'Document added' });
+  const [filesFor, setFilesFor] = useState<string | null>(null);
   const removeDoc = useApiMutation<string>((docId) => [`/suppliers/${id}/documents/${docId}`, { method: 'DELETE' }], { invalidate: ['/suppliers'], success: 'Document removed' });
   const addPrice = useApiMutation<void>(
     () => [`/suppliers/${id}/contract-prices`, { method: 'POST', body: { itemId: price.item?.id, unitPrice: Number(price.unitPrice), validFrom: price.validFrom, validTo: price.validTo || null } }],
@@ -187,12 +189,16 @@ function SupplierDetails({ id, onClose, onEdit }: { id: string; onClose(): void;
       {tab === 1 && (
         <Stack spacing={1}>
           {(s.documents ?? []).map((d) => (
-            <Stack key={d.id} direction="row" spacing={1} alignItems="center">
-              <Typography sx={{ minWidth: 160 }}>{humanise(d.documentType)}</Typography>
-              <Typography variant="body2" sx={{ flexGrow: 1 }}>{d.reference}</Typography>
-              <ExpiryChip date={d.expiresOn} />
-              {manage && <IconButton aria-label="Remove document" onClick={() => removeDoc.mutate(d.id)}><DeleteIcon /></IconButton>}
-            </Stack>
+            <Box key={d.id}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography sx={{ minWidth: 160 }}>{humanise(d.documentType)}</Typography>
+                <Typography variant="body2" sx={{ flexGrow: 1 }}>{d.reference}</Typography>
+                <ExpiryChip date={d.expiresOn} />
+                <Button size="small" onClick={() => setFilesFor(filesFor === d.id ? null : d.id)}>{filesFor === d.id ? 'Hide scan' : 'Scan'}</Button>
+                {manage && <IconButton aria-label="Remove document" onClick={() => removeDoc.mutate(d.id)}><DeleteIcon /></IconButton>}
+              </Stack>
+              {filesFor === d.id && <AttachmentsPanel ownerType="SUPPLIER_DOCUMENT" ownerId={d.id} title={`${humanise(d.documentType)} scan`} categories={['SCAN']} canUpload={manage} />}
+            </Box>
           ))}
           {manage && (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ pt: 1 }}>

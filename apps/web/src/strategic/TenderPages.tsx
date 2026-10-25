@@ -34,6 +34,7 @@ import type { Item } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
+import { AttachmentsPanel } from '../files/AttachmentsPanel';
 import { ItemPicker, StatusChip } from '../inventory/components';
 import { humanise } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
@@ -597,6 +598,7 @@ export function TenderDetailPage() {
               {t.documents.map((d) => <Typography key={d.supplierId} variant="body2">{d.supplier} · {date(d.issuedAt)}{d.fee ? ` · ${money(d.fee)}` : ''}</Typography>)}
             </Paper>
             {['PENDING_APPROVAL', 'AWARDED', 'CONTRACTED'].includes(t.status) && <ApprovalPanel type="TND" id={t.id} />}
+            <AttachmentsPanel ownerType="TENDER" ownerId={t.id} title="Tender documents" categories={['BID_DOCUMENT', 'ADDENDUM', 'OPENING_MINUTES', 'EVALUATION_REPORT']} canUpload={manage} />
             <DocumentChain type="TND" id={t.id} />
           </>
         }

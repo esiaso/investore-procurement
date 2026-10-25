@@ -29,6 +29,7 @@ import { useNotify } from '../components/Notify';
 import { PageHeader } from '../components/PageHeader';
 import { ExpiryChip, ItemPicker, StatusChip, StoreSelect, WitnessFields } from '../inventory/components';
 import { humanise } from '../lib/format';
+import { AttachmentsPanel } from '../files/AttachmentsPanel';
 import { DetailLayout, DocumentChain, Field, useDate, useMoney } from './common';
 import { useSupplierOptions } from './RequisitionsPages';
 
@@ -57,11 +58,16 @@ export function GrnFormPage() {
   const [supplierId, setSupplierId] = useState('');
   const [storeId, setStoreId] = useState('');
   const [deliveryNoteNo, setDeliveryNoteNo] = useState('');
+  const [receiptTemp, setReceiptTemp] = useState<number | ''>('');
+  const [shipmentId, setShipmentId] = useState('');
   const [emergencyReason, setEmergencyReason] = useState('');
   const [scan, setScan] = useState('');
   const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const { data: po } = useQuery({ queryKey: ['/purchase-orders', poId], queryFn: () => api<PurchaseOrder>(`/purchase-orders/${poId}`), enabled: !!poId });
   const effectiveStore = po?.storeId ?? storeId;
+  const shipments = useQuery({ queryKey: ['/shipments', 'po', poId], queryFn: () => api<{ id: string; number: string; status: string; expectedOn: string }[]>('/shipments', { query: { purchaseOrderId: poId! } }), enabled: !!poId });
+  const openShipments = (shipments.data ?? []).filter((s) => !['RECEIVED', 'CANCELLED'].includes(s.status));
+  const coldChain = (po?.lines ?? []).some((l) => l.item?.isColdChain);
   const bins = useAll<Bin>('/bins', { storeId: effectiveStore }, !!effectiveStore);
   const initial = useMemo<LineDraft[]>(
     () =>
@@ -109,6 +115,8 @@ export function GrnFormPage() {
           supplierId: poId ? undefined : supplierId,
           storeId: poId ? undefined : storeId,
           deliveryNoteNo: deliveryNoteNo || undefined,
+          receiptTemperatureC: receiptTemp === '' ? undefined : Number(receiptTemp),
+          shipmentId: shipmentId || undefined,
           emergencyReason: poId ? undefined : emergencyReason,
           lines: lines
             .filter((l) => Number(l.quantity) > 0)
@@ -147,6 +155,15 @@ export function GrnFormPage() {
           {po && <Typography color="text.secondary">{po.supplier?.name} → {po.store?.name}</Typography>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField label="Supplier delivery note no." value={deliveryNoteNo} onChange={(e) => setDeliveryNoteNo(e.target.value)} />
+            {openShipments.length > 0 && (
+              <TextField select label="Shipment" value={shipmentId} onChange={(e) => setShipmentId(e.target.value)} sx={{ minWidth: 200 }}>
+                <MenuItem value="">Not on a notified shipment</MenuItem>
+                {openShipments.map((s) => <MenuItem key={s.id} value={s.id}>{s.number} (expected {s.expectedOn})</MenuItem>)}
+              </TextField>
+            )}
+            {(coldChain || !poId) && (
+              <TextField label="Temperature on arrival (°C)" type="number" value={receiptTemp} onChange={(e) => setReceiptTemp(e.target.value === '' ? '' : Number(e.target.value))} helperText="Out of range holds the cold-chain batches" sx={{ width: 220 }} />
+            )}
             {poId && (
               <TextField
                 label="Scan barcode"
@@ -265,6 +282,7 @@ export function GrnDetailPage() {
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ mb: 2 }}>
                 <Field label="Received">{date(grn.receivedDate)}</Field>
                 <Field label="Delivery note">{grn.deliveryNoteNo ?? '—'}</Field>
+                {grn.receiptTemperatureC != null && <Field label="Arrival temperature">{grn.receiptTemperatureC} °C</Field>}
                 <Field label="PO">{grn.purchaseOrder?.number ?? '—'}</Field>
                 <Field label="Inspection sign-offs">{grn.inspectedBy.length}</Field>
               </Stack>
@@ -346,7 +364,12 @@ export function GrnDetailPage() {
             ))}
           </>
         }
-        side={<DocumentChain type="GRN" id={grn.id} />}
+        side={
+          <>
+            <AttachmentsPanel ownerType="GRN" ownerId={grn.id} categories={['DELIVERY_NOTE', 'INVOICE_COPY', 'CERTIFICATE_OF_ANALYSIS', 'PHOTO']} />
+            <DocumentChain type="GRN" id={grn.id} />
+          </>
+        }
       />
     </>
   );
