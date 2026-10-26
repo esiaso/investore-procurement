@@ -111,7 +111,7 @@ describe('HMIS over HL7 v2 (MLLP and HTTP)', () => {
 
     peer.failure = { mode: 'AE', count: 1 };
     const d2 = await c.pharmacist.post(`/pharmacy/prescriptions/${row.id}/dispense`, { lines: [{ prescriptionLineId: rx.lines[0].id, itemId: drug.itemId, quantity: 1 }] }).expect(201);
-    const after = await q(`SELECT type, status, error FROM hmis_message WHERE local_doc_id = $1 ORDER BY created_at`, [d2.body.dispenseId]);
+    const after = await q(`SELECT type, status, error FROM hmis_message WHERE local_doc_id = $1 ORDER BY type::text DESC`, [d2.body.dispenseId]);
     expect(after.map((m: { type: string; status: string }) => [m.type, m.status])).toEqual([['MEDICATION_DISPENSE', 'PENDING'], ['CHARGE', 'SENT']]);
     expect(after[0].error).toMatch(/ACK AE/);
     await q(`UPDATE hmis_message SET next_attempt_at = now() WHERE local_doc_id = $1`, [d2.body.dispenseId]);

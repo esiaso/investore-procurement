@@ -191,7 +191,9 @@ describe('Logistics, quality and assets (acceptance)', () => {
       expect(mine).toMatchObject({ status: 'OPEN', quantityAtHold: 40 });
       holdId = mine.id;
       // Back in range: the excursion ends; logger CSV import adds readings.
-      const csv = `Timestamp,Temperature (C)\n${day()} 00:10,4.2\n${day()} 00:20,4.4\n`;
+      // Local logger times shortly after the excursion (not fixed clock times: those can be in the future just after midnight).
+      const local = (msAgo: number) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(Date.now() - msAgo));
+      const csv = `Timestamp,Temperature (C)\n${local(100 * 60_000)},4.2\n${local(90 * 60_000)},4.4\n`;
       await c.pharmacist.post('/cold-chain/readings/import', { unitId, csv }).expect(200);
       await c.pharmacist.post(`/cold-chain/units/${unitId}/readings`, { readings: [{ recordedAt: new Date(Date.now() - 3600_000).toISOString(), temperatureC: 4.9 }] }).expect(201);
       expect((await c.quality.get(`/cold-chain/excursions/${exc.id}`).expect(200)).body.endedAt).toBeTruthy();

@@ -770,7 +770,8 @@ export class PharmacyService {
 
   /** Interaction / clinical alerts raised vs overridden over a period. */
   async alertReport(q: { from: string; to: string; storeId?: string }) {
-    const params: unknown[] = [q.from, q.to];
+    // Days are local days (locale.timezone), not UTC ones.
+    const params: unknown[] = [q.from, q.to, await this.settings.get('locale.timezone')];
     let storeFilter = '';
     const allowed = StoreScope.current();
     if (q.storeId) {
@@ -784,7 +785,7 @@ export class PharmacyService {
     const summary = await this.ds.query(
       `SELECT a.type, a.severity, count(*)::int AS raised, count(o.id)::int AS overridden, count(*) FILTER (WHERE a.blocking)::int AS blocking
          FROM clinical_alert a JOIN prescription rx ON rx.id = a.prescription_id LEFT JOIN interaction_override o ON o.alert_id = a.id
-        WHERE a.created_at >= $1::date AND a.created_at < $2::date + 1 ${storeFilter}
+        WHERE (a.created_at AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date ${storeFilter}
         GROUP BY a.type, a.severity ORDER BY a.type, a.severity`,
       params,
     );
@@ -792,7 +793,7 @@ export class PharmacyService {
       `SELECT o.at, rx.number AS prescription, p.hospital_no, p.name AS patient, a.type, a.severity, a.message, o.reason, u.full_name AS pharmacist, s.name AS store
          FROM interaction_override o JOIN clinical_alert a ON a.id = o.alert_id JOIN prescription rx ON rx.id = o.prescription_id
          JOIN patient p ON p.id = rx.patient_id JOIN app_user u ON u.id = o.pharmacist_id JOIN store s ON s.id = rx.store_id
-        WHERE o.at >= $1::date AND o.at < $2::date + 1 ${storeFilter}
+        WHERE (o.at AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date ${storeFilter}
         ORDER BY o.at DESC`,
       params,
     );
