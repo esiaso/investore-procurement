@@ -69,6 +69,7 @@ import ShoppingBasketIcon from '@mui/icons-material/ShoppingBasket';
 import PriceCheckIcon from '@mui/icons-material/PriceCheck';
 import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import type { ReactNode } from 'react';
 import { PermissionCode, Permissions } from '@sil/shared';
 
@@ -119,6 +120,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Billing setup', path: '/billing/setup', icon: <PriceChangeIcon />, permissions: [P.BILLING_READ], section: 'Pharmacy & billing' },
   { label: 'KRA eTIMS', path: '/etims', icon: <VerifiedIcon />, permissions: [P.ETIMS_READ], section: 'Pharmacy & billing' },
   { label: 'HMIS integration', path: '/hmis', icon: <HubIcon />, permissions: [P.HMIS_READ], section: 'Pharmacy & billing' },
+  { label: 'QuickBooks', path: '/accounting/quickbooks', icon: <AccountBalanceWalletIcon />, permissions: [], anyOf: [P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST], section: 'Pharmacy & billing' },
   { label: 'Till', path: '/pos', icon: <ShoppingBasketIcon />, permissions: [P.POS_SELL], section: 'Point of sale' },
   { label: 'Shifts & cash-up', path: '/pos/shifts', icon: <PriceCheckIcon />, permissions: [], anyOf: [P.POS_REPORTS, P.POS_APPROVE_VARIANCE], section: 'Point of sale' },
   { label: 'POS reports', path: '/pos/reports', icon: <QueryStatsIcon />, permissions: [P.POS_REPORTS], section: 'Point of sale' },
