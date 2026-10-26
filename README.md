@@ -1173,6 +1173,127 @@ New permissions: `pos.sell`, `pos.approve_pom`, `pos.override`, `pos.void`, `pos
 `pos.manualMpesaRequiresMatch`, `mpesa.stkTimeoutSeconds`. Numbering: Z (shifts), CUS (customers).
 Payment mode LOYALTY. Generic field `maxQtyPerSale`.
 
+## QuickBooks Online (slice 11)
+
+The *QuickBooks* screen (Pharmacy & billing) posts purchases, sales and inventory
+movements to a QuickBooks Online company. Documents are posted in previewed batches,
+each one once, with retries and a reconciliation against the QuickBooks trial balance.
+
+### Connection (*Connection* tab, `accounting.manage`)
+
+Create an app on developer.intuit.com (scope `com.intuit.quickbooks.accounting`). Then
+enter its client id and secret (the secret is stored encrypted) and register the
+redirect URI shown (`https://<host>/api/v1/callbacks/quickbooks`). Choose sandbox or
+production and press *Connect to QuickBooks*.
+
+Intuit sends the browser back to the callback. The one-time OAuth state is checked, and
+the access and refresh tokens are stored encrypted. The access token is refreshed before
+it expires: on use, and hourly by the `accounting.refresh` job, which also reads the
+company name and the books **closing date**. *Disconnect* revokes the token.
+
+**MOCK** is an in-process QuickBooks company with a chart of accounts, classes and tax
+codes. It is used for training and tests and never contacts Intuit.
+
+*Inventory journals from* is the go-live date: documents and stock movements before it
+are not posted.
+
+### Mappings (*Mappings* tab)
+
+Every local key is mapped to a QuickBooks account, class or tax code picked from the
+company's own lists. Gaps are counted per kind.
+
+* **Control accounts:** AP, AR, GRNI (goods received not invoiced), VAT input and
+  output, stock in transit, stock adjustments, write-offs, opening balance equity, and
+  the default bank.
+* **Per item category:** inventory, cost of sales, sales income and departmental
+  consumption. A sub-category falls back to its parent's mapping.
+* **Per payment mode:** the bank or clearing account for sales modes (CASH, MPESA,
+  CARD, LOYALTY…) and for supplier payment methods (EFT…). Credit modes (INSURANCE,
+  CORPORATE, CREDIT) go to receivables.
+* **Per tax category:** the QuickBooks tax code.
+* **Classes (optional):** per store / outlet, and per department for consumption.
+
+### What is posted
+
+| Here | QuickBooks |
+|---|---|
+| Approved, matched supplier invoice | **Bill**: debit GRNI (input VAT separately unless `purchasing.costIncludesVat`), credit AP |
+| Payment voucher | **Bill payment** linked to its bill |
+| Credited return to supplier | **Vendor credit**: debit AP, credit GRNI |
+| Sale paid in full by one non-credit mode | **Sales receipt** to the payment-mode account |
+| Any other sale (split tender, credit customer, insurer share) | **Invoice** to the customer, plus a **Payment** per amount paid now |
+| Credit note | **Refund receipt** (money paid back), else **Credit memo** |
+| Payer settlement (*Settlements* tab) | **Payment** applied to the insurer's invoices |
+| POS payment on account | **Payment** from the customer |
+| Stock ledger for a closed day or month (`accounting.journalFrequency`) | **Journal entry** (see below) |
+
+Customers:
+* an invoice with a payer is booked to that payer;
+* a till customer is booked to that customer;
+* anything else goes to `accounting.walkInCustomer`.
+
+Vendors and customers are found by name or created once, and their QuickBooks ids are
+kept. Products are one non-inventory item per category, or one per item when
+`accounting.syncItems` is on. Prices are VAT inclusive (`TaxInclusive`) with the mapped
+tax codes.
+
+The **inventory journal** posts each period's stock-ledger value changes against their
+counter-accounts, by store class. This keeps the QuickBooks inventory accounts equal to
+the local valuation:
+* receipts and supplier returns → GRNI;
+* dispenses and sales → cost of sales;
+* issues and department returns → consumption (department class);
+* expiry, damage and disposal → write-offs;
+* other adjustments and count variances → adjustments;
+* transfers → stock in transit;
+* opening stock → opening balance equity.
+
+### Batches, errors and retries
+
+1. *Post* previews a period: it builds every document not yet in QuickBooks and
+   validates it. A document missing a mapping is **BLOCKED** and lists what to map. A
+   document dated on or before the closing date is blocked as *Period closed*.
+2. *Post N to QuickBooks* sends the READY documents in dependency order: bills before
+   their payments, invoices before theirs.
+3. Each document is unique per (QuickBooks type, local document) and is never posted
+   twice. Its posting id is sent as QuickBooks' `requestid`, so a resent request is not
+   duplicated in QuickBooks either.
+
+When QuickBooks is unreachable, returns 5xx or rate-limits, the document waits as
+**PENDING**. It is retried with back-off (`accounting.retryBaseSeconds`, up to
+`accounting.maxAttempts`) by the `accounting.dispatch` job.
+
+A rejected document is **FAILED** and appears in *Postings & errors*. Fix the cause
+(usually a mapping), then use *Rebuild and send*, which rebuilds it from its source.
+
+### Reconciliation
+
+The reconciliation compares, per account and period:
+* what the local documents amount to;
+* what was posted;
+* the QuickBooks movement (trial balance at the end less the day before the start).
+
+A difference means something was entered or changed in QuickBooks; *still to post* is
+the rest. The local stock value is also compared with the QuickBooks inventory accounts.
+
+Sample data: the mock company is connected and every sample category, store, tax
+category and payment mode is mapped. Nothing is posted until a batch is previewed.
+
+New permissions: `accounting.read`, `accounting.manage`, `accounting.post` (Finance /
+Accounts has all three).
+
+New settings:
+* `accounting.journalFrequency` (MONTHLY)
+* `accounting.syncItems`
+* `accounting.walkInCustomer`
+* `accounting.maxAttempts`
+* `accounting.retryBaseSeconds`
+* `accounting.requestTimeoutMs`
+
+Jobs: `accounting.dispatch` (every 5 min) and `accounting.refresh` (hourly). Numbering:
+QBB (batches) and RCV (payer settlements). `customer_ledger.mode_code` records how a
+payment on account was made.
+
 ## Known limitations / next slices
 
 * Redis holds sessions and the BullMQ job queue. The mail outbox is still sent by a
@@ -1191,6 +1312,10 @@ Payment mode LOYALTY. Generic field `maxQtyPerSale`.
 * POS: M-Pesa refunds are not automated (no B2C reversal). Loyalty points redeemed on a
   partly refunded sale are not given back (a full void or refund does). The offline
   queue lives in the till’s browser storage: clearing it before syncing loses those sales.
+* QuickBooks has been exercised against the mock company only; connect an Intuit sandbox
+  company before production. Documents are not updated or voided in QuickBooks after
+  posting: correct them there, or with a credit note here. QuickBooks Desktop and Xero
+  are not supported (the AccountingAdapter interface is where another one would go).
 * eTIMS has been exercised against the mock control unit only. KRA sandbox
   certification (OSCU or VSCU) still has to be done with the hospital's PIN and device;
   see `ETIMS_ASSUMPTIONS`. Reverse invoicing is a hook only (no KRA format yet).
