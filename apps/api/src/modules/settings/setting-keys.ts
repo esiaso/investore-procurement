@@ -121,6 +121,16 @@ export interface SettingTypes {
   'services.categoryCodes': string[];
   /** Shelf / batch label size in millimetres. */
   'labels.size': { widthMm: number; heightMm: number };
+  /** Pharmacy outlet (store code) for HMIS orders without a mapped dispensing location, per encounter class. */
+  'hmis.defaultOutlets': Record<string, string>;
+  'hmis.requestTimeoutMs': number;
+  /** Outbound messages: attempts before FAILED, and the back-off base (doubles each attempt, capped at 1 h). */
+  'hmis.maxAttempts': number;
+  'hmis.retryBaseSeconds': number;
+  /** Alert users with hmis.manage about messages failed or unsent after this many minutes. */
+  'hmis.alertAfterMinutes': number;
+  /** Re-read a cached patient from the HMIS when older than this (hours) before using it. */
+  'hmis.patientRefreshHours': number;
 }
 
 export interface SourcingMethodRule {

@@ -134,6 +134,12 @@ export const Permissions = {
   SERVICES_CERTIFY: 'services.certify',
   /** Upload and download attachments on records the user can see. */
   FILES_UPLOAD: 'files.upload',
+  /** HMIS link: encounters, message log and integration dashboard. */
+  HMIS_READ: 'hmis.read',
+  /** Configure the HMIS connection and code mappings; reprocess messages; import patients. */
+  HMIS_MANAGE: 'hmis.manage',
+  /** Charge ward / theatre consumables to an admitted patient's encounter. */
+  PATIENTS_CHARGE: 'patients.charge',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -232,6 +238,9 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'assets.manage': 'Tag, move and maintain assets',
   'services.certify': 'Certify completion of services and works',
   'files.upload': 'Upload attachments to records',
+  'hmis.read': 'View encounters, HMIS messages and the integration dashboard',
+  'hmis.manage': 'Configure the HMIS connection and code mappings, reprocess messages, import patients',
+  'patients.charge': 'Charge consumables used on a patient to their encounter',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

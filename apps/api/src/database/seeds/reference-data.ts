@@ -34,6 +34,13 @@ export const PROCUREMENT_SCHEDULES: Record<string, string> = {
   'suppliers.leadtimes': '30 5 1 * *',
 };
 
+/** Slice 9 HMIS jobs (also merged into existing installations by a migration). */
+export const HMIS_SCHEDULES: Record<string, string> = {
+  'hmis.dispatch': '* * * * *',
+  'hmis.poll': '* * * * *',
+  'hmis.monitor': '*/15 * * * *',
+};
+
 /**
  * Sourcing methods for a private hospital: the hospital's own policy (not
  * PPADA). Bands are estimated values in KES, VAT inclusive; edit them in settings.
@@ -116,6 +123,7 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
       'stock.reorder': '0 6-20 * * *',
       ...ETIMS_SCHEDULES,
       ...PROCUREMENT_SCHEDULES,
+      ...HMIS_SCHEDULES,
     },
     description: 'Background job schedules (cron, in locale.timezone). Remove a job to stop scheduling it.',
     isPublic: false,
@@ -168,6 +176,17 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'assets.categoryCodes', value: ['EQUIP'], description: 'Item categories whose items become tagged assets on receipt (one per unit)', isPublic: true },
   { key: 'services.categoryCodes', value: ['SVC'], description: 'Item categories that are services / works (completion certificate instead of a GRN)', isPublic: true },
   { key: 'labels.size', value: { widthMm: 62, heightMm: 29 }, description: 'Shelf / batch label size (mm)', isPublic: false },
+  {
+    key: 'hmis.defaultOutlets',
+    value: { OPD: 'OPD-PH', IPD: 'IPD-PH', EMERGENCY: 'ER-PH', DAY_CASE: 'OPD-PH' },
+    description: 'Pharmacy (store code) receiving HMIS orders with no mapped dispensing location, by encounter class',
+    isPublic: false,
+  },
+  { key: 'hmis.requestTimeoutMs', value: 8000, description: 'Timeout for each call to the HMIS (ms)', isPublic: false },
+  { key: 'hmis.maxAttempts', value: 12, description: 'Attempts to send a message to the HMIS before it is marked failed', isPublic: false },
+  { key: 'hmis.retryBaseSeconds', value: 30, description: 'HMIS retry back-off base (seconds, doubled per attempt, capped at 1 hour)', isPublic: false },
+  { key: 'hmis.alertAfterMinutes', value: 30, description: 'Alert integration admins about HMIS messages failed or unsent after this many minutes', isPublic: false },
+  { key: 'hmis.patientRefreshHours', value: 12, description: 'Re-read a cached patient (demographics, allergies) from the HMIS when older than this', isPublic: false },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
   {
     key: 'pharmacy.blockingSeverities',
@@ -339,7 +358,7 @@ const READ_ALL: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
   P.PATIENTS_READ, P.PHARMACY_READ, P.BILLING_READ, P.ETIMS_READ,
   P.FORECASTING_READ, P.PLANS_READ, P.TENDERS_READ, P.CONTRACTS_READ, P.PROCUREMENT_KPIS,
-  P.QUALITY_READ, P.ASSETS_READ,
+  P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
 /** Strategic procurement (slice 7) for procurement staff. */
@@ -392,6 +411,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.PHARMACY_INTERACTIONS, P.BILLING_READ, P.BILLING_INVOICE,
       P.FORECASTING_READ, P.FORECASTING_MANAGE, P.PLANS_READ, P.PLANS_MANAGE,
       P.QUALITY_READ, P.QUALITY_MANAGE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.DISTRIBUTION_MANAGE, P.FILES_UPLOAD,
+      P.HMIS_READ, P.PATIENTS_CHARGE,
     ],
   },
   {
@@ -403,6 +423,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_STOCKTAKE, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.PURCHASING_READ,
       P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_ALERTS,
       P.PATIENTS_READ, P.PATIENTS_MANAGE, P.PHARMACY_READ, P.PHARMACY_PRESCRIPTION, P.PHARMACY_DISPENSE, P.BILLING_READ, P.BILLING_INVOICE,
+      P.HMIS_READ,
     ],
   },
   { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ, P.PATIENTS_READ, P.BILLING_READ, P.BILLING_INVOICE] },
@@ -420,13 +441,14 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     code: RoleCodes.WARD_IN_CHARGE,
     name: 'Department / Ward In-charge',
     description: 'Requests stock for a department or ward and approves its internal requisitions',
-    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION, P.PLANS_READ, P.PLANS_MANAGE, P.SERVICES_CERTIFY, P.ASSETS_READ],
+    permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION, P.PLANS_READ, P.PLANS_MANAGE, P.SERVICES_CERTIFY, P.ASSETS_READ,
+      P.PATIENTS_READ, P.HMIS_READ, P.PATIENTS_CHARGE],
   },
   {
     code: RoleCodes.WARD_STAFF,
     name: 'Department / Ward Staff',
     description: 'Raises internal requisitions and returns for their department',
-    permissions: [P.ORG_READ, P.CATALOG_READ, P.INVENTORY_REQUISITION],
+    permissions: [P.ORG_READ, P.CATALOG_READ, P.INVENTORY_REQUISITION, P.PATIENTS_READ, P.HMIS_READ, P.PATIENTS_CHARGE],
   },
   {
     code: RoleCodes.FINANCE,
@@ -435,7 +457,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
       P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
-      P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE,
+      P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE, P.HMIS_READ,
       P.PLANS_READ, P.CONTRACTS_READ, P.TENDERS_READ, P.PROCUREMENT_KPIS, P.DISPOSALS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ],
   },
   {

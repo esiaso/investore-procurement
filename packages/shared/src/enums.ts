@@ -409,6 +409,8 @@ export enum NotificationCategory {
   ETIMS = 'ETIMS',
   /** Contract and performance-security expiry, tender milestones. */
   CONTRACTS = 'CONTRACTS',
+  /** HMIS messages that failed or are stuck. */
+  HMIS = 'HMIS',
 }
 
 export enum JobRunStatus {
@@ -780,4 +782,88 @@ export enum AttachmentOwner {
   ASSET = 'ASSET',
   SERVICE_CERTIFICATE = 'SERVICE_CERTIFICATE',
   STOCK_ADJUSTMENT = 'STOCK_ADJUSTMENT',
+}
+
+// ------------------------------------------------------------------ slice 9: HMIS integration
+
+/** How the HMIS is reached. MOCK is the built-in FHIR mock (in process, or the mock-hmis container). */
+export enum HmisAdapterKind {
+  FHIR = 'FHIR',
+  REST = 'REST',
+  MOCK = 'MOCK',
+}
+
+/** Who bills patient charges: this system (sales invoices + eTIMS) or the HMIS (charges posted to its bill). */
+export enum HmisBillingMode {
+  LOCAL = 'LOCAL',
+  HMIS = 'HMIS',
+}
+
+export enum EncounterClass {
+  OPD = 'OPD',
+  IPD = 'IPD',
+  EMERGENCY = 'EMERGENCY',
+  DAY_CASE = 'DAY_CASE',
+}
+
+export enum EncounterStatus {
+  ACTIVE = 'ACTIVE',
+  FINISHED = 'FINISHED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum HmisDirection {
+  IN = 'IN',
+  OUT = 'OUT',
+}
+
+export enum HmisMessageType {
+  PATIENT = 'PATIENT',
+  ENCOUNTER = 'ENCOUNTER',
+  ALLERGY = 'ALLERGY',
+  MEDICATION_REQUEST = 'MEDICATION_REQUEST',
+  MEDICATION_DISPENSE = 'MEDICATION_DISPENSE',
+  CHARGE = 'CHARGE',
+}
+
+/** IN: PROCESSED | FAILED | IGNORED. OUT: PENDING (retrying) → SENT | FAILED. */
+export enum HmisMessageStatus {
+  PENDING = 'PENDING',
+  PROCESSED = 'PROCESSED',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+  IGNORED = 'IGNORED',
+}
+
+export enum HmisMappingKind {
+  /** HMIS drug code → generic (or brand item). */
+  DRUG = 'DRUG',
+  /** HMIS dispensing location → pharmacy outlet (store). */
+  LOCATION = 'LOCATION',
+  /** HMIS ward → department. */
+  WARD = 'WARD',
+  /** HMIS payer / scheme → payer. */
+  PAYER = 'PAYER',
+}
+
+/** Outpatient supply, or daily / unit-dose supply to an admitted patient. */
+export enum SupplyMode {
+  STANDARD = 'STANDARD',
+  DAILY = 'DAILY',
+  UNIT_DOSE = 'UNIT_DOSE',
+}
+
+export enum PatientChargeSource {
+  DISPENSE = 'DISPENSE',
+  ISSUE = 'ISSUE',
+  WARD_CONSUMPTION = 'WARD_CONSUMPTION',
+}
+
+export enum PatientChargeStatus {
+  /** Billed here: a sales invoice holds it. */
+  INVOICED = 'INVOICED',
+  /** Waiting to be posted to the HMIS bill (retrying). */
+  PENDING = 'PENDING',
+  POSTED = 'POSTED',
+  FAILED = 'FAILED',
 }
