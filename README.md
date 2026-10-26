@@ -10,7 +10,9 @@ wards, reservations, issues, back-orders, department and supplier returns and
 departmental consumption. **Slice 5** adds background jobs (BullMQ worker), AMC and
 reorder levels, reorder and expiry alerts, and reorder/near-expiry reports. Slices 6–8
 add pharmacy, billing and KRA eTIMS, strategic procurement, and logistics, quality and
-assets; **slice 9** links the hospital HMIS (FHIR R4) for patient-level dispensing.
+assets; **slice 9** links the hospital HMIS (FHIR R4, generic REST or HL7 v2) for
+patient-level dispensing, and **slice 10** adds the over-the-counter point of sale
+(M-Pesa, shifts and cash-up, offline tills).
 
 Defaults are KES, VAT 16% with zero-rated and exempt categories, Africa/Nairobi time,
 DD/MM/YYYY dates and a January financial-year start. **All of these live in database
@@ -1040,13 +1042,32 @@ be another adapter producing the same neutral records.
   `GET /hmis/assumptions` and the *Specification notes* tab). Review them with the HMIS
   vendor.
 
+### HL7 v2
+
+For an HMIS that speaks HL7 v2 rather than FHIR, choose protocol **HL7 v2 (MLLP)**:
+
+* **In**: ADT^A01/A02/A03/A04/A05/A08/A11/A28/A31 (patient, visit, allergies, insurer)
+  and pharmacy orders RDE^O11 / OMP^O09, over MLLP (the API listens on
+  `HL7_MLLP_PORT`, 2576 in compose; not in the worker) or `POST /api/v1/integration/hmis/hl7`
+  (ER7 text, API key with the `hmis` scope). Every message is answered with an ACK: **AA**
+  accepted, **AE** something in it could not be applied (it waits on the dashboard to be
+  mapped and reprocessed), **AR** unreadable. A resent message (same MSH-10) is not
+  applied twice.
+* **Out**: dispense records as **RDS^O13** and charges as **DFT^P03** (CG charge / CD
+  credit), sent over MLLP to the HMIS address (`mllp://host:port`) and accepted only on
+  an AA; AE is retried with back-off, AR fails and is listed.
+* There is no query in v2: the HMIS sends ADT (or PID/PV1 in the order) before orders,
+  so patient search / import and polling are not available. Field positions are in
+  `HMIS_ASSUMPTIONS`.
+
 ### Mock HMIS
 
 `mock-hmis` compose service (port 8090; FHIR under `/fhir`) seeded with the sample
 patients SIL-000101…105 and their visits. It is not a real HMIS. Control endpoints:
 `POST /_mock/prescriptions` (a prescriber writes orders),
 `POST /_mock/orders/:id/status`, `POST /_mock/failure {"mode":"offline"|"timeout"|"http500"|"http400","count":n}`,
-`GET /_mock/state`, `POST /_mock/reset`. Without the container (`SAMPLE_HMIS_URL` empty) the
+`GET /_mock/state`, `POST /_mock/reset`. It also receives HL7 v2 over MLLP on port 2575 (`GET /_mock/hl7`,
+`POST /_mock/hl7/failure {"mode":"offline"|"timeout"|"AE"|"AR","count":n}`). Without the container (`SAMPLE_HMIS_URL` empty) the
 API uses an in-process mock.
 
 Sample data: the sample patients linked to the mock HMIS, billing in the HMIS, outlets /
@@ -1058,6 +1079,99 @@ New permissions: `hmis.read`, `hmis.manage`, `patients.charge`. New settings:
 `hmis.defaultOutlets`, `hmis.requestTimeoutMs`, `hmis.maxAttempts`,
 `hmis.retryBaseSeconds`, `hmis.alertAfterMinutes`, `hmis.patientRefreshHours`. New jobs:
 `hmis.dispatch`, `hmis.poll`, `hmis.monitor`.
+
+## Over-the-counter point of sale (slice 10)
+
+Walk-in sales at the pharmacy counter: same stock (FEFO), prices and eTIMS engine as
+dispensing, separate from the prescription workflow.
+
+### Tills, shifts and cash-up
+
+* **Tills** (*POS setup → Tills*, `pos.manage`) sell from a store (its stock and its eTIMS
+  control unit) with a default price list.
+* A cashier opens a **shift** on a till with an opening float (one open shift per till
+  and per cashier). The **X report** (any time) and the **Z report** (at close) show
+  sales by payment mode, voids, refunds, discounts, payments taken on account,
+  overrides, M-Pesa codes not yet confirmed and the **expected cash** (float + cash kept
+  + cash taken on account − cash paid out for voids / refunds).
+* **Cash-up**: the cashier counts the drawer (by denomination). A variance within
+  `pos.varianceTolerance` (KES 50) closes the shift; outside it waits for a supervisor
+  (`pos.approve_variance`, never the cashier) to accept or reject it (*Shifts & cash-up*).
+
+### Selling
+
+* **Fast checkout** (*Till*): scan a barcode / GTIN or search by brand, generic or code
+  (Enter adds, F2 search, F9 pay); quantities in base units, so loose tablets are sold
+  from a pack; touch-friendly. Stock left and low stock (at or below the reorder level)
+  show at the till.
+* **OTC controls**: each item has a sales class (OTC, P pharmacy-only, POM
+  prescription-only, CD controlled; items without one use `pos.defaultSalesClass`, P).
+  **Controlled drugs cannot be sold**; P and POM need a pharmacist (`pos.approve_pom`:
+  the seller, or a pharmacist entering their credentials), POM also a prescription
+  reference. A generic can carry a **limit per sale** across its brands (e.g. paracetamol).
+* **Safety**: the basket is checked for interactions (and against the customer’s
+  purchases in the last `pharmacy.activeMedicationDays`, plus allergies / pregnancy when the
+  customer is linked to a patient). A blocking interaction needs a pharmacist and a
+  reason.
+* **Pricing**: the customer’s price list, else the till’s (retail, staff, corporate…);
+  **promotions** (per item or category, from a minimum quantity, for a period) apply
+  automatically; manual discounts up to the role limit in `pos.discountLimits` (cashier
+  5%, pharmacist 15%), above it a supervisor with `pos.override` authorises.
+* **Payments**: cash with change, **M-Pesa** — STK Push (Daraja Lipa na M-Pesa Online: the
+  customer confirms on their phone; the result arrives by callback, or by query when it
+  is late; times out after `mpesa.stkTimeoutSeconds`), a payment made to the till /
+  paybill picked from the C2B confirmations, or a code typed by the cashier (accepted
+  but flagged until Safaricom confirms it; `pos.manualMpesaRequiresMatch` makes the match
+  mandatory) — card (slip number), **split** payments, **on account** for customers with a
+  credit limit, and **loyalty** points. An M-Pesa payment pays one sale only.
+* **eTIMS on every sale**: each sale is a tax invoice queued to eTIMS; the thermal receipt
+  carries the CU invoice number and QR. **Voids** (current shift, `pos.void` or a
+  supervisor) and **refunds** (`pos.refund`) are credit notes only, with stock back on its
+  batch; the money paid out is counted in the refunding cashier’s shift.
+* **Customers** (optional): name, phone, KRA PIN for business buyers (printed on the
+  invoice), price list, credit limit and statement (payments on account at the till),
+  loyalty (`pos.loyalty`: 1 point per KES 100 paid, a point worth KES 1, from 50 points).
+* Every void, refund, discount override, pharmacist approval, interaction override,
+  payment on account and refused offline sale is a `pos_event` (append-only).
+
+### Offline
+
+The till keeps a snapshot of its catalog (prices, promotions, sales class, limits,
+stock), customers and payment modes in the browser. When the API cannot be reached the
+till keeps selling: each sale gets a client id and is queued on the till, the receipt
+says “eTIMS PENDING — not an official receipt”, and sold stock comes off the snapshot.
+Back online the queue is sent (`POST /pos/sales/sync`) and each sale becomes an invoice
+**once** (the client id makes resending harmless); eTIMS receives it then. Offline:
+no controlled drugs, P / POM only when the seller is a pharmacist, M-Pesa by code (STK
+needs the connection). A sale refused at sync (e.g. no stock left, older than
+`pos.offlineMaxHours`) is listed on the till and in *POS reports*. Close the shift after
+the queue is sent.
+
+### M-Pesa (Daraja)
+
+*POS setup → M-Pesa* (`pos.manage`): sandbox or production, shortcode, paybill or buy
+goods (till number), consumer key / secret and passkey (stored encrypted), and the public
+base URL Safaricom calls back. The screen shows the STK and C2B callback URLs to register;
+they carry a secret token (Daraja sends no credentials) and are the only unauthenticated
+routes (`/api/v1/callbacks/mpesa/...`). **MOCK** mode answers like Daraja without
+Safaricom: phones ending 000 fail (insufficient funds), 111 are cancelled, 222 never
+answer (time out), 333 are refused; others pay. M-Pesa refunds (B2C reversal) are not
+automated: refund in cash or by a manual M-Pesa payment.
+
+### Reports
+
+*POS reports* (`pos.reports`): sales by cashier, shift, item, category, payment mode or
+hour with **OTC margin** (net of VAT less the FEFO batch cost, net of refunds), and the
+voids / refunds / overrides log; CSV export. Shift totals are on *Shifts & cash-up*.
+
+Sample data: tills OPD-TILL-1 and MP-TILL-1, M-Pesa in mock mode, a corporate credit
+customer and a walk-in customer, a paracetamol promotion and an OTC limit.
+
+New permissions: `pos.sell`, `pos.approve_pom`, `pos.override`, `pos.void`, `pos.refund`,
+`pos.approve_variance`, `pos.manage`, `pos.reports`. New settings: `pos.discountLimits`,
+`pos.varianceTolerance`, `pos.defaultSalesClass`, `pos.loyalty`, `pos.offlineMaxHours`,
+`pos.manualMpesaRequiresMatch`, `mpesa.stkTimeoutSeconds`. Numbering: Z (shifts), CUS (customers).
+Payment mode LOYALTY. Generic field `maxQtyPerSale`.
 
 ## Known limitations / next slices
 
@@ -1073,7 +1187,10 @@ New permissions: `hmis.read`, `hmis.manage`, `patients.charge`. New settings:
   and patient references on requisitions are free text unless the line names an HMIS encounter.
 * HMIS: a department return of consumables charged to a patient does not reverse the
   charge by itself; reverse it on the encounter (HMIS billing) or raise a credit note
-  (local billing). HL7 v2 is not implemented.
+  (local billing).
+* POS: M-Pesa refunds are not automated (no B2C reversal). Loyalty points redeemed on a
+  partly refunded sale are not given back (a full void or refund does). The offline
+  queue lives in the till’s browser storage: clearing it before syncing loses those sales.
 * eTIMS has been exercised against the mock control unit only. KRA sandbox
   certification (OSCU or VSCU) still has to be done with the hospital's PIN and device;
   see `ETIMS_ASSUMPTIONS`. Reverse invoicing is a hook only (no KRA format yet).
