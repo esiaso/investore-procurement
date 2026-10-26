@@ -96,6 +96,7 @@ import { Attachment } from '../modules/files/attachment.entity';
 import { LOGISTICS_ENTITIES } from '../modules/logistics/logistics.module';
 import { QUALITY_ENTITIES } from '../modules/quality/entities';
 import { Encounter, HmisCodeMapping, HmisConnection, HmisMessage, PatientCharge } from '../modules/hmis/hmis.entities';
+import { Customer, CustomerLedger, MpesaConfig, MpesaTransaction, PosEvent, PosPromotion, PosSale, PosShift, PosTerminal } from '../modules/pos/pos.entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
 
 export const ENTITIES = [
@@ -216,6 +217,15 @@ export const ENTITIES = [
   Encounter,
   HmisMessage,
   PatientCharge,
+  PosTerminal,
+  PosShift,
+  PosSale,
+  PosEvent,
+  Customer,
+  CustomerLedger,
+  PosPromotion,
+  MpesaConfig,
+  MpesaTransaction,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

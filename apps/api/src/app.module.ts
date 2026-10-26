@@ -32,6 +32,7 @@ import { AssetsModule } from './modules/assets/assets.module';
 import { FilesModule } from './modules/files/files.module';
 import { HmisModule } from './modules/hmis/hmis.module';
 import { HmisIntegrationModule } from './modules/hmis/hmis-integration.module';
+import { PosModule } from './modules/pos/pos.module';
 import { LabelsModule } from './modules/labels/labels.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { QualityModule } from './modules/quality/quality.module';
@@ -72,6 +73,7 @@ import { UsersModule } from './modules/users/users.module';
     LabelsModule,
     HmisModule,
     HmisIntegrationModule,
+    PosModule,
   ],
   controllers: [HealthController],
   providers: [

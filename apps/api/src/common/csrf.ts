@@ -2,6 +2,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+/** Third-party callbacks (Safaricom Daraja): no cookie, authenticated by a secret in the path. */
+const CALLBACKS = /^\/api\/v\d+\/callbacks\//;
 export const CSRF_HEADER = 'x-csrf-token';
 
 /** Synchronizer-token CSRF protection: token lives in the server-side session. */
@@ -14,6 +16,7 @@ export function csrfMiddleware(req: Request, res: Response, next: NextFunction):
   if (SAFE_METHODS.has(req.method)) return next();
   // API-key (machine) calls carry no cookie, so cross-site forgery does not apply.
   if ((req as Request & { apiClient?: unknown }).apiClient) return next();
+  if (CALLBACKS.test(req.path)) return next();
   const expected = req.session?.csrfToken;
   const provided = req.get(CSRF_HEADER);
   if (expected && provided) {
