@@ -8,7 +8,9 @@ transfers, adjustments, stock takes), **slice 3** procurement (approvals, suppli
 budgets, PR → RFQ → PO → GRN → invoice), and **slice 4** internal requisitions from
 wards, reservations, issues, back-orders, department and supplier returns and
 departmental consumption. **Slice 5** adds background jobs (BullMQ worker), AMC and
-reorder levels, reorder and expiry alerts, and reorder/near-expiry reports.
+reorder levels, reorder and expiry alerts, and reorder/near-expiry reports. Slices 6–8
+add pharmacy, billing and KRA eTIMS, strategic procurement, and logistics, quality and
+assets; **slice 9** links the hospital HMIS (FHIR R4) for patient-level dispensing.
 
 Defaults are KES, VAT 16% with zero-rated and exempt categories, Africa/Nairobi time,
 DD/MM/YYYY dates and a January financial-year start. **All of these live in database
@@ -466,7 +468,7 @@ FEFO, and its cost is charged to the department's cost centre.
 
 * Raised by department staff (`inventory.requisition`) for **their own department**:
   lines from the item master (base units), priority, required-by date and an optional
-  patient/encounter reference per line (free text until the HMIS link in slice 9).
+  patient/encounter reference per line (free text, or an HMIS encounter since slice 9).
 * Approved through the approval engine. The default workflow `SR-1` has one step,
   **"Department in-charge"**. It uses a new approver type, `DEPARTMENT_ROLE`: holders of
   the role who belong to the requesting department, so the Surgical Ward in-charge
@@ -955,6 +957,108 @@ New permissions: `quality.read/manage/release`, `recalls.manage`, `disposals.man
 `distribution.manage`, `shipments.manage`, `assets.read/manage`, `services.certify`,
 `files.upload`. New document types: QH, PQC, RCL, DSL, DRN, SHP, AST, SCC.
 
+## HMIS integration and patient-level dispensing (slice 9)
+
+The hospital's HMIS/EMR stays the patient register; this system caches the minimum it
+needs, receives medication orders, and sends back what was dispensed and charged. All
+of it sits behind an **`HmisAdapter`** (FHIR R4 first, a generic REST/JSON contract,
+and a **mock FHIR HMIS** for development and tests). HL7 v2 is not implemented; it would
+be another adapter producing the same neutral records.
+
+### Connection and mapping (*HMIS integration* screen, `hmis.manage`)
+
+* One connection: protocol (FHIR / REST / MOCK), base URL, token or API key (stored
+  encrypted with `DATA_ENCRYPTION_KEY`, never returned), the hospital-number identifier
+  system, **who bills** (`LOCAL`: sales invoice + eTIMS here; `HMIS`: charges go to the
+  patient's HMIS bill and no local invoice is raised), whether dispense records are sent
+  back and whether orders are polled. *Test connection* calls FHIR `/metadata`.
+* **Code mappings**: HMIS drug code → generic (or a brand item); dispensing location →
+  pharmacy outlet; ward → department; payer/scheme → payer. A drug code that equals an
+  item code or GTIN needs no mapping. Orders without a mapped location go to the
+  outlet in `hmis.defaultOutlets` for the encounter class (OPD, IPD, EMERGENCY, DAY_CASE).
+
+### Patients, encounters and orders in
+
+* **Patients** are looked up in the HMIS (*Patients → Find in HMIS*, by hospital number or
+  name) and cached with demographics, pregnancy, weight, payer and allergies; a cached
+  patient is re-read when older than `hmis.patientRefreshHours`. **Encounters** (visit or
+  admission: class, ward, bed, payer, attending) are cached too and listed under
+  *Encounters* with everything dispensed and charged to them.
+* **Orders** (FHIR `MedicationRequest`) arrive by polling (`hmis.poll`, every minute, since
+  the last order seen) or by push to `POST /api/v1/integration/hmis/fhir` (Bundle or
+  resource; `application/fhir+json`) or `/integration/hmis/events` (REST), with an API
+  key that has the **`hmis`** scope. Orders of one `groupIdentifier` become one
+  prescription on the outlet worklist, with dose, frequency, duration, route, quantity
+  (or dose × frequency × duration), prescriber, the HMIS order id and drug code per line.
+  The clinical checks run as for any prescription. A stopped / cancelled order cancels
+  its undispensed balance; changes to an order already received are logged and not
+  applied.
+* **Idempotency**: every resource version is logged once (`hmis_message`, key = resource
+  type, id and `meta.versionId` or a content hash); repeats are counted and ignored, so
+  a resent Bundle never creates a second prescription.
+
+### Dispensing, charges and records out
+
+* Dispensing is unchanged (verification, interaction/allergy override, FEFO, brand
+  substitution, partial supply, controlled-drug witness). For an HMIS encounter:
+  - billing **HMIS**: each batch line given becomes a **patient charge** priced from the
+    payer's price list and posted as a FHIR `ChargeItem`; payments are refused here
+    (they are taken in the HMIS, which issues the tax invoice for its bill);
+  - billing **LOCAL**: the dispense is invoiced here as before, and the invoice lines are
+    recorded as the encounter's charges (nothing goes to the HMIS bill).
+  - a `MedicationDispense` per batch line (batch, expiry, brand, substitution, order and
+    encounter) is sent back so it shows on the patient record / MAR.
+* Each dispense batch line, issue line and consumption line is charged **once**
+  (unique key) — no double charging. **Returns** put the stock back on the same batch,
+  post a negative charge against the original HMIS charge (or a credit note when
+  billed here) and update the `MedicationDispense` with the net quantity.
+* **Inpatients**: orders marked daily or unit-dose supply (extension
+  `supply-mode`) appear on **Ward supply** (inpatient pharmacy, by ward and bed): what
+  each line needs today = daily quantity − given today, capped at what is left. The
+  round dispenses everything chosen, one dispense per prescription. Ward stock top-ups
+  stay internal requisitions (slice 4).
+* **Consumables charged to patients**: a requisition line can name the admitted patient
+  (encounter); issuing it charges the patient. Ward staff record ward / theatre stock
+  used on a patient under *Encounters → Charge ward consumables* (no stock moves — it
+  was issued to the ward already). HMIS-posted charges can be reversed (`patients.charge`).
+* Outbound messages are a transactional outbox: written with the dispense or charge,
+  sent at once and otherwise by `hmis.dispatch` (every minute) with back-off
+  (`hmis.retryBaseSeconds` × 2ⁿ, capped at 1 h, up to `hmis.maxAttempts`) for network
+  errors, timeouts, 5xx, 408 and 429; other 4xx fail at once. A dispense never waits for
+  the HMIS.
+
+### Monitoring
+
+* *HMIS integration → Dashboard*: connection health and last poll, counts in/out, the
+  retry queue, failed messages (reprocess), **unmapped drug codes** (map, then reprocess)
+  and the last 24 hours (with ignored repeats). *Messages* is the full log in and out
+  (payload as received / sent, request, response, HTTP status, attempts). `hmis.monitor`
+  (every 15 min) alerts users with `hmis.manage` once per message failed or unsent after
+  `hmis.alertAfterMinutes`.
+* Interpretation choices (extensions, quantity rules, reversal as negative `ChargeItem`…)
+  are listed in **`HMIS_ASSUMPTIONS`** (`apps/api/src/modules/hmis/hmis-spec.ts`, also
+  `GET /hmis/assumptions` and the *Specification notes* tab). Review them with the HMIS
+  vendor.
+
+### Mock HMIS
+
+`mock-hmis` compose service (port 8090; FHIR under `/fhir`) seeded with the sample
+patients SIL-000101…105 and their visits. It is not a real HMIS. Control endpoints:
+`POST /_mock/prescriptions` (a prescriber writes orders),
+`POST /_mock/orders/:id/status`, `POST /_mock/failure {"mode":"offline"|"timeout"|"http500"|"http400","count":n}`,
+`GET /_mock/state`, `POST /_mock/reset`. Without the container (`SAMPLE_HMIS_URL` empty) the
+API uses an in-process mock.
+
+Sample data: the sample patients linked to the mock HMIS, billing in the HMIS, outlets /
+wards / insurer / seven drug codes mapped, an outpatient order with an allergy alert,
+an inpatient daily-supply order dispensed on the ward round, an order with an unmapped
+code (on the dashboard) and gloves charged to a surgical admission.
+
+New permissions: `hmis.read`, `hmis.manage`, `patients.charge`. New settings:
+`hmis.defaultOutlets`, `hmis.requestTimeoutMs`, `hmis.maxAttempts`,
+`hmis.retryBaseSeconds`, `hmis.alertAfterMinutes`, `hmis.patientRefreshHours`. New jobs:
+`hmis.dispatch`, `hmis.poll`, `hmis.monitor`.
+
 ## Known limitations / next slices
 
 * Redis holds sessions and the BullMQ job queue. The mail outbox is still sent by a
@@ -966,7 +1070,10 @@ New permissions: `quality.read/manage/release`, `recalls.manage`, `disposals.man
   no history.
 * PPADA disposal and the full public-sector reporting set are not implemented (only the
   optional standstill, AGPO tracking and PPRA award report). Patients are a local cache
-  and patient references on requisitions are free text until the HMIS link (slice 9).
+  and patient references on requisitions are free text unless the line names an HMIS encounter.
+* HMIS: a department return of consumables charged to a patient does not reverse the
+  charge by itself; reverse it on the encounter (HMIS billing) or raise a credit note
+  (local billing). HL7 v2 is not implemented.
 * eTIMS has been exercised against the mock control unit only. KRA sandbox
   certification (OSCU or VSCU) still has to be done with the hospital's PIN and device;
   see `ETIMS_ASSUMPTIONS`. Reverse invoicing is a hook only (no KRA format yet).
