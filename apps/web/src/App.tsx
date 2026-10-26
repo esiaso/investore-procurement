@@ -7,6 +7,7 @@ import { LoginPage } from './auth/LoginPage';
 import { AdjustmentsPage } from './inventory/AdjustmentsPage';
 import { BillingReportsPage, BillingSetupPage, SaleFormPage, SalesInvoiceDetailPage, SalesInvoicesPage } from './billing/BillingPages';
 import { EtimsConsolePage } from './etims/EtimsPages';
+import { EncounterDetailPage, EncountersPage, HmisConsolePage, WardSupplyPage } from './hmis/HmisPages';
 import { InteractionsPage, PatientsPage, PharmacyWorklistPage, PrescriptionDetailPage, PrescriptionFormPage } from './pharmacy/PharmacyPages';
 import { ApprovalsPage } from './purchasing/ApprovalsPage';
 import { BudgetsPage } from './purchasing/BudgetsPage';
@@ -171,6 +172,10 @@ export function App() {
         <Route path="pharmacy/new" element={guarded([Permissions.PHARMACY_PRESCRIPTION], <PrescriptionFormPage />)} />
         <Route path="pharmacy/prescriptions/:id" element={guarded([Permissions.PHARMACY_READ], <PrescriptionDetailPage />)} />
         <Route path="pharmacy/interactions" element={guarded([Permissions.PHARMACY_READ], <InteractionsPage />)} />
+        <Route path="pharmacy/ward-supply" element={guarded([Permissions.PHARMACY_READ], <WardSupplyPage />)} />
+        <Route path="encounters" element={guardedAny([Permissions.HMIS_READ, Permissions.PATIENTS_READ], <EncountersPage />)} />
+        <Route path="encounters/:id" element={guardedAny([Permissions.HMIS_READ, Permissions.PATIENTS_READ], <EncounterDetailPage />)} />
+        <Route path="hmis" element={guarded([Permissions.HMIS_READ], <HmisConsolePage />)} />
         <Route path="patients" element={guardedAny([Permissions.PATIENTS_READ, Permissions.PHARMACY_READ], <PatientsPage />)} />
         <Route path="sales" element={guardedAny([Permissions.BILLING_READ, Permissions.BILLING_INVOICE], <SalesInvoicesPage />)} />
         <Route path="sales/new" element={guarded([Permissions.BILLING_INVOICE], <SaleFormPage />)} />

@@ -29,6 +29,7 @@ export interface StoreRequisitionLine extends Base {
   cancelledQty: number;
   cancelReason: string | null;
   patientRef: string | null;
+  encounterId?: string | null;
   notes: string | null;
   outstandingQty: number;
   reservedQty: number;

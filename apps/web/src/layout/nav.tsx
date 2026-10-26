@@ -62,6 +62,9 @@ import QrCode2Icon from '@mui/icons-material/QrCode2';
 import ReportIcon from '@mui/icons-material/Report';
 import RouteIcon from '@mui/icons-material/Route';
 import SailingIcon from '@mui/icons-material/Sailing';
+import HubIcon from '@mui/icons-material/Hub';
+import HotelIcon from '@mui/icons-material/Hotel';
+import VaccinesIcon from '@mui/icons-material/Vaccines';
 import type { ReactNode } from 'react';
 import { PermissionCode, Permissions } from '@sil/shared';
 
@@ -103,12 +106,15 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Portal documents', path: '/portal-documents', icon: <UploadFileIcon />, permissions: [P.PURCHASING_READ], section: 'Sourcing & contracts' },
   { label: 'Procurement KPIs', path: '/procurement-kpis', icon: <LeaderboardIcon />, permissions: [P.PROCUREMENT_KPIS], section: 'Sourcing & contracts' },
   { label: 'Pharmacy worklist', path: '/pharmacy', icon: <LocalPharmacyIcon />, permissions: [P.PHARMACY_READ], section: 'Pharmacy & billing' },
+  { label: 'Ward supply', path: '/pharmacy/ward-supply', icon: <VaccinesIcon />, permissions: [P.PHARMACY_READ], section: 'Pharmacy & billing' },
+  { label: 'Encounters', path: '/encounters', icon: <HotelIcon />, permissions: [], anyOf: [P.HMIS_READ, P.PATIENTS_READ], section: 'Pharmacy & billing' },
   { label: 'Patients', path: '/patients', icon: <PersonIcon />, permissions: [], anyOf: [P.PATIENTS_READ, P.PHARMACY_READ], section: 'Pharmacy & billing' },
   { label: 'Drug interactions', path: '/pharmacy/interactions', icon: <WarningAmberIcon />, permissions: [P.PHARMACY_READ], section: 'Pharmacy & billing' },
   { label: 'Sales & receipts', path: '/sales', icon: <PointOfSaleIcon />, permissions: [], anyOf: [P.BILLING_READ, P.BILLING_INVOICE], section: 'Pharmacy & billing' },
   { label: 'Tax & eTIMS reports', path: '/billing/reports', icon: <AssessmentIcon />, permissions: [], anyOf: [P.BILLING_READ, P.ETIMS_READ], section: 'Pharmacy & billing' },
   { label: 'Billing setup', path: '/billing/setup', icon: <PriceChangeIcon />, permissions: [P.BILLING_READ], section: 'Pharmacy & billing' },
   { label: 'KRA eTIMS', path: '/etims', icon: <VerifiedIcon />, permissions: [P.ETIMS_READ], section: 'Pharmacy & billing' },
+  { label: 'HMIS integration', path: '/hmis', icon: <HubIcon />, permissions: [P.HMIS_READ], section: 'Pharmacy & billing' },
   { label: 'Internal requisitions', path: '/store-requisitions', icon: <AssignmentTurnedInIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
   { label: 'Issue vouchers', path: '/issues', icon: <OutboxIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
   { label: 'Back-orders', path: '/backorders', icon: <PendingActionsIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },

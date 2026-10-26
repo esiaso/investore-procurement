@@ -29,6 +29,9 @@ export interface Patient {
   allergies: string[];
   phone: string | null;
   kraPin: string | null;
+  /** HMIS patient id (null: entered here). */
+  externalId?: string | null;
+  syncedAt?: string | null;
 }
 
 export interface InteractionOverride {
@@ -64,6 +67,9 @@ export interface PrescriptionLine {
   dispensedQty: number;
   cancelledQty: number;
   instructions: string | null;
+  externalRef?: string | null;
+  hmisDrugCode?: string | null;
+  dailyQuantity?: number | null;
 }
 
 export interface DispenseLine {
@@ -84,6 +90,7 @@ export interface Dispense {
   dispensedAt: string;
   dispensedBy: string;
   invoiceId: string | null;
+  billingMode?: 'LOCAL' | 'HMIS';
   fefoOverrideReason: string | null;
   lines: DispenseLine[];
 }
@@ -99,6 +106,11 @@ export interface Prescription {
   prescriber: string;
   prescriberRegNo: string | null;
   encounterRef: string | null;
+  encounterId?: string | null;
+  encounter?: { id: string; externalId: string; class: string; status: string; bed: string | null; department?: { name: string } | null; payer?: Payer | null } | null;
+  supplyMode?: 'STANDARD' | 'DAILY' | 'UNIT_DOSE';
+  /** Who bills the next dispense. */
+  billingMode?: 'LOCAL' | 'HMIS';
   receivedAt: string;
   verifiedAt: string | null;
   firstDispensedAt: string | null;
@@ -108,6 +120,8 @@ export interface Prescription {
   alerts?: ClinicalAlert[];
   dispenses?: Dispense[];
   invoices?: { id: string; number: string; docType: string; totalAmount: number; etimsStatus: EtimsSync; cuInvoiceNo: string | null; sourceId: string | null }[];
+  charges?: { id: string; sourceId: string; description: string; quantity: number; amount: number; status: string; externalId: string | null; reversesId: string | null }[];
+  hmisMessages?: { id: string; type: string; status: string; localDocNo: string | null; externalId: string | null; attempts: number; error: string | null; createdAt: string; processedAt: string | null }[];
 }
 
 export interface WorklistRow extends Omit<Prescription, 'alerts'> {

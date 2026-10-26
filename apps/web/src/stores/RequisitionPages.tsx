@@ -24,17 +24,19 @@ import {
 import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 import { Permissions, RequisitionPriority, StoreRequisitionStatus } from '@sil/shared';
 import { api } from '../api/client';
 import { useAll, useApiMutation, useList, usePaged } from '../api/hooks';
 import type { BackorderRow, StoreRequisition } from '../api/stores-types';
+import type { Encounter } from '../api/hmis-types';
 import type { Department, Item, Store } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
+import { EncounterPicker } from '../hmis/HmisPages';
 import { ItemPicker, StatusChip } from '../inventory/components';
 import { humanise } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
@@ -60,6 +62,7 @@ const schema = z.object({
         item: z.custom<Item>((v) => !!v, 'Choose an item'),
         quantity: z.coerce.number().positive('> 0'),
         patientRef: z.string().max(100).optional(),
+        encounter: z.custom<Encounter | null>().optional(),
       }),
     )
     .min(1)
@@ -85,7 +88,12 @@ export function StoreRequisitionFormPage() {
           priority: existing.data.priority,
           requiredBy: existing.data.requiredBy ?? '',
           notes: existing.data.notes ?? '',
-          lines: (existing.data.lines ?? []).map((l) => ({ item: l.item as Item, quantity: l.requestedQty, patientRef: l.patientRef ?? '' })),
+          lines: (existing.data.lines ?? []).map((l) => ({
+            item: l.item as Item,
+            quantity: l.requestedQty,
+            patientRef: l.patientRef ?? '',
+            encounter: l.encounterId ? ({ id: l.encounterId, class: '', patient: { hospitalNo: l.patientRef ?? '', name: '' } } as unknown as Encounter) : null,
+          })),
         }
       : undefined,
     defaultValues: {
@@ -94,9 +102,12 @@ export function StoreRequisitionFormPage() {
       priority: RequisitionPriority.ROUTINE,
       requiredBy: '',
       notes: '',
-      lines: [{ item: null as unknown as Item, quantity: 0, patientRef: '' }],
+      lines: [{ item: null as unknown as Item, quantity: 0, patientRef: '', encounter: null }],
     },
   });
+  const { canAny } = useAuth();
+  const encounters = canAny(Permissions.HMIS_READ, Permissions.PATIENTS_READ);
+  const departmentId = useWatch({ control, name: 'departmentId' });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
   const save = useApiMutation<FormValues, StoreRequisition>(
     (v) => [
@@ -110,7 +121,7 @@ export function StoreRequisitionFormPage() {
           requiredBy: v.requiredBy || undefined,
           notes: v.notes || undefined,
           submit: submitNow,
-          lines: v.lines.map((l) => ({ itemId: l.item.id, quantity: l.quantity, patientRef: l.patientRef || undefined })),
+          lines: v.lines.map((l) => ({ itemId: l.item.id, quantity: l.quantity, patientRef: l.encounter ? undefined : l.patientRef || undefined, encounterId: l.encounter?.id })),
         },
       },
     ],
@@ -152,9 +163,17 @@ export function StoreRequisitionFormPage() {
                 <Controller control={control} name={`lines.${i}.quantity`} render={({ field, fieldState }) => (
                   <TextField label="Quantity" type="number" {...field} error={!!fieldState.error} helperText={fieldState.error?.message} sx={{ width: { md: 130 } }} />
                 )} />
-                <Controller control={control} name={`lines.${i}.patientRef`} render={({ field }) => (
-                  <TextField label="Patient / encounter ref" {...field} helperText="Optional, for patient-charged consumables" sx={{ width: { md: 230 } }} />
-                )} />
+                {encounters ? (
+                  <Controller control={control} name={`lines.${i}.encounter`} render={({ field }) => (
+                    <Box sx={{ width: { md: 300 } }}>
+                      <EncounterPicker value={field.value ?? null} onChange={field.onChange} departmentId={departmentId || undefined} label="For patient (charged on issue)" />
+                    </Box>
+                  )} />
+                ) : (
+                  <Controller control={control} name={`lines.${i}.patientRef`} render={({ field }) => (
+                    <TextField label="Patient / encounter ref" {...field} helperText="Optional, for patient-charged consumables" sx={{ width: { md: 230 } }} />
+                  )} />
+                )}
                 <IconButton aria-label={`Remove line ${i + 1}`} onClick={() => remove(i)} disabled={fields.length === 1}>
                   <DeleteIcon />
                 </IconButton>
@@ -162,7 +181,7 @@ export function StoreRequisitionFormPage() {
             ))}
             {linesError?.root?.message && <Alert severity="error">{linesError.root.message}</Alert>}
             <Box>
-              <Button startIcon={<AddIcon />} onClick={() => append({ item: null as unknown as Item, quantity: 0, patientRef: '' })}>
+              <Button startIcon={<AddIcon />} onClick={() => append({ item: null as unknown as Item, quantity: 0, patientRef: '', encounter: null })}>
                 Add item
               </Button>
             </Box>

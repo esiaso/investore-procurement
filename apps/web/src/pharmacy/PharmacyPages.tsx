@@ -38,6 +38,7 @@ import { useDebounced } from '../lib/useDebounced';
 import { DetailLayout, Field, useMoney } from '../purchasing/common';
 import { useSettings } from '../settings/SettingsContext';
 import { AlertLine, ageText, EtimsChip, GenericPicker, PatientPicker, SeverityChip } from './ui';
+import { HmisPatientImportDialog, HmisStatusChip } from '../hmis/HmisPages';
 
 const P = Permissions;
 const OPEN = 'RECEIVED,VERIFIED,PARTIALLY_DISPENSED';
@@ -73,6 +74,21 @@ export function PharmacyWorklistPage() {
   const columns: GridColDef<WorklistRow>[] = [
     { field: 'number', headerName: 'Rx', width: 170 },
     { field: 'patient', headerName: 'Patient', flex: 1, minWidth: 200, valueGetter: (_, r) => `${r.patient?.hospitalNo ?? ''} · ${r.patient?.name ?? ''}` },
+    {
+      field: 'encounter',
+      headerName: 'Visit',
+      width: 170,
+      sortable: false,
+      renderCell: ({ row }) =>
+        row.encounter ? (
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ height: '100%' }}>
+            <Chip size="small" variant="outlined" label={row.encounter.class} />
+            <span>{[row.encounter.department?.name, row.encounter.bed].filter(Boolean).join(' · ')}</span>
+          </Stack>
+        ) : (
+          'Walk-in'
+        ),
+    },
     { field: 'prescriber', headerName: 'Prescriber', width: 160 },
     { field: 'receivedAt', headerName: 'Received', width: 160, valueFormatter: (v) => dt(v as string) },
     { field: 'waitingMinutes', headerName: 'Waiting', width: 90, valueFormatter: (v) => `${v} min` },
@@ -222,6 +238,7 @@ function PatientBanner({ patient }: { patient: Patient }) {
       {' · Allergies: '}
       {patient.allergies.length ? patient.allergies.join(', ') : 'none recorded'}
       {patient.payer && ` · ${patient.payer.name}${patient.memberNo ? ` (${patient.memberNo})` : ''}`}
+      {patient.externalId && <Chip size="small" variant="outlined" label="HMIS patient" sx={{ ml: 1 }} />}
     </Alert>
   );
 }
@@ -335,7 +352,16 @@ export function PrescriptionDetailPage() {
           <Box><StatusChip status={rx.status} /></Box>
           <Field label="Outlet">{rx.store?.name}</Field>
           <Field label="Prescriber">{rx.prescriber}{rx.prescriberRegNo ? ` (${rx.prescriberRegNo})` : ''}</Field>
-          {rx.encounterRef && <Field label="Encounter">{rx.encounterRef}</Field>}
+          {rx.encounter ? (
+            <Field label="Encounter">
+              <Link component={RouterLink} to={`/encounters/${rx.encounter.id}`}>{rx.encounter.externalId}</Link> · {rx.encounter.class}
+              {rx.encounter.department ? ` · ${rx.encounter.department.name}` : ''}{rx.encounter.bed ? ` · bed ${rx.encounter.bed}` : ''}
+            </Field>
+          ) : (
+            rx.encounterRef && <Field label="Encounter">{rx.encounterRef}</Field>
+          )}
+          {rx.supplyMode && rx.supplyMode !== 'STANDARD' && <Field label="Supply">{humanise(rx.supplyMode)} (ward supply)</Field>}
+          {rx.billingMode === 'HMIS' && <Field label="Billing">Charged to the HMIS bill</Field>}
           <Field label="Received">{dt(rx.receivedAt)}</Field>
           <Field label="Verified">{dt(rx.verifiedAt)}</Field>
           <Field label="First dispensed">{dt(rx.firstDispensedAt)}</Field>
@@ -355,6 +381,27 @@ export function PrescriptionDetailPage() {
           {open && remaining && can(P.PHARMACY_DISPENSE) && <Button color="warning" onClick={() => setCancelling(true)}>Cancel undispensed balance</Button>}
         </Stack>
       </Paper>
+      {((rx.charges ?? []).length > 0 || (rx.hmisMessages ?? []).length > 0) && (
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>Charges and HMIS records</Typography>
+          <Stack spacing={1}>
+            {(rx.charges ?? []).map((c) => (
+              <Stack key={c.id} direction="row" spacing={1} alignItems="center">
+                <span>{c.quantity} × {c.description}</span>
+                <span>{money(c.amount)}</span>
+                <HmisStatusChip status={c.status} />
+              </Stack>
+            ))}
+            {(rx.hmisMessages ?? []).map((m) => (
+              <Stack key={m.id} direction="row" spacing={1} alignItems="center">
+                <span>{humanise(m.type)} {m.localDocNo}</span>
+                <HmisStatusChip status={m.status} />
+                {m.error && m.status !== 'SENT' && <Typography variant="caption">{m.error}</Typography>}
+              </Stack>
+            ))}
+          </Stack>
+        </Paper>
+      )}
       {(rx.invoices ?? []).length > 0 && (
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle2" gutterBottom>Invoices</Typography>
@@ -420,16 +467,17 @@ function DispenseDialog({ rx, onClose }: { rx: Prescription; onClose(): void }) 
   const dispense = useApiMutation<void, Prescription & { change: number }>(
     () => [
       `/pharmacy/prescriptions/${rx.id}/dispense`,
-      { method: 'POST', body: { lines, payments: amount ? [{ modeCode: mode, amount: Number(amount), reference: reference || undefined }] : undefined } },
+      { method: 'POST', body: { lines, payments: amount && rx.billingMode !== 'HMIS' ? [{ modeCode: mode, amount: Number(amount), reference: reference || undefined }] : undefined } },
     ],
-    { invalidate: ['/pharmacy', '/billing', '/inventory'], success: 'Dispensed and invoiced' },
+    { invalidate: ['/pharmacy', '/billing', '/inventory', '/hmis'], success: rx.billingMode === 'HMIS' ? 'Dispensed and charged to the HMIS bill' : 'Dispensed and invoiced' },
   );
+  const hmisBilled = rx.billingMode === 'HMIS';
   const submit = (e: FormEvent) => {
     e.preventDefault();
     dispense.mutate(undefined, { onSuccess: (r) => { if (r.change) alert(`Change due: ${money(r.change)}`); onClose(); } });
   };
   return (
-    <FormDialog open title="Dispense" submitLabel="Dispense and invoice" maxWidth="md" onClose={onClose} submitting={dispense.isPending} onSubmit={submit}>
+    <FormDialog open title="Dispense" submitLabel={hmisBilled ? 'Dispense and charge' : 'Dispense and invoice'} maxWidth="md" onClose={onClose} submitting={dispense.isPending} onSubmit={submit}>
       {(options.data ?? []).filter((o) => o.remaining > 0).map((o) => {
         const line = rx.lines?.find((l) => l.id === o.prescriptionLineId);
         const c = choice[o.prescriptionLineId] ?? { itemId: '', quantity: 0 };
@@ -456,7 +504,11 @@ function DispenseDialog({ rx, onClose }: { rx: Prescription; onClose(): void }) 
           </Stack>
         );
       })}
-      <Typography variant="body2">Batches are taken first-expiry-first-out. The patient’s payer and co-pay come from the patient record.</Typography>
+      {hmisBilled ? (
+        <Alert severity="info">Batches are taken first-expiry-first-out. This visit is billed in the HMIS: the charge goes to the patient’s HMIS bill (payments are taken there).</Alert>
+      ) : (
+      <>
+      <Typography variant="body2">Batches are taken first-expiry-first-out. The patient’s payer and co-pay come from the {rx.encounter ? 'visit' : 'patient record'}.</Typography>
       <Stack direction="row" spacing={1}>
         <TextField select label="Payment" value={mode} onChange={(e) => setMode(e.target.value)} sx={{ minWidth: 180 }}>
           {(modes.data ?? []).filter((m) => m.isActive).map((m) => <MenuItem key={m.code} value={m.code}>{m.name}</MenuItem>)}
@@ -464,6 +516,8 @@ function DispenseDialog({ rx, onClose }: { rx: Prescription; onClose(): void }) 
         <TextField label="Amount tendered" type="number" value={amount} onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))} helperText="Leave empty to put it on account" />
         {selectedMode?.requiresReference && <TextField label="Reference (e.g. M-Pesa code)" value={reference} onChange={(e) => setReference(e.target.value)} required />}
       </Stack>
+      </>
+      )}
     </FormDialog>
   );
 }
@@ -493,7 +547,7 @@ function ReturnDialog({ rx, dispense, onClose }: { rx: Prescription; dispense: D
   const [reason, setReason] = useState('');
   const [restock, setRestock] = useState(true);
   const lines = Object.entries(qty).filter(([, q]) => q > 0).map(([prescriptionLineId, quantity]) => ({ prescriptionLineId, quantity }));
-  const save = useApiMutation<void>(() => [`/pharmacy/dispenses/${dispense.id}/returns`, { method: 'POST', body: { lines, reason, restock } }], { invalidate: ['/pharmacy', '/billing', '/inventory'], success: 'Return credited' });
+  const save = useApiMutation<void>(() => [`/pharmacy/dispenses/${dispense.id}/returns`, { method: 'POST', body: { lines, reason, restock } }], { invalidate: ['/pharmacy', '/billing', '/inventory', '/hmis'], success: 'Return credited' });
   return (
     <FormDialog open title={`Return medicines from ${dispense.number}`} submitLabel="Credit and return" onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       {[...byLine.entries()].filter(([, left]) => left > 0).map(([lineId, left]) => {
@@ -502,7 +556,10 @@ function ReturnDialog({ rx, dispense, onClose }: { rx: Prescription; dispense: D
       })}
       <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required />
       <FormControlLabel control={<Switch checked={restock} onChange={(e) => setRestock(e.target.checked)} />} label="Back into sellable stock (same batch)" />
-      <Typography variant="body2">A credit note is issued against the dispense invoice and sent to eTIMS.</Typography>
+      <Typography variant="body2">
+        {dispense.billingMode === 'HMIS' ? 'A credit is posted to the patient’s HMIS bill against the original charge.' : 'A credit note is issued against the dispense invoice and sent to eTIMS.'}
+        {rx.encounter ? ' The dispense record in the HMIS is updated.' : ''}
+      </Typography>
     </FormDialog>
   );
 }
@@ -569,10 +626,11 @@ function PatientDialog({ patient, onClose, onSaved }: { patient?: Patient; onClo
 }
 
 export function PatientsPage() {
-  const { can } = useAuth();
+  const { can, canAny } = useAuth();
   const [search, setSearch] = useState('');
   const [paging, setPaging] = useState({ page: 0, pageSize: 25 });
   const [edit, setEdit] = useState<Patient | null | 'new'>(null);
+  const [fromHmis, setFromHmis] = useState(false);
   const q = useDebounced(search);
   const { data, isFetching } = usePaged<Patient>('/patients', { ...paging, search: q || undefined });
   const columns: GridColDef<Patient>[] = [
@@ -583,11 +641,15 @@ export function PatientsPage() {
     { field: 'allergies', headerName: 'Allergies', flex: 1, minWidth: 160, valueFormatter: (v: string[]) => v.join(', ') },
     { field: 'isPregnant', headerName: 'Pregnant', width: 100, valueFormatter: (v) => (v ? 'Yes' : '') },
     { field: 'payer', headerName: 'Payer', width: 200, valueGetter: (_, r) => r.payer?.name ?? 'Self' },
+    { field: 'externalId', headerName: 'Source', width: 110, valueFormatter: (v) => (v ? 'HMIS' : 'Local') },
   ];
   return (
     <>
       <PageHeader title="Patients" search={search} onSearch={setSearch} searchPlaceholder="Hospital no. or name" onNew={can(P.PATIENTS_MANAGE) ? () => setEdit('new') : undefined} />
-      <Typography variant="body2" sx={{ mb: 1 }}>Minimal cached patient details used for dispensing checks and invoicing (the HMIS remains the patient register).</Typography>
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
+        <Typography variant="body2" sx={{ flexGrow: 1 }}>Minimal cached patient details used for dispensing checks and invoicing (the HMIS remains the patient register).</Typography>
+        {canAny(P.PATIENTS_MANAGE, P.HMIS_MANAGE) && can(P.HMIS_READ) && <Button onClick={() => setFromHmis(true)}>Find in HMIS</Button>}
+      </Stack>
       <DataGrid
         autoHeight
         rows={data?.items ?? []}
@@ -602,6 +664,7 @@ export function PatientsPage() {
         disableRowSelectionOnClick
       />
       {edit && <PatientDialog patient={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
+      {fromHmis && <HmisPatientImportDialog onClose={() => setFromHmis(false)} />}
     </>
   );
 }
