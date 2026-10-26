@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Permissions, SessionUser } from '@sil/shared';
@@ -165,6 +165,13 @@ export class HmisIntegrationController {
   fhir(@Body() body: FhirResource, @Req() req: Request) {
     this.assertClient(req);
     return this.inbound.receiveFhir(body);
+  }
+
+  /** HL7 v2 message (ER7 text) over HTTP; the reply is the HL7 ACK. MLLP: see HL7_MLLP_PORT. */
+  @Post('hl7') @HttpCode(200) @Header('Content-Type', 'application/hl7-v2; charset=utf-8') @RequirePermissions(P.PHARMACY_PRESCRIPTION)
+  async hl7(@Body() body: string, @Req() req: Request) {
+    this.assertClient(req);
+    return (await this.inbound.receiveHl7(typeof body === 'string' ? body : '', 'HTTP')).ack;
   }
 
   @Post('events') @HttpCode(200) @RequirePermissions(P.PHARMACY_PRESCRIPTION)

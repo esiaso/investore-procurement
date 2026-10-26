@@ -786,10 +786,11 @@ export enum AttachmentOwner {
 
 // ------------------------------------------------------------------ slice 9: HMIS integration
 
-/** How the HMIS is reached. MOCK is the built-in FHIR mock (in process, or the mock-hmis container). */
+/** How the HMIS is reached. MOCK is the built-in FHIR mock (in process, or the mock-hmis container); HL7 is HL7 v2 over MLLP. */
 export enum HmisAdapterKind {
   FHIR = 'FHIR',
   REST = 'REST',
+  HL7 = 'HL7',
   MOCK = 'MOCK',
 }
 

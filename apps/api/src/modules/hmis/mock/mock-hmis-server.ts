@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
-import { MockHmis, MockHmisFailure, MockPrescription, seedMockHmis } from './mock-hmis';
+import { MockHl7Peer, MockHmis, MockHmisFailure, MockPrescription, seedMockHmis } from './mock-hmis';
 
 /**
  * HTTP front for MockHmis. FHIR under /fhir (or the root), plus control endpoints:
@@ -9,8 +9,9 @@ import { MockHmis, MockHmisFailure, MockPrescription, seedMockHmis } from './moc
  *   POST   /_mock/prescriptions {MockPrescription}   a prescriber writes orders
  *   POST   /_mock/orders/:id/status {status}         stop / cancel an order
  *   POST   /_mock/reset                   empty and re-seed the sample patients
+ *   GET    /_mock/hl7                     HL7 v2 messages received over MLLP
  */
-export function createMockHmisServer(mock = new MockHmis()): { server: Server; mock: MockHmis } {
+export function createMockHmisServer(mock = new MockHmis(), hl7 = new MockHl7Peer()): { server: Server; mock: MockHmis; hl7: MockHl7Peer } {
   const json = (res: ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { 'content-type': 'application/fhir+json' });
     res.end(JSON.stringify(body));
@@ -53,7 +54,13 @@ export function createMockHmisServer(mock = new MockHmis()): { server: Server; m
       if (p === '/_mock/prescriptions' && req.method === 'POST') return json(res, 201, { orders: mock.prescribe(body as MockPrescription) });
       const status = /^\/_mock\/orders\/([^/]+)\/status$/.exec(p);
       if (status && req.method === 'POST') return json(res, 200, mock.setOrderStatus(status[1], String((body as { status?: string })?.status ?? 'stopped')));
+      if (p === '/_mock/hl7') return json(res, 200, { failure: hl7.failure, received: hl7.received.slice(-50) });
+      if (p === '/_mock/hl7/failure' && req.method === 'POST') {
+        hl7.failure = body as MockHl7Peer['failure'];
+        return json(res, 200, { failure: hl7.failure });
+      }
       if (p === '/_mock/reset' && req.method === 'POST') {
+        hl7.reset();
         mock.reset();
         seedMockHmis(mock);
         return json(res, 200, { reset: true });
@@ -65,5 +72,5 @@ export function createMockHmisServer(mock = new MockHmis()): { server: Server; m
     if (reply.network === 'timeout') return; // never answer
     json(res, reply.status, reply.body ?? {});
   });
-  return { server, mock };
+  return { server, mock, hl7 };
 }

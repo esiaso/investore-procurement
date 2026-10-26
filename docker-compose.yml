@@ -73,9 +73,13 @@ services:
 
   api:
     build: { context: ., target: api }
-    environment: *api-env
+    environment:
+      <<: *api-env
+      # HL7 v2 HMIS: MLLP listener for ADT / RDE (the API process only, not the worker).
+      HL7_MLLP_PORT: 2576
     ports:
       - "${API_PORT:-3000}:3000"
+      - "${HL7_MLLP_PORT:-2576}:2576"
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -135,8 +139,10 @@ services:
     command: ["node", "dist/mock-hmis.js"]
     environment:
       MOCK_HMIS_PORT: 8090
+      MOCK_HL7_PORT: 2575
     ports:
       - "${MOCK_HMIS_PORT:-8090}:8090"
+      - "${MOCK_HL7_PORT:-2575}:2575"
     restart: unless-stopped
 
   # S3-compatible object storage for attachments. Console: http://localhost:9001

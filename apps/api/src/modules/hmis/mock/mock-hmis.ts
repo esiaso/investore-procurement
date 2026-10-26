@@ -257,3 +257,39 @@ export function seedMockHmis(mock: MockHmis, system = 'urn:sil:hospital-no') {
 
 /** One mock shared by the in-process adapter (tests, development without the container). */
 export const sharedMockHmis = new MockHmis();
+
+/**
+ * Mock HL7 v2 receiver (the HMIS side of MLLP): keeps what it receives and
+ * answers AA, or the injected failure (offline, timeout, AE, AR).
+ */
+export class MockHl7Peer {
+  received: string[] = [];
+  failure: { mode: 'offline' | 'timeout' | 'AE' | 'AR'; count: number } | null = null;
+
+  reset() {
+    this.received = [];
+    this.failure = null;
+  }
+
+  handle(message: string): { reply: string | null; error: string | null } {
+    const control = /^MSH\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|([^|\r]*)/.exec(message)?.[1] ?? '';
+    const event = /^MSH(?:\|[^|]*){7}\|[^^|]*\^([^^|]*)/.exec(message)?.[1] ?? '';
+    if (this.failure && this.failure.count > 0) {
+      this.failure.count--;
+      const f = this.failure;
+      if (f.count <= 0) this.failure = null;
+      if (f.mode === 'offline') return { reply: null, error: 'Network error: connect ECONNREFUSED (mock)' };
+      if (f.mode === 'timeout') return { reply: null, error: 'Timed out (mock)' };
+      return { reply: `MSH|^~\\&|HMIS|MOCK|SIL-PIS|SIL|20260101000000||ACK^${event}^ACK|A${Date.now()}|P|2.5.1\rMSA|${f.mode}|${control}|Mock HMIS ${f.mode === 'AE' ? 'could not store' : 'rejected'} the message`, error: null };
+    }
+    this.received.push(message);
+    return { reply: `MSH|^~\\&|HMIS|MOCK|SIL-PIS|SIL|20260101000000||ACK^${event}^ACK|A${Date.now()}|P|2.5.1\rMSA|AA|${control}`, error: null };
+  }
+}
+
+export const sharedMockHl7 = new MockHl7Peer();
+
+/** In-process MLLP transport to the mock HL7 receiver. */
+export function mockHl7Transport(peer: MockHl7Peer = sharedMockHl7) {
+  return async (message: string) => peer.handle(message);
+}

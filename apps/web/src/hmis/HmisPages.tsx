@@ -382,10 +382,10 @@ function ConnectionTab() {
     <Paper sx={{ p: 2 }}>
       <Stack spacing={2} sx={{ maxWidth: 640 }}>
         <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} disabled={!editable} />
-        <TextField select label="Protocol" value={f.adapter} onChange={(e) => setF({ ...f, adapter: e.target.value })} disabled={!editable} helperText="FHIR R4 REST; generic REST (JSON contract in the specification notes); MOCK = built-in test HMIS">
-          <MenuItem value="FHIR">FHIR R4</MenuItem><MenuItem value="REST">Generic REST</MenuItem><MenuItem value="MOCK">Mock (not a real HMIS)</MenuItem>
+        <TextField select label="Protocol" value={f.adapter} onChange={(e) => setF({ ...f, adapter: e.target.value })} disabled={!editable} helperText="FHIR R4 REST; generic REST (JSON contract in the specification notes); HL7 v2 over MLLP (the HMIS pushes ADT / RDE); MOCK = built-in test HMIS">
+          <MenuItem value="FHIR">FHIR R4</MenuItem><MenuItem value="REST">Generic REST</MenuItem><MenuItem value="HL7">HL7 v2 (MLLP)</MenuItem><MenuItem value="MOCK">Mock (not a real HMIS)</MenuItem>
         </TextField>
-        <TextField label="Base URL" value={f.baseUrl} onChange={(e) => setF({ ...f, baseUrl: e.target.value })} disabled={!editable} helperText={f.adapter === 'MOCK' ? 'Empty: in-process mock; or the mock-hmis service, e.g. http://mock-hmis:8090/fhir' : 'e.g. https://hmis.example/fhir'} />
+        <TextField label="Base URL" value={f.baseUrl} onChange={(e) => setF({ ...f, baseUrl: e.target.value })} disabled={!editable} helperText={f.adapter === 'MOCK' ? 'Empty: in-process mock; or the mock-hmis service, e.g. http://mock-hmis:8090/fhir' : f.adapter === 'HL7' ? 'Where RDS / DFT messages go: mllp://host:port (mllp://mock-hmis:2575 for the mock; mllp://mock in-process). Inbound ADT / RDE: MLLP on HL7_MLLP_PORT or POST /integration/hmis/hl7' : 'e.g. https://hmis.example/fhir'} />
         <Stack direction="row" spacing={2}>
           <TextField label="Auth header" value={f.authHeader} onChange={(e) => setF({ ...f, authHeader: e.target.value })} disabled={!editable} sx={{ width: 200 }} />
           <TextField label={c?.hasToken ? 'Token (stored — leave empty to keep)' : 'Token / API key'} type="password" value={f.authToken} onChange={(e) => setF({ ...f, authToken: e.target.value })} disabled={!editable} sx={{ flex: 1 }} />
@@ -396,7 +396,7 @@ function ConnectionTab() {
           <MenuItem value="HMIS">The HMIS (charges posted to the patient&apos;s HMIS bill; no local invoice)</MenuItem>
         </TextField>
         <FormControlLabel control={<Switch checked={f.sendDispenses} onChange={(e) => setF({ ...f, sendDispenses: e.target.checked })} disabled={!editable} />} label="Send dispense records (MedicationDispense) to the HMIS" />
-        <FormControlLabel control={<Switch checked={f.pollOrders} onChange={(e) => setF({ ...f, pollOrders: e.target.checked })} disabled={!editable} />} label="Poll the HMIS for orders (off when the HMIS pushes to /integration/hmis)" />
+        <FormControlLabel control={<Switch checked={f.pollOrders && f.adapter !== 'HL7'} onChange={(e) => setF({ ...f, pollOrders: e.target.checked })} disabled={!editable || f.adapter === 'HL7'} />} label="Poll the HMIS for orders (off when the HMIS pushes to /integration/hmis)" />
         <FormControlLabel control={<Switch checked={f.isActive} onChange={(e) => setF({ ...f, isActive: e.target.checked })} disabled={!editable} />} label="Active" />
         {editable && <Box><Button variant="contained" onClick={() => save.mutate()} disabled={save.isPending}>Save connection</Button></Box>}
         <Alert severity="info">

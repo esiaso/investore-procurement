@@ -7,6 +7,8 @@ import { Patient, Prescription, PrescriptionLine } from '../pharmacy/pharmacy.en
 import { PharmacyService } from '../pharmacy/pharmacy.service';
 import { SettingsService } from '../settings/settings.service';
 import type { AllergyInfo, EncounterInfo, FhirResource, MedicationOrder, PatientInfo } from './fhir';
+import { buildAck, Hl7Error, parseHl7 } from './hl7';
+import { itemsFromHl7 } from './hl7-adapter';
 import { HmisUnavailableError, InboundItem, itemsFromFhir, itemsFromRest } from './hmis-adapter';
 import { HmisConnection, HmisMessage } from './hmis.entities';
 import { HmisService } from './hmis.service';
@@ -69,6 +71,26 @@ export class HmisInboundService implements OnModuleInit {
     return this.receive(itemsFromRest(event ?? {}), via);
   }
 
+  /**
+   * HL7 v2 message (MLLP listener or HTTP): processed like any other, answered
+   * with an ACK — AA when accepted, AE when something in it could not be
+   * applied (it stays on the dashboard to reprocess), AR when unreadable.
+   */
+  async receiveHl7(raw: string, via = 'MLLP'): Promise<{ ack: string; result: Awaited<ReturnType<HmisInboundService['receive']>> | null }> {
+    const header = { sendingApp: 'SIL-PIS', sendingFacility: 'SIL', receivingApp: 'HMIS', receivingFacility: 'HMIS' };
+    let parsed = null;
+    try {
+      parsed = parseHl7(raw);
+    } catch (e) {
+      return { ack: buildAck(null, 'AR', (e as Error).message, header), result: null };
+    }
+    const conn = await this.hmis.connection();
+    if (!conn) return { ack: buildAck(parsed, 'AR', 'No HMIS connection is configured', header), result: null };
+    const result = await this.receive(itemsFromHl7(raw, conn.hospitalNoSystem), via);
+    const failed = result.results.filter((r) => r.status === HmisMessageStatus.FAILED);
+    return { ack: buildAck(parsed, failed.length ? 'AE' : 'AA', failed.length ? (failed[0].error ?? 'Not applied') : 'Accepted', header), result };
+  }
+
   /** Logs each item once (per version), then processes it. Patients and encounters go before orders. */
   async receive(items: InboundItem[], via: string) {
     const rank = (t: HmisMessageType) => (t === HmisMessageType.PATIENT ? 0 : t === HmisMessageType.ENCOUNTER ? 1 : t === HmisMessageType.ALLERGY ? 2 : 3);
@@ -95,6 +117,7 @@ export class HmisInboundService implements OnModuleInit {
     if (!conn?.pollOrders) return { skipped: true };
     try {
       const { adapter, timeoutMs } = await this.hmis.adapter();
+      if (!adapter.canRead) return { skipped: true, reason: 'The HMIS pushes (HL7 v2)' };
       // First poll: the last day only. Afterwards a second of overlap (repeats are recognised by version).
       const since = conn.lastPolledAt ? new Date(conn.lastPolledAt.getTime() - 1000) : new Date(Date.now() - 86_400_000);
       const { items, cursor } = await adapter.pollOrders(since, timeoutMs);
@@ -117,6 +140,7 @@ export class HmisInboundService implements OnModuleInit {
       items = await adapter.searchPatients(q, timeoutMs);
     } catch (e) {
       if (e instanceof HmisUnavailableError) throw new BadRequestException(`The HMIS did not answer: ${e.message}`);
+      if (e instanceof Hl7Error) throw new BadRequestException(e.message);
       throw e;
     }
     const found = items.flatMap((i) => (i.type === HmisMessageType.PATIENT && i.data ? [i.data as PatientInfo] : []));
@@ -134,6 +158,7 @@ export class HmisInboundService implements OnModuleInit {
       items = await adapter.fetchPatient(externalId, timeoutMs);
     } catch (e) {
       if (e instanceof HmisUnavailableError) throw new BadRequestException(`The HMIS did not answer: ${e.message}`);
+      if (e instanceof Hl7Error) throw new BadRequestException(e.message);
       throw e;
     }
     if (!items.some((i) => i.type === HmisMessageType.PATIENT)) throw new NotFoundException(`Patient ${externalId} was not found in the HMIS`);
@@ -151,6 +176,11 @@ export class HmisInboundService implements OnModuleInit {
   // ------------------------------------------------------------------ processing
 
   private parse(msg: HmisMessage, hospitalNoSystem: string): InboundItem {
+    if (msg.idempotencyKey.startsWith('HL7:')) {
+      const item = itemsFromHl7(String(msg.payload.hl7 ?? ''), hospitalNoSystem).find((i) => i.key === msg.idempotencyKey);
+      if (!item) throw new InboundRejected('The HL7 message no longer yields this record');
+      return item;
+    }
     const items = msg.idempotencyKey.startsWith('REST:')
       ? itemsFromRest({ type: REST_TYPE[msg.type], data: msg.payload })
       : itemsFromFhir(msg.payload as FhirResource, hospitalNoSystem);

@@ -1,7 +1,7 @@
 import type { Payer, Patient } from './pharmacy-types';
 import type { Item, Store } from './types';
 
-export type HmisAdapterKind = 'FHIR' | 'REST' | 'MOCK';
+export type HmisAdapterKind = 'FHIR' | 'REST' | 'HL7' | 'MOCK';
 export type HmisBillingMode = 'LOCAL' | 'HMIS';
 export type HmisMessageStatus = 'PENDING' | 'PROCESSED' | 'SENT' | 'FAILED' | 'IGNORED';
 export type HmisMessageType = 'PATIENT' | 'ENCOUNTER' | 'ALLERGY' | 'MEDICATION_REQUEST' | 'MEDICATION_DISPENSE' | 'CHARGE';

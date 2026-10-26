@@ -73,8 +73,10 @@ export class HmisService implements OnModuleInit {
   }
 
   async saveConnection(dto: ConnectionDto) {
-    if (dto.adapter !== HmisAdapterKind.MOCK && !dto.baseUrl) throw new BadRequestException(`${dto.adapter} needs the HMIS base URL`);
-    if (dto.baseUrl && !/^https?:\/\//.test(dto.baseUrl)) throw new BadRequestException('The base URL must start with http:// or https://');
+    const hl7 = dto.adapter === HmisAdapterKind.HL7;
+    if (dto.adapter !== HmisAdapterKind.MOCK && !hl7 && !dto.baseUrl) throw new BadRequestException(`${dto.adapter} needs the HMIS base URL`);
+    if (hl7 && !/^mllp:\/\/[^:/]+(:\d+)?\/?$/.test(dto.baseUrl ?? 'mllp://mock')) throw new BadRequestException('HL7 v2 needs the HMIS MLLP address, e.g. mllp://hmis.local:2575 (mllp://mock for the built-in mock)');
+    if (!hl7 && dto.baseUrl && !/^https?:\/\//.test(dto.baseUrl)) throw new BadRequestException('The base URL must start with http:// or https://');
     const repo = this.ds.getRepository(HmisConnection);
     const row = (await repo.findOneBy({ code: CONNECTION_CODE })) ?? repo.create({ code: CONNECTION_CODE });
     Object.assign(row, {
@@ -85,7 +87,8 @@ export class HmisService implements OnModuleInit {
       hospitalNoSystem: dto.hospitalNoSystem?.trim() || 'urn:sil:hospital-no',
       billingMode: dto.billingMode,
       sendDispenses: dto.sendDispenses ?? true,
-      pollOrders: dto.pollOrders ?? true,
+      // HL7 v2 cannot be queried: the HMIS pushes.
+      pollOrders: hl7 ? false : (dto.pollOrders ?? true),
       isActive: dto.isActive ?? true,
     });
     if (dto.authToken !== undefined) row.authTokenEnc = dto.authToken ? encryptField(loadEnv().dataEncryptionKey, dto.authToken) : null;
@@ -98,7 +101,7 @@ export class HmisService implements OnModuleInit {
     const c = await m.getRepository(HmisConnection).createQueryBuilder('c').addSelect('c.authTokenEnc').where('c.code = :code AND c.is_active', { code: CONNECTION_CODE }).getOne();
     if (!c) throw new ConflictException({ code: 'HMIS_NOT_CONFIGURED', message: 'No HMIS connection is configured' });
     const token = c.authTokenEnc ? decryptField(loadEnv().dataEncryptionKey, c.authTokenEnc) : null;
-    return { adapter: createHmisAdapter({ adapter: c.adapter, baseUrl: c.baseUrl, token, authHeader: c.authHeader, hospitalNoSystem: c.hospitalNoSystem }), connection: c, timeoutMs: await this.settings.get('hmis.requestTimeoutMs', m) };
+    return { adapter: createHmisAdapter({ adapter: c.adapter, baseUrl: c.baseUrl, token, authHeader: c.authHeader, hospitalNoSystem: c.hospitalNoSystem, code: c.code }), connection: c, timeoutMs: await this.settings.get('hmis.requestTimeoutMs', m) };
   }
 
   async test() {
@@ -224,6 +227,11 @@ export class HmisService implements OnModuleInit {
     let encounter = encounterExternalId ? await m.findOneBy(Encounter, { externalId: encounterExternalId }) : null;
     if (stale || (encounterExternalId && !encounter)) {
       const { adapter, timeoutMs } = await this.adapter(m);
+      // A push-only HMIS (HL7 v2) sends patients and visits before orders: use what it sent.
+      if (!adapter.canRead) {
+        if (!patient) throw new BadRequestException(`Patient ${patientExternalId} is not known yet: the HMIS must send it (ADT or PID) first`);
+        return { patient, encounter };
+      }
       if (stale) {
         const items = await adapter.fetchPatient(patientExternalId, timeoutMs);
         const pi = items.find((i) => i.type === HmisMessageType.PATIENT && 'data' in i && i.data);

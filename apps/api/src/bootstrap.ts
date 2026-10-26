@@ -28,6 +28,8 @@ export function configureApp(app: NestExpressApplication, env: Env, redis: Redis
   app.setGlobalPrefix(API_PREFIX);
   // JSON, and FHIR from the HMIS (application/fhir+json). Replaces Nest's default JSON parser.
   app.useBodyParser('json', { type: ['application/json', 'application/fhir+json'], limit: '1mb' });
+  // HL7 v2 (ER7) messages from the HMIS.
+  app.useBodyParser('text', { type: ['text/plain', 'application/hl7-v2', 'x-application/hl7-v2+er7'], limit: '1mb' });
   app.set('trust proxy', env.trustProxy ? 1 : false);
   // JSON API; CSP is left to the web front end (and would block the Swagger UI).
   app.use(helmet({ contentSecurityPolicy: false }));

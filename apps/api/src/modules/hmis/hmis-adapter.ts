@@ -18,7 +18,8 @@ import {
   toMedicationDispense,
   versionKey,
 } from './fhir';
-import { MockHmis, sharedMockHmis } from './mock/mock-hmis';
+import { Hl7HmisAdapter, mllpTransport } from './hl7-adapter';
+import { MockHmis, mockHl7Transport, sharedMockHmis } from './mock/mock-hmis';
 
 // ------------------------------------------------------------------ transport
 
@@ -181,6 +182,8 @@ export interface OutboundRequest {
 /** One HMIS. Implementations differ in protocol only; everything above works on neutral records. */
 export interface HmisAdapter {
   readonly kind: HmisAdapterKind;
+  /** The HMIS can be queried (patients, visits, orders); false for HL7 v2, where the HMIS pushes. */
+  readonly canRead: boolean;
   /** A cheap call that proves the HMIS answers (FHIR: /metadata). */
   ping(timeoutMs: number): Promise<{ ok: boolean; detail: string }>;
   searchPatients(query: string, timeoutMs: number): Promise<InboundItem[]>;
@@ -213,6 +216,7 @@ async function read(t: HmisTransport, path: string, timeoutMs: number): Promise<
 
 /** FHIR R4 REST (also used for the mock, which speaks FHIR). */
 export class FhirHmisAdapter implements HmisAdapter {
+  readonly canRead = true;
   constructor(
     readonly kind: HmisAdapterKind,
     private readonly t: HmisTransport,
@@ -275,6 +279,7 @@ export class FhirHmisAdapter implements HmisAdapter {
  */
 export class RestHmisAdapter implements HmisAdapter {
   readonly kind = HmisAdapterKind.REST;
+  readonly canRead = true;
   constructor(private readonly t: HmisTransport) {}
 
   async ping(timeoutMs: number) {
@@ -322,8 +327,15 @@ export class RestHmisAdapter implements HmisAdapter {
   }
 }
 
-export function createHmisAdapter(cfg: { adapter: HmisAdapterKind; baseUrl: string | null; token: string | null; authHeader: string; hospitalNoSystem: string }): HmisAdapter {
+export function createHmisAdapter(cfg: { adapter: HmisAdapterKind; baseUrl: string | null; token: string | null; authHeader: string; hospitalNoSystem: string; code?: string }): HmisAdapter {
   const auth = { header: cfg.authHeader || 'Authorization', token: cfg.token };
+  if (cfg.adapter === HmisAdapterKind.HL7) {
+    const header = { sendingApp: 'SIL-PIS', sendingFacility: 'SIL', receivingApp: 'HMIS', receivingFacility: cfg.code ?? 'HMIS' };
+    const url = cfg.baseUrl ?? 'mllp://mock';
+    const m = /^mllp:\/\/([^:/]+)(?::(\d+))?\/?$/.exec(url);
+    if (!m) throw new Error('HL7 v2 needs an address like mllp://host:2575');
+    return new Hl7HmisAdapter(m[1] === 'mock' ? mockHl7Transport() : mllpTransport(m[1], Number(m[2] ?? 2575)), header);
+  }
   if (cfg.adapter === HmisAdapterKind.MOCK) {
     return new FhirHmisAdapter(HmisAdapterKind.MOCK, cfg.baseUrl ? httpTransport(cfg.baseUrl, auth, 'application/fhir+json') : mockTransport(), cfg.hospitalNoSystem);
   }
