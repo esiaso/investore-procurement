@@ -1,4 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { PatientChargeSource } from '@sil/shared';
+import { Encounter } from '../hmis/hmis.entities';
+import { PatientChargesService } from '../hmis/patient-charges.service';
+import { Patient } from '../pharmacy/pharmacy.entities';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In } from 'typeorm';
 import { DocumentType, Paginated, Permissions, SessionUser, StockTxnType } from '@sil/shared';
@@ -47,6 +51,7 @@ export class IssuesService implements OnModuleInit {
     private readonly links: DocumentLinksService,
     private readonly notifications: NotificationsService,
     private readonly pdf: PdfService,
+    private readonly charges: PatientChargesService,
   ) {}
 
   onModuleInit() {
@@ -111,7 +116,7 @@ export class IssuesService implements OnModuleInit {
     const witnessId = controlled ? await this.inventory.verifyWitness(dto.witness, actor) : null;
     const scanMode = await this.settings.get('inventory.issueScanConfirm');
 
-    const voucherId = await this.ds.transaction(async (m) => {
+    const { voucherId, charged } = await this.ds.transaction(async (m) => {
       const sr = await this.requisitions.lock(m, requisitionId);
       if (!ISSUABLE.includes(sr.status)) throw new ConflictException(`Requisition is ${sr.status}`);
       StoreScope.assert(sr.storeId);
@@ -215,6 +220,23 @@ export class IssuesService implements OnModuleInit {
       voucher.totalValue = round2(voucherLines.reduce((s, l) => s + l.value, 0));
       await m.save(voucher);
 
+      // Consumables issued for an admitted patient are charged to the encounter.
+      const charged: { messageIds: string[]; outboxId: string | null }[] = [];
+      const byEncounter = new Map<string, IssueVoucherLine[]>();
+      plan.forEach((p, i) => p.line.encounterId && byEncounter.set(p.line.encounterId, [...(byEncounter.get(p.line.encounterId) ?? []), voucherLines[i]]));
+      for (const [encounterId, vls] of byEncounter) {
+        const encounter = await m.findOneByOrFail(Encounter, { id: encounterId });
+        const patient = await m.findOneByOrFail(Patient, { id: encounter.patientId });
+        charged.push(
+          await this.charges.chargeEncounter(
+            m,
+            { source: PatientChargeSource.ISSUE, sourceId: voucher.id, sourceNo: voucher.number, storeId: sr.storeId, departmentId: sr.departmentId, patient, encounter, lines: vls.map((v) => ({ sourceLineId: v.id, itemId: v.itemId, quantity: v.quantity })) },
+            actor,
+            `Consumables ${voucher.number} for encounter ${encounter.externalId}`,
+          ),
+        );
+      }
+
       for (const line of lines) {
         const q = round4(plan.filter((p) => p.line.id === line.id).reduce((s, p) => s + p.quantity, 0));
         if (q > 0) {
@@ -231,8 +253,9 @@ export class IssuesService implements OnModuleInit {
         body: status === 'PARTIALLY_ISSUED' ? 'The rest is on back-order' : undefined,
         link: `/store-requisitions/${sr.id}`,
       });
-      return voucher.id;
+      return { voucherId: voucher.id, charged };
     });
+    for (const c of charged) await this.charges.deliver(c);
     return this.get(voucherId, actor);
   }
 

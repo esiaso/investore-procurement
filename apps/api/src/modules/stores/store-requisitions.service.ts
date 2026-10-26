@@ -62,6 +62,18 @@ export class StoreRequisitionsService implements OnModuleInit, ApprovalHandler {
         WHERE i.id = ANY($1::uuid[])`,
       [ids, dto.storeId],
     );
+    // Lines for an admitted patient: the encounter must be open; the reference names the patient.
+    const encIds = [...new Set(dto.lines.map((l) => l.encounterId).filter((x): x is string => !!x))];
+    const encs: { id: string; status: string; external_id: string; hospital_no: string }[] = encIds.length
+      ? await m.query(`SELECT e.id, e.status, e.external_id, p.hospital_no FROM encounter e JOIN patient p ON p.id = e.patient_id WHERE e.id = ANY($1::uuid[])`, [encIds])
+      : [];
+    for (const l of dto.lines) {
+      if (!l.encounterId) continue;
+      const e = encs.find((x) => x.id === l.encounterId);
+      if (!e) throw new BadRequestException('Encounter not found');
+      if (e.status !== 'ACTIVE') throw new BadRequestException(`Encounter ${e.external_id} is closed`);
+      l.patientRef = `${e.hospital_no} / ${e.external_id}`.slice(0, 100);
+    }
     let value = 0;
     for (const l of dto.lines) {
       const item = items.find((i) => i.id === l.itemId);
@@ -79,6 +91,7 @@ export class StoreRequisitionsService implements OnModuleInit, ApprovalHandler {
         itemId: l.itemId,
         requestedQty: l.quantity,
         patientRef: l.patientRef?.trim() || null,
+        encounterId: l.encounterId ?? null,
         notes: l.notes ?? null,
       }),
     );

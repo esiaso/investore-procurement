@@ -2,19 +2,29 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { InjectDataSource } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager, In } from 'typeorm';
-import { DocumentType, Paginated, Permissions, PrescriptionStatus, SalesSource, SessionUser } from '@sil/shared';
+import { DocumentType, EncounterStatus, HmisBillingMode, HmisMessageType, Paginated, PatientChargeSource, Permissions, PrescriptionStatus, SalesSource, SessionUser, SupplyMode } from '@sil/shared';
 import { likeTerm, paginate } from '../../common/pagination';
 import { StoreScope } from '../../common/store-scope';
 import { BillingService } from '../billing/billing.service';
 import { SalesInvoice } from '../billing/billing.entities';
-import { takeStock } from '../billing/dispense-stock';
+import { returnStock, takeStock } from '../billing/dispense-stock';
 import { EtimsService } from '../etims/etims.service';
+import type { DispenseOut } from '../hmis/fhir';
+import { Encounter, PatientCharge } from '../hmis/hmis.entities';
+import { HmisService } from '../hmis/hmis.service';
+import { PatientChargesService } from '../hmis/patient-charges.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { SettingsService } from '../settings/settings.service';
 import { AlertDraft, ageInYears, InteractionSource, InternalInteractionSource, MedForCheck, runChecks, termsOf } from './interactions';
 import { ClinicalAlert, Dispense, DispenseLine, InteractionOverride, Patient, Prescription, PrescriptionLine } from './pharmacy.entities';
-import { CancelLinesDto, CreatePrescriptionDto, DispenseDto, DispenseReturnDto, PatientDto, PatientQueryDto, WorklistQueryDto } from './pharmacy.dto';
+import { CancelLinesDto, CreatePrescriptionDto, DispenseDto, DispenseReturnDto, PatientDto, PatientQueryDto, WardSupplyDto, WardSupplyQueryDto, WorklistQueryDto } from './pharmacy.dto';
+
+/** HMIS details of a line created from an order (not part of the public DTO). */
+export interface HmisLineMeta {
+  externalRef: string;
+  hmisDrugCode: string | null;
+}
 
 const r4 = (n: number) => Math.round(n * 10_000) / 10_000;
 /** Same rules as FEFO: unreserved, not held, not quarantined, not expired. */
@@ -43,6 +53,8 @@ export class PharmacyService {
     private readonly inventory: InventoryService,
     private readonly billing: BillingService,
     private readonly etims: EtimsService,
+    private readonly hmis: HmisService,
+    private readonly charges: PatientChargesService,
   ) {}
 
   // ------------------------------------------------------------------ patients
@@ -72,52 +84,102 @@ export class PharmacyService {
 
   async createPrescription(dto: CreatePrescriptionDto) {
     StoreScope.assert(dto.storeId);
+    const id = await this.ds.transaction((m) => this.createInTx(m, dto));
+    return this.get(id);
+  }
+
+  private async assertLines(m: EntityManager, lines: CreatePrescriptionDto['lines']) {
+    const generics: { id: string; is_active: boolean }[] = await m.query(`SELECT id, is_active FROM generic WHERE id = ANY($1::uuid[])`, [lines.map((l) => l.genericId)]);
+    for (const l of lines) {
+      if (!generics.find((g) => g.id === l.genericId && g.is_active)) throw new BadRequestException('A prescribed generic is unknown or inactive');
+      if (l.preferredItemId) {
+        const [it] = await m.query(`SELECT generic_id FROM item WHERE id = $1`, [l.preferredItemId]);
+        if (it?.generic_id !== l.genericId) throw new BadRequestException('The preferred brand is not an item of the prescribed generic');
+      }
+    }
+  }
+
+  private lineOf(m: EntityManager, l: CreatePrescriptionDto['lines'][number], lineNo: number, meta?: HmisLineMeta) {
+    return m.create(PrescriptionLine, {
+      lineNo,
+      genericId: l.genericId,
+      preferredItemId: l.preferredItemId ?? null,
+      dose: l.dose,
+      frequency: l.frequency,
+      duration: l.duration ?? null,
+      route: l.route ?? null,
+      quantity: l.quantity,
+      dailyQuantity: l.dailyQuantity ?? null,
+      instructions: l.instructions ?? null,
+      externalRef: meta?.externalRef ?? null,
+      hmisDrugCode: meta?.hmisDrugCode ?? null,
+    });
+  }
+
+  /**
+   * Creates a prescription in the caller's transaction (also used for orders
+   * received from the HMIS, whose lines carry the order ids).
+   */
+  async createInTx(m: EntityManager, dto: CreatePrescriptionDto, lineMeta?: HmisLineMeta[]): Promise<string> {
     if (dto.externalRef) {
-      const dup = await this.ds.getRepository(Prescription).findOneBy({ externalRef: dto.externalRef });
+      const dup = await m.findOneBy(Prescription, { externalRef: dto.externalRef });
       if (dup) throw new ConflictException({ code: 'DUPLICATE_EXTERNAL_REF', message: `Already received as ${dup.number}`, prescriptionId: dup.id });
     }
-    const id = await this.ds.transaction(async (m) => {
-      const patient = await m.findOneBy(Patient, { id: dto.patientId });
-      if (!patient) throw new BadRequestException('Patient not found');
-      const generics: { id: string; is_active: boolean }[] = await m.query(`SELECT id, is_active FROM generic WHERE id = ANY($1::uuid[])`, [dto.lines.map((l) => l.genericId)]);
-      for (const l of dto.lines) {
-        if (!generics.find((g) => g.id === l.genericId && g.is_active)) throw new BadRequestException('A prescribed generic is unknown or inactive');
-        if (l.preferredItemId) {
-          const [it] = await m.query(`SELECT generic_id FROM item WHERE id = $1`, [l.preferredItemId]);
-          if (it?.generic_id !== l.genericId) throw new BadRequestException('The preferred brand is not an item of the prescribed generic');
-        }
-      }
-      const rx = await m.save(
-        m.create(Prescription, {
-          number: await this.numbering.next(DocumentType.PRESCRIPTION, { storeId: dto.storeId, manager: m }),
-          patientId: dto.patientId,
-          storeId: dto.storeId,
-          prescriber: dto.prescriber,
-          prescriberRegNo: dto.prescriberRegNo ?? null,
-          encounterRef: dto.encounterRef ?? null,
-          externalRef: dto.externalRef ?? null,
-          notes: dto.notes ?? null,
-          status: PrescriptionStatus.RECEIVED,
-          receivedAt: new Date(),
-          lines: dto.lines.map((l, i) =>
-            m.create(PrescriptionLine, {
-              lineNo: i + 1,
-              genericId: l.genericId,
-              preferredItemId: l.preferredItemId ?? null,
-              dose: l.dose,
-              frequency: l.frequency,
-              duration: l.duration ?? null,
-              route: l.route ?? null,
-              quantity: l.quantity,
-              instructions: l.instructions ?? null,
-            }),
-          ),
-        }),
-      );
-      await this.check(m, rx.id);
-      return rx.id;
-    });
-    return this.get(id);
+    const patient = await m.findOneBy(Patient, { id: dto.patientId });
+    if (!patient) throw new BadRequestException('Patient not found');
+    let encounter: Encounter | null = null;
+    if (dto.encounterId) {
+      encounter = await m.findOneBy(Encounter, { id: dto.encounterId });
+      if (!encounter || encounter.patientId !== patient.id) throw new BadRequestException('The encounter is not a visit of this patient');
+    }
+    const supplyMode = dto.supplyMode ?? SupplyMode.STANDARD;
+    if (supplyMode !== SupplyMode.STANDARD && dto.lines.some((l) => !l.dailyQuantity)) throw new BadRequestException('Daily / unit-dose supply needs a daily quantity on every line');
+    await this.assertLines(m, dto.lines);
+    const rx = await m.save(
+      m.create(Prescription, {
+        number: await this.numbering.next(DocumentType.PRESCRIPTION, { storeId: dto.storeId, manager: m }),
+        patientId: dto.patientId,
+        storeId: dto.storeId,
+        prescriber: dto.prescriber,
+        prescriberRegNo: dto.prescriberRegNo ?? null,
+        encounterId: encounter?.id ?? null,
+        encounterRef: dto.encounterRef ?? encounter?.externalId ?? null,
+        externalRef: dto.externalRef ?? null,
+        supplyMode,
+        notes: dto.notes ?? null,
+        status: PrescriptionStatus.RECEIVED,
+        receivedAt: new Date(),
+        lines: dto.lines.map((l, i) => this.lineOf(m, l, i + 1, lineMeta?.[i])),
+      }),
+    );
+    await this.check(m, rx.id);
+    return rx.id;
+  }
+
+  /** Adds lines (HMIS orders of the same group arriving later) to an open prescription and re-runs the checks. */
+  async addLinesInTx(m: EntityManager, prescriptionId: string, lines: CreatePrescriptionDto['lines'], lineMeta: HmisLineMeta[]) {
+    const rx = await m.findOne(Prescription, { where: { id: prescriptionId }, relations: { lines: true }, lock: { mode: 'pessimistic_write', tables: ['prescription'] } });
+    if (!rx || !OPEN.includes(rx.status)) throw new ConflictException('The prescription is no longer open');
+    await this.assertLines(m, lines);
+    let no = Math.max(0, ...rx.lines!.map((l) => l.lineNo));
+    for (const [i, l] of lines.entries()) await m.save(Object.assign(this.lineOf(m, l, ++no, lineMeta[i]), { prescriptionId }));
+    await this.check(m, rx.id);
+  }
+
+  /** The HMIS stopped / cancelled an order: its undispensed balance is cancelled. */
+  async cancelOrderLineInTx(m: EntityManager, externalRef: string, reason: string): Promise<boolean> {
+    const line = await m.findOneBy(PrescriptionLine, { externalRef });
+    if (!line) return false;
+    const rx = await m.findOne(Prescription, { where: { id: line.prescriptionId }, relations: { lines: true }, lock: { mode: 'pessimistic_write', tables: ['prescription'] } });
+    if (!rx || !OPEN.includes(rx.status)) return true;
+    const l = rx.lines!.find((x) => x.id === line.id)!;
+    l.cancelledQty = r4(l.quantity - l.dispensedQty);
+    await m.update(PrescriptionLine, l.id, { cancelledQty: l.cancelledQty });
+    rx.notes = `${rx.notes ? `${rx.notes}\n` : ''}Line ${l.lineNo}: ${reason}`.slice(0, 1000);
+    this.applyStatus(rx, new Date());
+    await m.update(Prescription, rx.id, { status: rx.status, completedAt: rx.completedAt, notes: rx.notes });
+    await this.check(m, rx.id);
+    return true;
   }
 
   async worklist(q: WorklistQueryDto) {
@@ -126,6 +188,8 @@ export class PharmacyService {
       .createQueryBuilder('rx')
       .leftJoinAndSelect('rx.patient', 'patient')
       .leftJoinAndSelect('rx.store', 'store')
+      .leftJoinAndSelect('rx.encounter', 'encounter')
+      .leftJoinAndSelect('encounter.department', 'ward')
       .orderBy('rx.receivedAt', 'ASC');
     StoreScope.apply(qb, 'rx.store_id');
     if (q.storeId) qb.andWhere('rx.store_id = :st', { st: q.storeId });
@@ -158,14 +222,26 @@ export class PharmacyService {
   async get(id: string) {
     const rx = await this.ds.getRepository(Prescription).findOne({
       where: { id },
-      relations: { patient: { payer: true }, store: true, lines: { generic: true } },
+      relations: { patient: { payer: true }, store: true, lines: { generic: true }, encounter: { department: true, payer: true } },
       order: { lines: { lineNo: 'ASC' } },
     });
     if (!rx) throw new NotFoundException('Prescription not found');
     StoreScope.assert(rx.storeId);
     const dispenses = await this.ds.getRepository(Dispense).find({ where: { prescriptionId: id }, relations: { lines: { item: true, batch: true } }, order: { dispensedAt: 'ASC' } });
-    const invoices = dispenses.length ? await this.ds.getRepository(SalesInvoice).find({ where: [{ sourceId: In(dispenses.map((d) => d.id)) }], order: { createdAt: 'ASC' } }) : [];
-    return { ...rx, alerts: await this.alerts(id), dispenses, invoices: invoices.map((i) => ({ id: i.id, number: i.number, docType: i.docType, totalAmount: i.totalAmount, etimsStatus: i.etimsStatus, cuInvoiceNo: i.cuInvoiceNo, sourceId: i.sourceId })) };
+    const dispenseIds = dispenses.map((d) => d.id);
+    const invoices = dispenses.length ? await this.ds.getRepository(SalesInvoice).find({ where: [{ sourceId: In(dispenseIds) }], order: { createdAt: 'ASC' } }) : [];
+    const charges = dispenses.length ? await this.ds.getRepository(PatientCharge).find({ where: { sourceId: In(dispenseIds) }, order: { createdAt: 'ASC' } }) : [];
+    const hmisMessages = (await this.hmis.outboundFor(dispenseIds)).map((x) => ({ id: x.id, type: x.type, status: x.status, localDocNo: x.localDocNo, externalId: x.externalId, attempts: x.attempts, error: x.error, createdAt: x.createdAt, processedAt: x.processedAt }));
+    return {
+      ...rx,
+      /** Who bills the next dispense: the HMIS for an HMIS patient's visit when the link bills there. */
+      billingMode: rx.encounterId && rx.patient?.externalId ? await this.hmis.billingMode() : HmisBillingMode.LOCAL,
+      alerts: await this.alerts(id),
+      dispenses,
+      invoices: invoices.map((i) => ({ id: i.id, number: i.number, docType: i.docType, totalAmount: i.totalAmount, etimsStatus: i.etimsStatus, cuInvoiceNo: i.cuInvoiceNo, sourceId: i.sourceId })),
+      charges: charges.map((c) => ({ id: c.id, sourceId: c.sourceId, description: c.description, quantity: c.quantity, amount: c.amount, status: c.status, externalId: c.externalId, reversesId: c.reversesId })),
+      hmisMessages,
+    };
   }
 
   /** Brands of each prescribed generic with usable stock at the outlet (for brand selection / substitution). */
@@ -310,17 +386,30 @@ export class PharmacyService {
   /**
    * Dispenses (part of) a verified prescription: chosen brand per line (any
    * item of the prescribed generic), FEFO batches unless picked (with reason
-   * and permission), DISPENSE stock movements per patient, the sales invoice
-   * (payer split) and eTIMS. Records each batch given.
+   * and permission), DISPENSE stock movements per patient, and billing:
+   * a sales invoice (payer split) and eTIMS, or — for an HMIS encounter with
+   * billing mode HMIS — charges posted to the patient's HMIS bill. Records each
+   * batch given, and sends the dispense records back to the HMIS for orders
+   * that came from it.
    */
   async dispense(id: string, dto: DispenseDto, actor: SessionUser) {
-    const r = await this.ds.transaction(async (m) => {
+    const r = await this.ds.transaction((m) => this.dispenseInTx(m, id, dto, actor));
+    if (r.outboxId) await this.etims.trySendNow(r.outboxId);
+    await this.hmis.trySendNow(r.hmisMessageIds);
+    return { ...(await this.get(id)), dispenseId: r.dispenseId, invoiceId: r.invoiceId, change: r.change };
+  }
+
+  private async dispenseInTx(m: EntityManager, id: string, dto: DispenseDto, actor: SessionUser) {
+    {
       const rx = await m.findOne(Prescription, { where: { id }, relations: { lines: true, patient: true }, lock: { mode: 'pessimistic_write', tables: ['prescription'] } });
       if (!rx) throw new NotFoundException('Prescription not found');
       StoreScope.assert(rx.storeId);
       if (rx.status !== PrescriptionStatus.VERIFIED && rx.status !== PrescriptionStatus.PARTIALLY_DISPENSED) {
         throw new ConflictException(rx.status === PrescriptionStatus.RECEIVED ? 'Verify the prescription before dispensing' : `Prescription is ${rx.status}`);
       }
+      const encounter = rx.encounterId ? await m.findOneByOrFail(Encounter, { id: rx.encounterId }) : null;
+      const billingMode = encounter && rx.patient!.externalId ? await this.hmis.billingMode(m) : HmisBillingMode.LOCAL;
+      if (billingMode === HmisBillingMode.HMIS && dto.payments?.some((p) => p.amount > 0)) throw new BadRequestException('This patient is billed in the HMIS: take payments there');
       await this.assertNoOpenBlocking(m, id);
       const byLine = new Map(rx.lines!.map((l) => [l.id, l]));
       const want = new Map<string, number>();
@@ -361,6 +450,7 @@ export class PharmacyService {
           dispensedBy: actor.id,
           dispensedAt: now,
           witnessId: dto.witnessId ?? null,
+          billingMode,
           fefoOverrideReason: overridden ? dto.fefoOverrideReason!.trim() : null,
           lines: dto.lines.flatMap((l, i) =>
             (allocations.get(String(i)) ?? []).map((a) =>
@@ -385,6 +475,26 @@ export class PharmacyService {
       this.applyStatus(rx, now);
       await m.update(Prescription, rx.id, { status: rx.status, firstDispensedAt: rx.firstDispensedAt, completedAt: rx.completedAt });
 
+      // Charges are per batch line given; invoice line i+1 holds dto line i.
+      const made: { dtoIndex: number; line: DispenseLine }[] = [];
+      let k = 0;
+      dto.lines.forEach((_, i) => (allocations.get(String(i)) ?? []).forEach(() => made.push({ dtoIndex: i, line: dispense.lines![k++] })));
+      const chargeInput = {
+        source: PatientChargeSource.DISPENSE,
+        sourceId: dispense.id,
+        sourceNo: number,
+        storeId: rx.storeId,
+        departmentId: encounter?.departmentId ?? null,
+        patient: rx.patient!,
+        encounter,
+        lines: made.map((x) => ({ sourceLineId: x.line.id, itemId: x.line.itemId, quantity: x.line.quantity, invoiceLineNo: x.dtoIndex + 1 })),
+      };
+      const hmisMessageIds = rx.encounterId ? await this.queueDispenseRecords(m, rx, dispense, actor) : [];
+      if (billingMode === HmisBillingMode.HMIS) {
+        hmisMessageIds.push(...(await this.charges.postToHmis(m, chargeInput, actor)));
+        return { dispenseId: dispense.id, invoiceId: null as string | null, outboxId: null as string | null, change: 0, hmisMessageIds };
+      }
+
       const inv = await this.billing.createInvoice(
         m,
         {
@@ -395,7 +505,7 @@ export class PharmacyService {
           customerName: rx.patient!.name,
           customerPin: rx.patient!.kraPin,
           customerPhone: rx.patient!.phone,
-          payerId: rx.patient!.payerId,
+          payerId: encounter ? encounter.payerId : rx.patient!.payerId,
           payments: dto.payments,
           notes: `${rx.number} / ${number}`,
           lines: dto.lines.map((l, i) => ({ itemId: l.itemId, quantity: l.quantity, sourceLineId: l.prescriptionLineId, allocations: allocations.get(String(i)) ?? [] })),
@@ -403,10 +513,54 @@ export class PharmacyService {
         actor,
       );
       await m.update(Dispense, dispense.id, { invoiceId: inv.invoice.id });
-      return { dispenseId: dispense.id, invoiceId: inv.invoice.id, outboxId: inv.outboxId, change: inv.change };
-    });
-    if (r.outboxId) await this.etims.trySendNow(r.outboxId);
-    return { ...(await this.get(id)), dispenseId: r.dispenseId, invoiceId: r.invoiceId, change: r.change };
+      if (encounter) await this.charges.recordInvoiced(m, chargeInput, inv.invoice.id);
+      return { dispenseId: dispense.id, invoiceId: inv.invoice.id as string | null, outboxId: inv.outboxId, change: inv.change, hmisMessageIds };
+    }
+  }
+
+  /** MedicationDispense records (one per batch given) for the HMIS, when the order came from it. */
+  private async queueDispenseRecords(m: EntityManager, rx: Prescription, dispense: Dispense, actor: SessionUser, update?: { lineIds: string[]; note: string }): Promise<string[]> {
+    const conn = await this.hmis.connection(m);
+    if (!conn?.sendDispenses || !rx.patient?.externalId) return [];
+    const encounter = rx.encounterId ? await m.findOneBy(Encounter, { id: rx.encounterId }) : null;
+    const rows: { id: string; prescription_line_id: string; item_id: string; quantity: string; returned_qty: string; substituted: boolean; code: string; name: string; uom: string | null; batch_no: string; expiry: string | null; external_ref: string | null; hmis_drug_code: string | null }[] = await m.query(
+      `SELECT dl.id, dl.prescription_line_id, dl.item_id, dl.quantity, dl.returned_qty, dl.substituted, i.code, i.name, u.code AS uom, b.batch_no,
+              to_char(b.expiry_date, 'YYYY-MM-DD') AS expiry, pl.external_ref, pl.hmis_drug_code
+         FROM dispense_line dl JOIN item i ON i.id = dl.item_id LEFT JOIN unit_of_measure u ON u.id = i.base_uom_id
+         JOIN batch b ON b.id = dl.batch_id JOIN prescription_line pl ON pl.id = dl.prescription_line_id
+        WHERE dl.dispense_id = $1 ORDER BY dl.created_at`,
+      [dispense.id],
+    );
+    const ids: string[] = [];
+    for (const r of rows) {
+      if (update && !update.lineIds.includes(r.id)) continue;
+      const net = r4(Number(r.quantity) - Number(r.returned_qty));
+      const payload: DispenseOut = {
+        dispenseLineId: r.id,
+        dispenseNo: dispense.number,
+        status: 'completed',
+        orderExternalId: r.external_ref,
+        patientExternalId: rx.patient.externalId,
+        encounterExternalId: encounter?.externalId ?? null,
+        hmisDrugCode: r.hmis_drug_code,
+        itemCode: r.code,
+        itemName: r.name,
+        quantity: update ? net : Number(r.quantity),
+        unit: r.uom,
+        batchNo: r.batch_no,
+        expiryDate: r.expiry,
+        dispensedAt: dispense.dispensedAt.toISOString(),
+        dispensedBy: actor.fullName,
+        substituted: r.substituted,
+        note: update?.note ?? null,
+      };
+      // An update is a new message keyed on the original (the HMIS record is PUT).
+      const base = `MD|${r.id}`;
+      const key = update ? `${base}#${Date.now()}` : base;
+      const msg = await this.hmis.enqueue(m, { type: HmisMessageType.MEDICATION_DISPENSE, key, payload, docType: 'DISPENSE', docId: dispense.id, docNo: dispense.number, patientId: rx.patientId, encounterId: rx.encounterId });
+      ids.push(msg.id);
+    }
+    return ids;
   }
 
   private applyStatus(rx: Prescription, now: Date) {
@@ -444,47 +598,172 @@ export class PharmacyService {
   }
 
   /**
-   * Medicines brought back unused: credit note against the dispense invoice
-   * (eTIMS), stock back on the same batches (restock) and the dispense records
-   * reduced. The returned quantity becomes dispensable again only if the
-   * prescription is still open.
+   * Medicines brought back unused: stock back on the same batches (restock)
+   * and the dispense records reduced. Billed here: a credit note against the
+   * dispense invoice (eTIMS). Billed in the HMIS: a negative charge against
+   * the original HMIS charge. Dispense records already in the HMIS are
+   * updated with the net quantity. The returned quantity is not re-supplied
+   * automatically.
    */
   async returnDispense(dispenseId: string, dto: DispenseReturnDto, actor: SessionUser) {
     const d = await this.ds.getRepository(Dispense).findOne({ where: { id: dispenseId }, relations: { lines: true } });
     if (!d) throw new NotFoundException('Dispense not found');
     StoreScope.assert(d.storeId);
-    if (!d.invoiceId) throw new ConflictException('This dispense has no invoice');
-    const inv = await this.billing.get(d.invoiceId);
-    const creditLines = dto.lines.map((l) => {
-      const il = (inv.lines ?? []).find((x) => x.sourceLineId === l.prescriptionLineId);
-      if (!il) throw new BadRequestException('A line was not dispensed on this dispense');
-      return { invoiceLineId: il.id, quantity: l.quantity };
-    });
-    await this.billing.creditNote(d.invoiceId, { lines: creditLines, reason: dto.reason, restock: dto.restock ?? true }, actor, async (m) => {
-      const lines = await m.find(DispenseLine, { where: { dispenseId }, order: { createdAt: 'ASC' } });
-      for (const r of dto.lines) {
-        let left = r.quantity;
-        for (const dl of lines.filter((x) => x.prescriptionLineId === r.prescriptionLineId)) {
-          if (left <= 0) break;
-          const q = Math.min(r4(dl.quantity - dl.returnedQty), left);
-          if (q <= 0) continue;
-          dl.returnedQty = r4(dl.returnedQty + q);
-          await m.update(DispenseLine, dl.id, { returnedQty: dl.returnedQty });
-          left = r4(left - q);
+    let hmisIds: string[] = [];
+    if (d.billingMode === HmisBillingMode.HMIS) {
+      hmisIds = await this.ds.transaction(async (m) => {
+        const touched = await this.applyReturn(m, d, dto);
+        if (dto.restock ?? true) {
+          const ctx = await this.inventory.postingContext(actor, { type: DocumentType.DISPENSE, id: d.id, number: d.number }, undefined, null, m);
+          const lines = await m.find(DispenseLine, { where: { dispenseId } });
+          const [p] = await m.query(`SELECT hospital_no FROM patient WHERE id = $1`, [d.patientId]);
+          await returnStock(
+            m,
+            ctx,
+            d.storeId,
+            touched.map((t) => {
+              const dl = lines.find((x) => x.id === t.dispenseLineId)!;
+              return { itemId: dl.itemId, quantity: t.quantity, patientRef: p.hospital_no, allocations: [{ batchId: dl.batchId, binId: dl.binId, quantity: t.quantity, unitCost: dl.unitCost }] };
+            }),
+          );
         }
-        if (left > 0) throw new BadRequestException('Cannot return more than was dispensed');
-        await m.query(`UPDATE prescription_line SET dispensed_qty = dispensed_qty - $2 WHERE id = $1`, [r.prescriptionLineId, r.quantity]);
-      }
-      const rx = await m.findOneOrFail(Prescription, { where: { id: d.prescriptionId }, relations: { lines: true } });
-      if (rx.status === PrescriptionStatus.DISPENSED || rx.status === PrescriptionStatus.PARTIALLY_DISPENSED) {
-        // Returned medicines are not re-supplied automatically: close the returned balance.
-        for (const r of dto.lines) await m.query(`UPDATE prescription_line SET cancelled_qty = LEAST(quantity - dispensed_qty, cancelled_qty + $2) WHERE id = $1`, [r.prescriptionLineId, r.quantity]);
-        const fresh = await m.findOneOrFail(Prescription, { where: { id: d.prescriptionId }, relations: { lines: true } });
-        this.applyStatus(fresh, new Date());
-        await m.update(Prescription, fresh.id, { status: fresh.status, completedAt: fresh.completedAt });
-      }
-    });
+        return this.afterReturn(m, d, touched, dto.reason, actor, null);
+      });
+    } else {
+      if (!d.invoiceId) throw new ConflictException('This dispense has no invoice');
+      const inv = await this.billing.get(d.invoiceId);
+      const creditLines = dto.lines.map((l) => {
+        const il = (inv.lines ?? []).find((x) => x.sourceLineId === l.prescriptionLineId);
+        if (!il) throw new BadRequestException('A line was not dispensed on this dispense');
+        return { invoiceLineId: il.id, quantity: l.quantity };
+      });
+      await this.billing.creditNote(d.invoiceId, { lines: creditLines, reason: dto.reason, restock: dto.restock ?? true }, actor, async (m, cn) => {
+        const touched = await this.applyReturn(m, d, dto);
+        hmisIds = await this.afterReturn(m, d, touched, dto.reason, actor, cn.id);
+      });
+    }
+    await this.hmis.trySendNow(hmisIds);
     return this.get(d.prescriptionId);
+  }
+
+  /** Reduces the dispense and prescription records; returns the quantity taken back per dispense (batch) line. */
+  private async applyReturn(m: EntityManager, d: Dispense, dto: DispenseReturnDto) {
+    const lines = await m.find(DispenseLine, { where: { dispenseId: d.id }, order: { createdAt: 'ASC' }, lock: { mode: 'pessimistic_write' } });
+    const touched: { dispenseLineId: string; quantity: number }[] = [];
+    for (const r of dto.lines) {
+      let left = r.quantity;
+      const mine = lines.filter((x) => x.prescriptionLineId === r.prescriptionLineId);
+      if (!mine.length) throw new BadRequestException('A line was not dispensed on this dispense');
+      for (const dl of mine) {
+        if (left <= 0) break;
+        const q = Math.min(r4(dl.quantity - dl.returnedQty), left);
+        if (q <= 0) continue;
+        dl.returnedQty = r4(dl.returnedQty + q);
+        await m.update(DispenseLine, dl.id, { returnedQty: dl.returnedQty });
+        touched.push({ dispenseLineId: dl.id, quantity: q });
+        left = r4(left - q);
+      }
+      if (left > 0) throw new BadRequestException('Cannot return more than was dispensed');
+      await m.query(`UPDATE prescription_line SET dispensed_qty = dispensed_qty - $2 WHERE id = $1`, [r.prescriptionLineId, r.quantity]);
+    }
+    const rx = await m.findOneOrFail(Prescription, { where: { id: d.prescriptionId }, relations: { lines: true } });
+    if (rx.status === PrescriptionStatus.DISPENSED || rx.status === PrescriptionStatus.PARTIALLY_DISPENSED) {
+      // Returned medicines are not re-supplied automatically: close the returned balance.
+      for (const r of dto.lines) await m.query(`UPDATE prescription_line SET cancelled_qty = LEAST(quantity - dispensed_qty, cancelled_qty + $2) WHERE id = $1`, [r.prescriptionLineId, r.quantity]);
+      const fresh = await m.findOneOrFail(Prescription, { where: { id: d.prescriptionId }, relations: { lines: true } });
+      this.applyStatus(fresh, new Date());
+      await m.update(Prescription, fresh.id, { status: fresh.status, completedAt: fresh.completedAt });
+    }
+    return touched;
+  }
+
+  /** Encounter charges reversed and HMIS dispense records updated after a return. */
+  private async afterReturn(m: EntityManager, d: Dispense, touched: { dispenseLineId: string; quantity: number }[], reason: string, actor: SessionUser, creditNoteId: string | null): Promise<string[]> {
+    const ids: string[] = [];
+    for (const t of touched) {
+      const id = await this.charges.reverse(m, { source: PatientChargeSource.DISPENSE, sourceId: d.id, sourceLineId: t.dispenseLineId, quantity: t.quantity, reason, creditNoteId }, actor);
+      if (id) ids.push(id);
+    }
+    const rx = await m.findOneOrFail(Prescription, { where: { id: d.prescriptionId }, relations: { patient: true } });
+    if (rx.encounterId) {
+      const sent = await m.query(`SELECT 1 FROM hmis_message WHERE local_doc_id = $1 AND type = 'MEDICATION_DISPENSE' LIMIT 1`, [d.id]);
+      if (sent.length) ids.push(...(await this.queueDispenseRecords(m, rx, d, actor, { lineIds: touched.map((t) => t.dispenseLineId), note: `Returned: ${reason}`.slice(0, 300) })));
+    }
+    return ids;
+  }
+
+  // ------------------------------------------------------------------ ward supply (inpatients)
+
+  /**
+   * Admitted patients' daily / unit-dose lines at an outlet (optionally one
+   * ward): what is due today = daily quantity less what was given today,
+   * capped at the balance left on the order.
+   */
+  async wardSupplyList(q: WardSupplyQueryDto) {
+    StoreScope.assert(q.storeId);
+    const today = await this.settings.today();
+    const tz = await this.settings.get('locale.timezone');
+    const rows: {
+      prescription_id: string; number: string; status: string; supply_mode: string; patient_id: string; patient: string; hospital_no: string; bed: string | null; ward: string | null; department_id: string | null;
+      line_id: string; line_no: number; generic_id: string; generic: string; dose: string; frequency: string; route: string | null; daily_quantity: number; remaining: number; given_today: number;
+    }[] = await this.ds.query(
+      `SELECT rx.id AS prescription_id, rx.number, rx.status, rx.supply_mode, p.id AS patient_id, p.name AS patient, p.hospital_no, e.bed, d.name AS ward, e.department_id,
+              l.id AS line_id, l.line_no, l.generic_id, g.inn_name || COALESCE(' ' || NULLIF(g.strength, ''), '') AS generic, l.dose, l.frequency, l.route,
+              l.daily_quantity::float AS daily_quantity, (l.quantity - l.dispensed_qty - l.cancelled_qty)::float AS remaining,
+              COALESCE((SELECT SUM(dl.quantity - dl.returned_qty) FROM dispense_line dl JOIN dispense ds ON ds.id = dl.dispense_id
+                         WHERE dl.prescription_line_id = l.id AND (ds.dispensed_at AT TIME ZONE $3)::date = $2::date), 0)::float AS given_today
+         FROM prescription rx
+         JOIN prescription_line l ON l.prescription_id = rx.id
+         JOIN generic g ON g.id = l.generic_id
+         JOIN patient p ON p.id = rx.patient_id
+         JOIN encounter e ON e.id = rx.encounter_id
+         LEFT JOIN department d ON d.id = e.department_id
+        WHERE rx.store_id = $1 AND rx.supply_mode <> 'STANDARD' AND rx.status IN ('RECEIVED', 'VERIFIED', 'PARTIALLY_DISPENSED')
+          AND e.status = 'ACTIVE' AND ($4::uuid IS NULL OR e.department_id = $4)
+          AND l.quantity - l.dispensed_qty - l.cancelled_qty > 0
+        ORDER BY d.name NULLS LAST, e.bed NULLS LAST, p.name, rx.number, l.line_no`,
+      [q.storeId, today, tz, q.departmentId ?? null],
+    );
+    const patients = new Map<string, { patientId: string; patient: string; hospitalNo: string; ward: string | null; bed: string | null; lines: unknown[] }>();
+    for (const r of rows) {
+      const due = r4(Math.max(0, Math.min((r.daily_quantity ?? 0) - r.given_today, r.remaining)));
+      const p = patients.get(r.patient_id) ?? { patientId: r.patient_id, patient: r.patient, hospitalNo: r.hospital_no, ward: r.ward, bed: r.bed, lines: [] };
+      p.lines.push({
+        prescriptionId: r.prescription_id, prescriptionNo: r.number, status: r.status, supplyMode: r.supply_mode, prescriptionLineId: r.line_id, lineNo: r.line_no,
+        genericId: r.generic_id, generic: r.generic, dose: r.dose, frequency: r.frequency, route: r.route,
+        dailyQuantity: r.daily_quantity, givenToday: r.given_today, remaining: r.remaining, due, needsVerification: r.status === PrescriptionStatus.RECEIVED,
+      });
+      patients.set(r.patient_id, p);
+    }
+    return { date: today, patients: [...patients.values()] };
+  }
+
+  /** Dispenses a ward round: one dispense per prescription (each in its own transaction); reports per prescription. */
+  async wardSupply(dto: WardSupplyDto, actor: SessionUser) {
+    StoreScope.assert(dto.storeId);
+    const lineIds = dto.lines.map((l) => l.prescriptionLineId);
+    const owners: { id: string; prescription_id: string; store_id: string }[] = await this.ds.query(
+      `SELECT l.id, l.prescription_id, rx.store_id FROM prescription_line l JOIN prescription rx ON rx.id = l.prescription_id WHERE l.id = ANY($1::uuid[])`,
+      [lineIds],
+    );
+    if (owners.length !== new Set(lineIds).size) throw new BadRequestException('A line was not found');
+    if (owners.some((o) => o.store_id !== dto.storeId)) throw new BadRequestException('All lines must be for prescriptions at this outlet');
+    const byRx = new Map<string, typeof dto.lines>();
+    for (const l of dto.lines) {
+      const rxId = owners.find((o) => o.id === l.prescriptionLineId)!.prescription_id;
+      byRx.set(rxId, [...(byRx.get(rxId) ?? []), l]);
+    }
+    const results: { prescriptionId: string; ok: boolean; dispenseId?: string; error?: string }[] = [];
+    for (const [rxId, lines] of byRx) {
+      try {
+        const r = await this.dispense(rxId, { lines, witnessId: dto.witnessId, fefoOverrideReason: dto.fefoOverrideReason }, actor);
+        results.push({ prescriptionId: rxId, ok: true, dispenseId: r.dispenseId });
+      } catch (e) {
+        const resp = (e as { getResponse?: () => unknown }).getResponse?.();
+        results.push({ prescriptionId: rxId, ok: false, error: typeof resp === 'object' && resp && 'message' in resp ? String((resp as { message: unknown }).message) : (e as Error).message });
+      }
+    }
+    return { results, dispensed: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length };
   }
 
   // ------------------------------------------------------------------ reports

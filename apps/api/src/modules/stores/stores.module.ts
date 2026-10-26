@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { HmisModule } from '../hmis/hmis.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { NumberingModule } from '../numbering/numbering.module';
 import { BackorderReplanService } from './backorder-replan.service';
@@ -31,6 +32,7 @@ import {
     TypeOrmModule.forFeature([StoreRequisition, StoreRequisitionLine, IssueVoucher, IssueVoucherLine, DepartmentReturn, DepartmentReturnLine]),
     NumberingModule,
     InventoryModule,
+    HmisModule,
   ],
   controllers: [StoreRequisitionsController, IssuesController, DepartmentReturnsController, ReturnReasonsController, ConsumptionController],
   providers: [ReservationsService, StoreRequisitionsService, IssuesService, DepartmentReturnsService, ConsumptionService, ReturnReasonsService, BackorderReplanService],

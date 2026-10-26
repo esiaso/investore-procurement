@@ -28,8 +28,9 @@ const toBool = ({ value }: { value: unknown }) => (value === 'true' ? true : val
 export class StoreRequisitionLineDto {
   @ApiProperty() @IsUUID() itemId: string;
   @ApiProperty({ description: 'Base units' }) @IsNumber(QTY) @Min(0.0001) quantity: number;
-  @ApiPropertyOptional({ description: 'Patient / encounter reference (free text for now)' })
+  @ApiPropertyOptional({ description: 'Patient / encounter reference (free text; filled from the encounter when one is given)' })
   @IsOptional() @IsString() @MaxLength(100) patientRef?: string;
+  @ApiPropertyOptional({ description: 'HMIS encounter: the patient is charged when the line is issued' }) @IsOptional() @IsUUID() encounterId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }
 

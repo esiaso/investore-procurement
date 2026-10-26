@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BillingModule } from '../billing/billing.module';
 import { EtimsModule } from '../etims/etims.module';
+import { HmisModule } from '../hmis/hmis.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { NumberingModule } from '../numbering/numbering.module';
 import { DrugInteractionsService } from './drug-interactions.service';
@@ -15,6 +16,7 @@ import { PharmacyService } from './pharmacy.service';
     TypeOrmModule.forFeature([Patient, Prescription, PrescriptionLine, Dispense, DispenseLine, DrugInteraction, ClinicalAlert, InteractionOverride]),
     BillingModule,
     EtimsModule,
+    HmisModule,
     InventoryModule,
     NumberingModule,
   ],

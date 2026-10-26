@@ -94,9 +94,13 @@ export class StoreRequisitionLine extends AppBaseEntity {
   @Column({ type: 'varchar', length: 500, nullable: true })
   cancelReason: string | null;
 
-  /** Patient / encounter the consumable is for (free text until the HMIS link). */
+  /** Patient / encounter the consumable is for (free text, or filled from the encounter). */
   @Column({ type: 'varchar', length: 100, nullable: true })
   patientRef: string | null;
+
+  /** HMIS encounter the consumable is for: issuing it charges the patient. */
+  @Column({ type: 'uuid', nullable: true })
+  encounterId: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   notes: string | null;

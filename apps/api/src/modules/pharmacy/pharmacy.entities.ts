@@ -1,15 +1,16 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
-import { ClinicalAlertType, InteractionSeverity, PrescriptionStatus, Sex } from '@sil/shared';
+import { ClinicalAlertType, HmisBillingMode, InteractionSeverity, PrescriptionStatus, Sex, SupplyMode } from '@sil/shared';
 import { AppBaseEntity } from '../../common/entities/base.entity';
 import { numericTransformer, QUANTITY } from '../../common/entities/transformers';
 import { Payer } from '../billing/billing.entities';
 import { Generic, Item } from '../catalog/catalog.entities';
+import type { Encounter } from '../hmis/hmis.entities';
 import { Batch } from '../inventory/inventory.entities';
 import { Store } from '../org/org.entities';
 
 /**
- * Minimal cached patient record (no full register: the HMIS owns patients;
- * slice 9 will sync them). Allergies are substance or class names.
+ * Minimal cached patient record (no full register: the HMIS owns patients
+ * and they are synchronised from it). Allergies are substance or class names.
  */
 @Entity('patient')
 export class Patient extends AppBaseEntity {
@@ -52,6 +53,15 @@ export class Patient extends AppBaseEntity {
 
   @Column({ type: 'varchar', length: 11, nullable: true })
   kraPin: string | null;
+
+  /** HMIS patient id; null for a patient entered here (walk-in, no HMIS). */
+  @Index({ unique: true, where: '"external_id" IS NOT NULL' })
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  externalId: string | null;
+
+  /** Last refreshed from the HMIS. */
+  @Column({ type: 'timestamptz', nullable: true })
+  syncedAt: Date | null;
 }
 
 @Entity('prescription')
@@ -86,6 +96,19 @@ export class Prescription extends AppBaseEntity {
   /** Encounter / visit reference from the HMIS. */
   @Column({ type: 'varchar', length: 100, nullable: true })
   encounterRef: string | null;
+
+  /** The HMIS visit or admission (orders received from the HMIS). */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  encounterId: string | null;
+
+  @ManyToOne('Encounter', { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'encounter_id' })
+  encounter?: Encounter | null;
+
+  /** Outpatient supply, or daily / unit-dose supply to an admitted patient (ward supply list). */
+  @Column({ type: 'enum', enum: SupplyMode, enumName: 'supply_mode', default: SupplyMode.STANDARD })
+  supplyMode: SupplyMode;
 
   /** HMIS order id (idempotency for API-created prescriptions). */
   @Index({ unique: true, where: '"external_ref" IS NOT NULL' })
@@ -166,6 +189,19 @@ export class PrescriptionLine extends AppBaseEntity {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   instructions: string | null;
+
+  /** HMIS order (MedicationRequest) id for this line. */
+  @Index({ unique: true, where: '"external_ref" IS NOT NULL' })
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  externalRef: string | null;
+
+  /** Drug code the HMIS ordered (sent back on the dispense record). */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  hmisDrugCode: string | null;
+
+  /** Daily / unit-dose supply: base units per day. */
+  @Column({ ...QUANTITY, nullable: true })
+  dailyQuantity: number | null;
 }
 
 @Entity('dispense')
@@ -199,6 +235,10 @@ export class Dispense extends AppBaseEntity {
 
   @Column({ type: 'uuid', nullable: true })
   invoiceId: string | null;
+
+  /** LOCAL: invoiced here; HMIS: charged to the patient's HMIS bill (no local invoice). */
+  @Column({ type: 'enum', enum: HmisBillingMode, enumName: 'hmis_billing_mode', default: HmisBillingMode.LOCAL })
+  billingMode: HmisBillingMode;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   fefoOverrideReason: string | null;

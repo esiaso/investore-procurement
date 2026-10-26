@@ -17,6 +17,8 @@ import {
   OverrideDto,
   PatientDto,
   PatientQueryDto,
+  WardSupplyDto,
+  WardSupplyQueryDto,
   WorklistQueryDto,
 } from './pharmacy.dto';
 import { PharmacyService } from './pharmacy.service';
@@ -109,6 +111,18 @@ export class PharmacyController {
   @Post('dispenses/:id/returns') @RequirePermissions(P.PHARMACY_DISPENSE)
   returnDispense(@Param('id', ParseUUIDPipe) id: string, @Body() dto: DispenseReturnDto, @CurrentUser() u: SessionUser) {
     return this.pharmacy.returnDispense(id, dto, u);
+  }
+
+  /** Inpatient daily / unit-dose lines due today at an outlet (optionally one ward). */
+  @Get('ward-supply') @RequirePermissions(P.PHARMACY_READ) @StoreScoped('query.storeId')
+  wardSupplyList(@Query() q: WardSupplyQueryDto) {
+    return this.pharmacy.wardSupplyList(q);
+  }
+
+  /** Dispenses a ward round (one dispense per prescription); returns the result per prescription. */
+  @Post('ward-supply') @HttpCode(200) @RequirePermissions(P.PHARMACY_DISPENSE) @StoreScoped('body.storeId')
+  wardSupply(@Body() dto: WardSupplyDto, @CurrentUser() u: SessionUser) {
+    return this.pharmacy.wardSupply(dto, u);
   }
 
   @Get('interactions') @RequirePermissions(P.PHARMACY_READ)

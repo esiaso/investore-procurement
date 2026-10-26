@@ -18,7 +18,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { InteractionSeverity, PrescriptionStatus, Sex } from '@sil/shared';
+import { InteractionSeverity, PrescriptionStatus, Sex, SupplyMode } from '@sil/shared';
 import { PaymentDto } from '../billing/billing.dto';
 import { PageQueryDto } from '../../common/pagination';
 
@@ -48,6 +48,7 @@ export class PrescriptionLineDto {
   @ApiPropertyOptional({ example: '5 days' }) @IsOptional() @IsString() @MaxLength(60) duration?: string;
   @ApiPropertyOptional({ example: 'PO' }) @IsOptional() @IsString() @MaxLength(60) route?: string;
   @ApiProperty({ description: 'Base units to supply' }) @IsNumber(QTY) @Min(0.0001) quantity: number;
+  @ApiPropertyOptional({ description: 'Daily / unit-dose supply: base units per day' }) @IsOptional() @IsNumber(QTY) @Min(0.0001) dailyQuantity?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) instructions?: string;
 }
 
@@ -57,6 +58,8 @@ export class CreatePrescriptionDto {
   @ApiProperty() @IsString() @MaxLength(200) prescriber: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) prescriberRegNo?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) encounterRef?: string;
+  @ApiPropertyOptional({ description: 'HMIS encounter (visit / admission)' }) @IsOptional() @IsUUID() encounterId?: string;
+  @ApiPropertyOptional({ enum: SupplyMode, description: 'DAILY / UNIT_DOSE: supplied to the ward each day' }) @IsOptional() @IsEnum(SupplyMode) supplyMode?: SupplyMode;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) externalRef?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
   @ApiProperty({ type: [PrescriptionLineDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => PrescriptionLineDto) lines: PrescriptionLineDto[];
@@ -131,4 +134,19 @@ export class AlertReportQueryDto {
   @ApiProperty() @IsDateString({ strict: true }) to: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() storeId?: string;
   @ApiPropertyOptional({ enum: ['json', 'csv'] }) @IsOptional() @IsIn(['json', 'csv']) format?: 'json' | 'csv';
+}
+
+export class WardSupplyQueryDto {
+  @ApiProperty({ description: 'Dispensing outlet' }) @IsUUID() storeId: string;
+  @ApiPropertyOptional({ description: 'Ward' }) @IsOptional() @IsUUID() departmentId?: string;
+}
+
+export class WardSupplyLineDto extends DispenseLineDto {}
+
+/** One round of daily / unit-dose supply: lines across several patients, dispensed per prescription. */
+export class WardSupplyDto {
+  @ApiProperty() @IsUUID() storeId: string;
+  @ApiProperty({ type: [WardSupplyLineDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => WardSupplyLineDto) lines: WardSupplyLineDto[];
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) fefoOverrideReason?: string;
+  @ApiPropertyOptional({ description: 'Second person (controlled drugs)' }) @IsOptional() @IsUUID() witnessId?: string;
 }
