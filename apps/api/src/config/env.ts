@@ -34,6 +34,8 @@ export interface Env {
   jobsMode: 'queue' | 'inline' | 'off';
   /** Sample data only: URL of the mock-etims container for the sample outlets (empty = in-process mock). */
   sampleEtimsUrl: string | null;
+  /** Sample data only: FHIR base of the mock-hmis container (empty = in-process mock). */
+  sampleHmisUrl: string | null;
   /**
    * Attachment storage: s3 (MinIO or any S3-compatible store) or local
    * (a directory; development and tests without MinIO).
@@ -128,6 +130,7 @@ export function loadEnv(): Env {
     chromiumPath: e.CHROMIUM_PATH || null,
     jobsMode: jobsMode(e.JOBS_MODE),
     sampleEtimsUrl: e.SAMPLE_ETIMS_URL || null,
+    sampleHmisUrl: e.SAMPLE_HMIS_URL || null,
     storage: {
       driver: storageDriver(e.STORAGE_DRIVER),
       endpoint: e.S3_ENDPOINT || null,

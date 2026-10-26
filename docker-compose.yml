@@ -30,6 +30,8 @@ x-api-env: &api-env
   JOBS_MODE: ${JOBS_MODE:-queue}
   # Sample pharmacy outlets talk to the mock control unit below (not KRA).
   SAMPLE_ETIMS_URL: ${SAMPLE_ETIMS_URL:-http://mock-etims:8088/etims-api}
+  # Sample HMIS link talks to the mock FHIR server below (not a real HMIS).
+  SAMPLE_HMIS_URL: ${SAMPLE_HMIS_URL:-http://mock-hmis:8090/fhir}
   # Attachments (supplier documents, GRN delivery notes, certificates…) in MinIO (S3).
   STORAGE_DRIVER: ${STORAGE_DRIVER:-s3}
   S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
@@ -79,6 +81,7 @@ services:
       redis: { condition: service_healthy }
       mailpit: { condition: service_started }
       mock-etims: { condition: service_started }
+      mock-hmis: { condition: service_started }
       minio: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -124,6 +127,16 @@ services:
       MOCK_ETIMS_PORT: 8088
     ports:
       - "${MOCK_ETIMS_PORT:-8088}:8088"
+    restart: unless-stopped
+
+  # Mock HMIS (FHIR R4) seeded with the sample patients. Control endpoints under /_mock.
+  mock-hmis:
+    build: { context: ., target: api }
+    command: ["node", "dist/mock-hmis.js"]
+    environment:
+      MOCK_HMIS_PORT: 8090
+    ports:
+      - "${MOCK_HMIS_PORT:-8090}:8090"
     restart: unless-stopped
 
   # S3-compatible object storage for attachments. Console: http://localhost:9001
