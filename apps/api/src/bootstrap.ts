@@ -26,6 +26,8 @@ export async function createRedisClient(env: Env): Promise<RedisClientType> {
 /** HTTP pipeline shared by main.ts and the integration tests. */
 export function configureApp(app: NestExpressApplication, env: Env, redis: RedisClientType): void {
   app.setGlobalPrefix(API_PREFIX);
+  // JSON, and FHIR from the HMIS (application/fhir+json). Replaces Nest's default JSON parser.
+  app.useBodyParser('json', { type: ['application/json', 'application/fhir+json'], limit: '1mb' });
   app.set('trust proxy', env.trustProxy ? 1 : false);
   // JSON API; CSP is left to the web front end (and would block the Swagger UI).
   app.use(helmet({ contentSecurityPolicy: false }));
