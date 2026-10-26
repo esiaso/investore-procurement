@@ -109,7 +109,7 @@ export class PosAdminService {
       const [{ balance }] = await m.query(`SELECT COALESCE(SUM(amount), 0)::float AS balance FROM customer_ledger WHERE customer_id = $1`, [id]);
       if (dto.amount > balance + 0.001) throw new BadRequestException(`${c.name} owes ${round2(balance)}`);
       if (dto.modeCode !== 'CASH' && !dto.reference?.trim()) throw new BadRequestException('Give the M-Pesa code or card slip number');
-      await m.save(m.create(CustomerLedger, { customerId: id, type: CustomerLedgerType.PAYMENT, amount: -dto.amount, reference: dto.reference?.trim() || dto.modeCode, userId: actor.id }));
+      await m.save(m.create(CustomerLedger, { customerId: id, type: CustomerLedgerType.PAYMENT, amount: -dto.amount, reference: dto.reference?.trim() || dto.modeCode, modeCode: dto.modeCode, userId: actor.id }));
       const shift = dto.terminalId ? await m.findOneBy(PosShift, { terminalId: dto.terminalId, cashierId: actor.id, status: PosShiftStatus.OPEN }) : null;
       if (dto.terminalId && !shift) throw new ConflictException('Open a shift on this till to take the payment');
       await m.save(m.create(PosEvent, { type: PosEventType.ACCOUNT_PAYMENT, shiftId: shift?.id ?? null, terminalId: dto.terminalId ?? null, userId: actor.id, amount: dto.amount, reason: c.code, details: { modeCode: dto.modeCode, customerId: id, reference: dto.reference ?? null } }));

@@ -153,6 +153,11 @@ export const Permissions = {
   /** Tills, promotions, M-Pesa settings, customer credit limits. */
   POS_MANAGE: 'pos.manage',
   POS_REPORTS: 'pos.reports',
+  ACCOUNTING_READ: 'accounting.read',
+  /** Connect QuickBooks, account / class / tax mappings, master data sync. */
+  ACCOUNTING_MANAGE: 'accounting.manage',
+  /** Preview and post batches to QuickBooks; reprocess failed postings. */
+  ACCOUNTING_POST: 'accounting.post',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -262,6 +267,9 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'pos.approve_variance': 'Decide cash-up variances outside the tolerance',
   'pos.manage': 'Manage tills, promotions, M-Pesa settings and customer credit',
   'pos.reports': 'View POS sales, shift, margin and void reports',
+  'accounting.read': 'View QuickBooks postings, mappings and reconciliation',
+  'accounting.manage': 'Connect QuickBooks, map accounts, classes and tax codes, sync master data',
+  'accounting.post': 'Preview and post batches to QuickBooks; reprocess failed postings',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

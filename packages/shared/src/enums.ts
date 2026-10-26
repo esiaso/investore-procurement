@@ -97,6 +97,8 @@ export enum DocumentType {
   SERVICE_CERTIFICATE = 'SCC',
   POS_SHIFT = 'SHF',
   CUSTOMER = 'CUS',
+  ACCOUNTING_BATCH = 'QBB',
+  PAYER_SETTLEMENT = 'RCV',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -931,4 +933,65 @@ export enum CustomerLedgerType {
   SALE = 'SALE',
   PAYMENT = 'PAYMENT',
   REFUND = 'REFUND',
+}
+
+// ------------------------------------------------------------------ slice 11: QuickBooks accounting
+
+/** Accounting system behind the AccountingAdapter. */
+export enum AccountingProvider {
+  QBO = 'QBO',
+  MOCK = 'MOCK',
+}
+
+export enum QboEnvironment {
+  SANDBOX = 'SANDBOX',
+  PRODUCTION = 'PRODUCTION',
+}
+
+/** What a local document becomes in QuickBooks. */
+export enum PostingDocType {
+  BILL = 'BILL',
+  BILL_PAYMENT = 'BILL_PAYMENT',
+  VENDOR_CREDIT = 'VENDOR_CREDIT',
+  SALES_RECEIPT = 'SALES_RECEIPT',
+  INVOICE = 'INVOICE',
+  PAYMENT = 'PAYMENT',
+  REFUND_RECEIPT = 'REFUND_RECEIPT',
+  CREDIT_MEMO = 'CREDIT_MEMO',
+  JOURNAL = 'JOURNAL',
+}
+
+/** READY (previewed, valid) → POSTED; BLOCKED (mapping missing, period closed); PENDING (retrying); FAILED. */
+export enum PostingStatus {
+  READY = 'READY',
+  BLOCKED = 'BLOCKED',
+  PENDING = 'PENDING',
+  POSTED = 'POSTED',
+  FAILED = 'FAILED',
+}
+
+export enum AccountMappingKind {
+  /** Item category → inventory asset account. */
+  CATEGORY_INVENTORY = 'CATEGORY_INVENTORY',
+  CATEGORY_COGS = 'CATEGORY_COGS',
+  CATEGORY_INCOME = 'CATEGORY_INCOME',
+  /** Departmental consumption (issues to wards / departments). */
+  CATEGORY_CONSUMPTION = 'CATEGORY_CONSUMPTION',
+  /** Store → QuickBooks class (or location). */
+  STORE_CLASS = 'STORE_CLASS',
+  /** Department / cost centre → QuickBooks class. */
+  DEPARTMENT_CLASS = 'DEPARTMENT_CLASS',
+  /** Tax category → QuickBooks tax code. */
+  TAX_CODE = 'TAX_CODE',
+  /** Payment mode / payment method → bank or cash account money goes into or out of. */
+  PAYMENT_ACCOUNT = 'PAYMENT_ACCOUNT',
+  /** Control accounts: GRNI, AP, AR, VAT, stock adjustment, write-off, in transit, opening balance. */
+  SYSTEM = 'SYSTEM',
+}
+
+/** Local master data mirrored in QuickBooks. */
+export enum ExternalEntity {
+  VENDOR = 'VENDOR',
+  CUSTOMER = 'CUSTOMER',
+  ITEM = 'ITEM',
 }

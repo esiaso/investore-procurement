@@ -34,6 +34,12 @@ export const PROCUREMENT_SCHEDULES: Record<string, string> = {
   'suppliers.leadtimes': '30 5 1 * *',
 };
 
+/** Slice 11 QuickBooks jobs (also merged into existing installations by a migration). */
+export const ACCOUNTING_SCHEDULES: Record<string, string> = {
+  'accounting.dispatch': '*/5 * * * *',
+  'accounting.refresh': '15 * * * *',
+};
+
 /** Slice 9 HMIS jobs (also merged into existing installations by a migration). */
 export const HMIS_SCHEDULES: Record<string, string> = {
   'hmis.dispatch': '* * * * *',
@@ -124,6 +130,7 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
       ...ETIMS_SCHEDULES,
       ...PROCUREMENT_SCHEDULES,
       ...HMIS_SCHEDULES,
+      ...ACCOUNTING_SCHEDULES,
     },
     description: 'Background job schedules (cron, in locale.timezone). Remove a job to stop scheduling it.',
     isPublic: false,
@@ -194,6 +201,12 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'pos.offlineMaxHours', value: 72, description: 'Offline till sales older than this are refused at sync', isPublic: true },
   { key: 'pos.manualMpesaRequiresMatch', value: false, description: 'A typed M-Pesa code must match a confirmation received from Safaricom', isPublic: true },
   { key: 'mpesa.stkTimeoutSeconds', value: 120, description: 'How long an STK push waits for the customer before it times out', isPublic: true },
+  { key: 'accounting.journalFrequency', value: 'MONTHLY', description: 'Post inventory journals (cost of sales, consumption, write-offs, transfers) per DAILY or MONTHLY period', isPublic: false },
+  { key: 'accounting.syncItems', value: false, description: 'Create each item in QuickBooks as a non-inventory product (otherwise one product per item category)', isPublic: false },
+  { key: 'accounting.walkInCustomer', value: 'Walk-in customers', description: 'QuickBooks customer used for walk-in sales and patients on account without a payer', isPublic: false },
+  { key: 'accounting.maxAttempts', value: 8, description: 'Attempts to post a document to QuickBooks before it is marked failed', isPublic: false },
+  { key: 'accounting.retryBaseSeconds', value: 60, description: 'QuickBooks retry back-off base (seconds, doubled per attempt, capped at 1 hour)', isPublic: false },
+  { key: 'accounting.requestTimeoutMs', value: 15000, description: 'Timeout for each call to QuickBooks (ms)', isPublic: false },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
   {
     key: 'pharmacy.blockingSeverities',
@@ -284,6 +297,8 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.SERVICE_CERTIFICATE, prefix: 'SCC', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
   { documentType: DocumentType.POS_SHIFT, prefix: 'Z', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.CUSTOMER, prefix: 'CUS', format: '{PREFIX}{SEQ}', padding: 5, resetEachYear: false },
+  { documentType: DocumentType.ACCOUNTING_BATCH, prefix: 'QBB', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.PAYER_SETTLEMENT, prefix: 'RCV', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
 ];
 
 export const DEFAULT_UOMS: [code: string, name: string][] = [
@@ -367,7 +382,7 @@ const READ_ALL: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
   P.PATIENTS_READ, P.PHARMACY_READ, P.BILLING_READ, P.ETIMS_READ,
   P.FORECASTING_READ, P.PLANS_READ, P.TENDERS_READ, P.CONTRACTS_READ, P.PROCUREMENT_KPIS,
-  P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ, P.POS_REPORTS,
+  P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ, P.POS_REPORTS, P.ACCOUNTING_READ,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
 /** Strategic procurement (slice 7) for procurement staff. */
@@ -469,6 +484,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
       P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE, P.HMIS_READ,
       P.POS_REPORTS, P.POS_APPROVE_VARIANCE, P.POS_MANAGE, P.POS_REFUND,
+      P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST,
       P.PLANS_READ, P.CONTRACTS_READ, P.TENDERS_READ, P.PROCUREMENT_KPIS, P.DISPOSALS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ],
   },
   {

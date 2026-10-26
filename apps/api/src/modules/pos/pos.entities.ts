@@ -286,6 +286,10 @@ export class CustomerLedger {
   @Column({ type: 'varchar', length: 100, nullable: true })
   reference: string | null;
 
+  /** How a payment on account was paid (CASH, MPESA, CARD). */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  modeCode: string | null;
+
   @Column({ type: 'uuid', nullable: true })
   userId: string | null;
 

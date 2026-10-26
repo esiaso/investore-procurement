@@ -145,6 +145,15 @@ export interface SettingTypes {
   'pos.manualMpesaRequiresMatch': boolean;
   /** Seconds to wait for the customer to answer an STK push before it is treated as timed out. */
   'mpesa.stkTimeoutSeconds': number;
+  /** Inventory journals per DAILY or MONTHLY period (only finished periods are journaled). */
+  'accounting.journalFrequency': 'DAILY' | 'MONTHLY';
+  /** Sync each item to QuickBooks as a non-inventory product (else one product per category). */
+  'accounting.syncItems': boolean;
+  /** QuickBooks customer for walk-in sales and for patients billed on account without a payer. */
+  'accounting.walkInCustomer': string;
+  'accounting.maxAttempts': number;
+  'accounting.retryBaseSeconds': number;
+  'accounting.requestTimeoutMs': number;
 }
 
 export interface SourcingMethodRule {
