@@ -140,6 +140,19 @@ export const Permissions = {
   HMIS_MANAGE: 'hmis.manage',
   /** Charge ward / theatre consumables to an admitted patient's encounter. */
   PATIENTS_CHARGE: 'patients.charge',
+  /** Open a shift on a till and sell over the counter. */
+  POS_SELL: 'pos.sell',
+  /** Approve pharmacy-only / prescription-only sales and interaction overrides at the till (pharmacist). */
+  POS_APPROVE_POM: 'pos.approve_pom',
+  /** Discounts above the role limit (manager override). */
+  POS_OVERRIDE: 'pos.override',
+  POS_VOID: 'pos.void',
+  POS_REFUND: 'pos.refund',
+  /** Decide cash-up variances outside the tolerance. */
+  POS_APPROVE_VARIANCE: 'pos.approve_variance',
+  /** Tills, promotions, M-Pesa settings, customer credit limits. */
+  POS_MANAGE: 'pos.manage',
+  POS_REPORTS: 'pos.reports',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -241,6 +254,14 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'hmis.read': 'View encounters, HMIS messages and the integration dashboard',
   'hmis.manage': 'Configure the HMIS connection and code mappings, reprocess messages, import patients',
   'patients.charge': 'Charge consumables used on a patient to their encounter',
+  'pos.sell': 'Open a till shift and sell over the counter',
+  'pos.approve_pom': 'Approve pharmacy-only and prescription-only sales and interaction overrides at the till',
+  'pos.override': 'Authorise discounts above the role limit',
+  'pos.void': 'Void a sale in the current shift',
+  'pos.refund': 'Refund a sale (credit note)',
+  'pos.approve_variance': 'Decide cash-up variances outside the tolerance',
+  'pos.manage': 'Manage tills, promotions, M-Pesa settings and customer credit',
+  'pos.reports': 'View POS sales, shift, margin and void reports',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

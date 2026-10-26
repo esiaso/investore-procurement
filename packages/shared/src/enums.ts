@@ -95,6 +95,8 @@ export enum DocumentType {
   SHIPMENT = 'SHP',
   ASSET = 'AST',
   SERVICE_CERTIFICATE = 'SCC',
+  POS_SHIFT = 'SHF',
+  CUSTOMER = 'CUS',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -867,4 +869,66 @@ export enum PatientChargeStatus {
   PENDING = 'PENDING',
   POSTED = 'POSTED',
   FAILED = 'FAILED',
+}
+
+// ------------------------------------------------------------------ slice 10: point of sale
+
+export enum PosShiftStatus {
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED',
+}
+
+/** Cash-up variance outside pos.varianceTolerance needs a supervisor's decision. */
+export enum VarianceStatus {
+  NONE = 'NONE',
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+export enum PosSaleStatus {
+  COMPLETED = 'COMPLETED',
+  VOIDED = 'VOIDED',
+  PARTLY_REFUNDED = 'PARTLY_REFUNDED',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum PosEventType {
+  VOID_LINE = 'VOID_LINE',
+  VOID_SALE = 'VOID_SALE',
+  REFUND = 'REFUND',
+  DISCOUNT_OVERRIDE = 'DISCOUNT_OVERRIDE',
+  PHARMACIST_APPROVAL = 'PHARMACIST_APPROVAL',
+  INTERACTION_OVERRIDE = 'INTERACTION_OVERRIDE',
+  ACCOUNT_PAYMENT = 'ACCOUNT_PAYMENT',
+  OFFLINE_REJECTED = 'OFFLINE_REJECTED',
+}
+
+export enum MpesaEnvironment {
+  SANDBOX = 'SANDBOX',
+  PRODUCTION = 'PRODUCTION',
+  MOCK = 'MOCK',
+}
+
+export enum MpesaMethod {
+  /** Lipa na M-Pesa Online (STK Push) started at the till. */
+  STK = 'STK',
+  /** Customer paid the till / paybill; confirmation received from Daraja C2B. */
+  C2B = 'C2B',
+  /** Code typed by the cashier with no confirmation (yet). */
+  MANUAL = 'MANUAL',
+}
+
+export enum MpesaStatus {
+  PENDING = 'PENDING',
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+  TIMEOUT = 'TIMEOUT',
+}
+
+export enum CustomerLedgerType {
+  SALE = 'SALE',
+  PAYMENT = 'PAYMENT',
+  REFUND = 'REFUND',
 }

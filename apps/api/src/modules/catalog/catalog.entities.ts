@@ -53,6 +53,10 @@ export class Generic extends AppBaseEntity {
   @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
   minAgeYears: number | null;
 
+  /** Over-the-counter limit per sale, in base units, across its brands (e.g. paracetamol, codeine products). */
+  @Column({ ...QUANTITY, nullable: true })
+  maxQtyPerSale: number | null;
+
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 

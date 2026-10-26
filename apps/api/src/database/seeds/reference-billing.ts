@@ -20,6 +20,7 @@ export const DEFAULT_PAYMENT_MODES: { code: string; name: string; etimsPaymentTy
   { code: 'INSURANCE', name: 'Insurance', etimsPaymentTypeCode: '02', requiresReference: false, isCredit: true },
   { code: 'CORPORATE', name: 'Corporate', etimsPaymentTypeCode: '02', requiresReference: false, isCredit: true },
   { code: 'CREDIT', name: 'On account (credit)', etimsPaymentTypeCode: '02', requiresReference: false, isCredit: true },
+  { code: 'LOYALTY', name: 'Loyalty points', etimsPaymentTypeCode: '07', requiresReference: false, isCredit: false },
 ];
 
 /**

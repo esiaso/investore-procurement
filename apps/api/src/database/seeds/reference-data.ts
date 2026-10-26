@@ -187,6 +187,13 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'hmis.retryBaseSeconds', value: 30, description: 'HMIS retry back-off base (seconds, doubled per attempt, capped at 1 hour)', isPublic: false },
   { key: 'hmis.alertAfterMinutes', value: 30, description: 'Alert integration admins about HMIS messages failed or unsent after this many minutes', isPublic: false },
   { key: 'hmis.patientRefreshHours', value: 12, description: 'Re-read a cached patient (demographics, allergies) from the HMIS when older than this', isPublic: false },
+  { key: 'pos.discountLimits', value: { POS_CASHIER: 5, PHARMACY_TECHNICIAN: 5, PHARMACIST: 15, SYSTEM_ADMIN: 100 }, description: 'Largest manual discount (%) per role at the till; above it a supervisor (pos.override) authorises', isPublic: true },
+  { key: 'pos.varianceTolerance', value: 50, description: 'Cash-up difference (KES) accepted without a supervisor', isPublic: true },
+  { key: 'pos.defaultSalesClass', value: 'P', description: 'Sales class for items without one (OTC, P pharmacy-only, POM prescription-only, CD controlled)', isPublic: true },
+  { key: 'pos.loyalty', value: { enabled: true, earnPerAmount: 100, pointValue: 1, minRedeemPoints: 50 }, description: 'Loyalty: 1 point per earnPerAmount paid; a point is worth pointValue when redeemed', isPublic: true },
+  { key: 'pos.offlineMaxHours', value: 72, description: 'Offline till sales older than this are refused at sync', isPublic: true },
+  { key: 'pos.manualMpesaRequiresMatch', value: false, description: 'A typed M-Pesa code must match a confirmation received from Safaricom', isPublic: true },
+  { key: 'mpesa.stkTimeoutSeconds', value: 120, description: 'How long an STK push waits for the customer before it times out', isPublic: true },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
   {
     key: 'pharmacy.blockingSeverities',
@@ -275,6 +282,8 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.SHIPMENT, prefix: 'SHP', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.ASSET, prefix: 'AST', format: '{PREFIX}{SEQ}', padding: 6, resetEachYear: false },
   { documentType: DocumentType.SERVICE_CERTIFICATE, prefix: 'SCC', format: '{PREFIX}/{FY}/{SEQ}', padding: 4, resetEachYear: true },
+  { documentType: DocumentType.POS_SHIFT, prefix: 'Z', format: '{PREFIX}/{STORE}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.CUSTOMER, prefix: 'CUS', format: '{PREFIX}{SEQ}', padding: 5, resetEachYear: false },
 ];
 
 export const DEFAULT_UOMS: [code: string, name: string][] = [
@@ -358,7 +367,7 @@ const READ_ALL: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
   P.PATIENTS_READ, P.PHARMACY_READ, P.BILLING_READ, P.ETIMS_READ,
   P.FORECASTING_READ, P.PLANS_READ, P.TENDERS_READ, P.CONTRACTS_READ, P.PROCUREMENT_KPIS,
-  P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ,
+  P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ, P.POS_REPORTS,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
 /** Strategic procurement (slice 7) for procurement staff. */
@@ -412,6 +421,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.FORECASTING_READ, P.FORECASTING_MANAGE, P.PLANS_READ, P.PLANS_MANAGE,
       P.QUALITY_READ, P.QUALITY_MANAGE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.DISTRIBUTION_MANAGE, P.FILES_UPLOAD,
       P.HMIS_READ, P.PATIENTS_CHARGE,
+      P.POS_SELL, P.POS_APPROVE_POM, P.POS_OVERRIDE, P.POS_VOID, P.POS_REFUND, P.POS_APPROVE_VARIANCE, P.POS_REPORTS,
     ],
   },
   {
@@ -423,10 +433,10 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_STOCKTAKE, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.PURCHASING_READ,
       P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_ALERTS,
       P.PATIENTS_READ, P.PATIENTS_MANAGE, P.PHARMACY_READ, P.PHARMACY_PRESCRIPTION, P.PHARMACY_DISPENSE, P.BILLING_READ, P.BILLING_INVOICE,
-      P.HMIS_READ,
+      P.HMIS_READ, P.POS_SELL,
     ],
   },
-  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ, P.PATIENTS_READ, P.BILLING_READ, P.BILLING_INVOICE] },
+  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ, P.PATIENTS_READ, P.BILLING_READ, P.BILLING_INVOICE, P.POS_SELL] },
   {
     code: RoleCodes.QUALITY_OFFICER,
     name: 'Cold-chain / Quality Officer',
@@ -458,6 +468,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
       P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
       P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE, P.HMIS_READ,
+      P.POS_REPORTS, P.POS_APPROVE_VARIANCE, P.POS_MANAGE, P.POS_REFUND,
       P.PLANS_READ, P.CONTRACTS_READ, P.TENDERS_READ, P.PROCUREMENT_KPIS, P.DISPOSALS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ],
   },
   {

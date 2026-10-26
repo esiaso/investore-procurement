@@ -131,6 +131,20 @@ export interface SettingTypes {
   'hmis.alertAfterMinutes': number;
   /** Re-read a cached patient from the HMIS when older than this (hours) before using it. */
   'hmis.patientRefreshHours': number;
+  /** Largest manual discount % per role code at the till; above it a pos.override holder must authorise. */
+  'pos.discountLimits': Record<string, number>;
+  /** Cash-up variance (currency) accepted without a supervisor. */
+  'pos.varianceTolerance': number;
+  /** Sales class of items with none set (OTC | P | POM | CD). */
+  'pos.defaultSalesClass': string;
+  /** Loyalty: points earned per amount paid, value of a point, minimum points to redeem. */
+  'pos.loyalty': { enabled: boolean; earnPerAmount: number; pointValue: number; minRedeemPoints: number };
+  /** Offline sales older than this (hours) are not accepted at sync. */
+  'pos.offlineMaxHours': number;
+  /** Manual M-Pesa codes must match a confirmation received from Safaricom (C2B). */
+  'pos.manualMpesaRequiresMatch': boolean;
+  /** Seconds to wait for the customer to answer an STK push before it is treated as timed out. */
+  'mpesa.stkTimeoutSeconds': number;
 }
 
 export interface SourcingMethodRule {

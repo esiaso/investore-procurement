@@ -177,6 +177,7 @@ export const genericSchema = z.object({
   /** Dispensing checks. */
   pregnancyContraindicated: z.boolean().default(false),
   minAgeYears: z.number().min(0).max(120).nullish(),
+  maxQtyPerSale: z.number().positive().nullish(),
   isActive: z.boolean().default(true),
 });
 export type GenericInput = z.infer<typeof genericSchema>;
