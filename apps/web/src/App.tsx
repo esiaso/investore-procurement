@@ -8,6 +8,8 @@ import { AdjustmentsPage } from './inventory/AdjustmentsPage';
 import { BillingReportsPage, BillingSetupPage, SaleFormPage, SalesInvoiceDetailPage, SalesInvoicesPage } from './billing/BillingPages';
 import { EtimsConsolePage } from './etims/EtimsPages';
 import { EncounterDetailPage, EncountersPage, HmisConsolePage, WardSupplyPage } from './hmis/HmisPages';
+import { PosReportsPage, PosSetupPage, PosShiftsPage } from './pos/PosPages';
+import { TillPage } from './pos/TillPage';
 import { InteractionsPage, PatientsPage, PharmacyWorklistPage, PrescriptionDetailPage, PrescriptionFormPage } from './pharmacy/PharmacyPages';
 import { ApprovalsPage } from './purchasing/ApprovalsPage';
 import { BudgetsPage } from './purchasing/BudgetsPage';
@@ -176,6 +178,10 @@ export function App() {
         <Route path="encounters" element={guardedAny([Permissions.HMIS_READ, Permissions.PATIENTS_READ], <EncountersPage />)} />
         <Route path="encounters/:id" element={guardedAny([Permissions.HMIS_READ, Permissions.PATIENTS_READ], <EncounterDetailPage />)} />
         <Route path="hmis" element={guarded([Permissions.HMIS_READ], <HmisConsolePage />)} />
+        <Route path="pos" element={guarded([Permissions.POS_SELL], <TillPage />)} />
+        <Route path="pos/shifts" element={guardedAny([Permissions.POS_REPORTS, Permissions.POS_APPROVE_VARIANCE], <PosShiftsPage />)} />
+        <Route path="pos/setup" element={guardedAny([Permissions.POS_MANAGE, Permissions.POS_SELL], <PosSetupPage />)} />
+        <Route path="pos/reports" element={guarded([Permissions.POS_REPORTS], <PosReportsPage />)} />
         <Route path="patients" element={guardedAny([Permissions.PATIENTS_READ, Permissions.PHARMACY_READ], <PatientsPage />)} />
         <Route path="sales" element={guardedAny([Permissions.BILLING_READ, Permissions.BILLING_INVOICE], <SalesInvoicesPage />)} />
         <Route path="sales/new" element={guarded([Permissions.BILLING_INVOICE], <SaleFormPage />)} />

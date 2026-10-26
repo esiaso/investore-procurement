@@ -47,6 +47,7 @@ export function GenericDialog({ generic, onClose }: { generic: Generic | 'new'; 
           lactationNotes: generic.lactationNotes ?? '',
           pregnancyContraindicated: generic.pregnancyContraindicated ?? false,
           minAgeYears: generic.minAgeYears ?? null,
+          maxQtyPerSale: generic.maxQtyPerSale ?? null,
           isActive: generic.isActive,
         },
   });
@@ -89,6 +90,7 @@ export function GenericDialog({ generic, onClose }: { generic: Generic | 'new'; 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
         <RHFSwitch control={control} name="pregnancyContraindicated" label="Contraindicated in pregnancy (dispensing alert)" />
         <RHFNumber control={control} name="minAgeYears" label="Minimum age (years)" />
+        <RHFNumber control={control} name="maxQtyPerSale" label="Over-the-counter limit per sale (base units)" />
       </Stack>
       <Stack direction="row" spacing={2}>
         <RHFSwitch control={control} name="isKeml" label="On KEML" />

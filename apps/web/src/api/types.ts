@@ -115,6 +115,7 @@ export interface Generic extends Base {
   lactationNotes: string | null;
   pregnancyContraindicated?: boolean;
   minAgeYears?: number | null;
+  maxQtyPerSale?: number | null;
   isActive: boolean;
   items?: Item[];
 }

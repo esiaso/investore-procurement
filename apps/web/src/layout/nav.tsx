@@ -65,6 +65,10 @@ import SailingIcon from '@mui/icons-material/Sailing';
 import HubIcon from '@mui/icons-material/Hub';
 import HotelIcon from '@mui/icons-material/Hotel';
 import VaccinesIcon from '@mui/icons-material/Vaccines';
+import ShoppingBasketIcon from '@mui/icons-material/ShoppingBasket';
+import PriceCheckIcon from '@mui/icons-material/PriceCheck';
+import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
+import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import type { ReactNode } from 'react';
 import { PermissionCode, Permissions } from '@sil/shared';
 
@@ -115,6 +119,10 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Billing setup', path: '/billing/setup', icon: <PriceChangeIcon />, permissions: [P.BILLING_READ], section: 'Pharmacy & billing' },
   { label: 'KRA eTIMS', path: '/etims', icon: <VerifiedIcon />, permissions: [P.ETIMS_READ], section: 'Pharmacy & billing' },
   { label: 'HMIS integration', path: '/hmis', icon: <HubIcon />, permissions: [P.HMIS_READ], section: 'Pharmacy & billing' },
+  { label: 'Till', path: '/pos', icon: <ShoppingBasketIcon />, permissions: [P.POS_SELL], section: 'Point of sale' },
+  { label: 'Shifts & cash-up', path: '/pos/shifts', icon: <PriceCheckIcon />, permissions: [], anyOf: [P.POS_REPORTS, P.POS_APPROVE_VARIANCE], section: 'Point of sale' },
+  { label: 'POS reports', path: '/pos/reports', icon: <QueryStatsIcon />, permissions: [P.POS_REPORTS], section: 'Point of sale' },
+  { label: 'POS setup', path: '/pos/setup', icon: <SettingsSuggestIcon />, permissions: [], anyOf: [P.POS_MANAGE, P.POS_SELL], section: 'Point of sale' },
   { label: 'Internal requisitions', path: '/store-requisitions', icon: <AssignmentTurnedInIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
   { label: 'Issue vouchers', path: '/issues', icon: <OutboxIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
   { label: 'Back-orders', path: '/backorders', icon: <PendingActionsIcon />, permissions: [], anyOf: STORES_SEE, section: 'Wards & issues' },
