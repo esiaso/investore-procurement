@@ -1378,6 +1378,121 @@ New settings:
 
 Job: `reports.scheduled`. Generic field `vedClass`.
 
+## Non-stock procurement — phase 1: approval engine, requisitions → purchase requisitions
+
+Goods and services that are not held in stock go through the same purchasing cycle as
+stock items. Examples: consultancy, repairs, utilities, office services, and capital
+items expensed directly.
+
+Each purchase line now has a **line type**: `STOCK`, `NON_STOCK_GOODS`, `SERVICE` or
+`CAPEX_EXPENSED`. A non-stock line carries a description, a unit, an optional catalog
+item and category, a **GL account** and a project. Non-stock lines never change stock
+levels.
+
+### Staff requisitions (*Procurement → My requisitions*)
+
+Any staff member (`requisitions.create`) raises a requisition (`REQ-2026-00001`) for
+their own department or on behalf of another.
+* **Header:** department / cost centre, project, priority, date required, justification,
+  attachments (quotes, specifications, photos) and an optional budget line.
+* **Lines:**
+  * Stock lines name a catalog item and the store that issues it.
+  * Non-stock lines need a description and an estimated cost.
+  * The GL account is optional by default; setting `requisitions.requireGlAccount` makes it
+    required.
+
+**Submitting.** The budget is checked first. The budget's own WARN or BLOCK setting
+applies: a warning is shown, or the submission is refused.
+
+**Approving.** The requisition goes through the approval matrix (`REQ`). The default rule
+is the head of department (Department in-charge of that department); above 500,000 the
+Finance manager also approves.
+
+**After approval:**
+* Stock lines automatically become an approved internal store requisition: stock is
+  reserved and the store is told.
+* Non-stock lines join the **procurement queue**.
+
+Statuses: Draft → Submitted → Approved → Partly converted / Converted → Closed;
+Rejected, Returned (amend and resubmit), Cancelled. Each line shows where it is: the
+store requisition, or the purchase requisition it was put on. *PDF* prints the
+requisition with its approval signatures.
+
+### Procurement queue → purchase requisition (*Procurement → Procurement queue*)
+
+Procurement (`requisitions.read_all`, `purchasing.consolidate`) sees approved non-stock
+lines from every department.
+* Select lines from any departments and create **one purchase requisition**.
+* The PR records the owning department, delivery location, procurement method (Direct,
+  RFQ, tender…), suggested suppliers and justification.
+* Each PR line keeps a link to its requisition line.
+* The PR is a draft. It is submitted and approved like any other PR (value bands).
+* If the PR is rejected or cancelled, its lines go back to the queue.
+* The document chain shows REQ → SR and REQ → PR.
+
+Quoting, ordering (LPO / LSO), service acceptance and payment of non-stock lines arrive
+in phases 2–4. Until then, a PR with non-stock lines cannot go on a stock RFQ or PO; it
+is refused with `NON_STOCK_LINES`.
+
+### Approval engine (shared by every document)
+
+*Approvals → Workflows* (`approvals.manage`).
+
+**Rules.** A rule matches by document type, amount band (base currency), department,
+item category and **currency**. The most specific rule wins, then priority.
+
+**Steps.** Each step can set:
+* **approvals needed** (a parallel level: any N different role holders);
+* **remind after** N hours (once);
+* **escalate after** N hours to a role, whose members can then act on the step too.
+
+The `approvals.escalate` job runs every 15 minutes and records REMIND / ESCALATE actions
+in the history.
+
+**Editing a rule.** Editing a workflow while documents are in approval keeps the old
+version for them (renamed `CODE~v1`, inactive). The change applies to documents
+submitted afterwards.
+
+**Segregation of duties:**
+* The requester never approves.
+* Each approval in a cycle is by a different person.
+* A document can name further users who may not approve it, for example the preparer of
+  a payment.
+
+**Records.** Every action records the channel (in app / email link), IP and device.
+
+**Approve by email link.** Each approver's email has a personal link
+(`/approve/<token>`) to approve, reject or return without signing in:
+* the link is single use and bound to that approver and step;
+* it expires after `approvals.linkExpiryHours` (72);
+* only its SHA-256 is stored.
+
+Approval emails follow each user's notification preference (*APPROVALS* category). SMS
+links wait for an SMS provider.
+
+### Finance master data (*Accounts & currencies*)
+
+* **GL accounts** (`finance.gl_manage`). Imported from QuickBooks (*Import from
+  QuickBooks*), or maintained here.
+* **Projects** (`projects.manage`).
+* **Currencies and exchange rates** (`finance.exchange_rates`). KES is the base; other
+  currencies use the latest rate on or before a date.
+
+The sample data adds 16 GL accounts, 3 projects and USD / EUR / GBP rates.
+
+### Configuration added
+
+| | |
+|---|---|
+| Environment | `APP_PUBLIC_URL` — web address used in approval emails |
+| Settings | `approvals.linkExpiryHours`, `requisitions.requireGlAccount` |
+| Permissions | `requisitions.create` (all staff roles), `requisitions.read_all`, `purchasing.consolidate`, `finance.gl_manage`, `projects.manage`, `finance.exchange_rates` |
+| Role | Finance Manager / CFO (sample user `finance.manager`) |
+| Numbering | REQ `{PREFIX}-{FY}-{SEQ}` |
+| Jobs | `approvals.escalate` (every 15 min) |
+| Notification categories | APPROVALS, REQUISITIONS |
+| API | `/staff-requisitions` (+ `/queue`, `/consolidate`, `/:id/submit`, `/:id/cancel`, `/:id/pdf`), `/gl-accounts`, `/projects`, `/currencies`, `/exchange-rates`, `/approval-links/:token` (public) |
+
 ## Known limitations / next slices
 
 * Reports run on the live database (no reporting replica or pre-aggregation); very
