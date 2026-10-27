@@ -170,6 +170,12 @@ export const Permissions = {
   PURCHASING_CONSOLIDATE: 'purchasing.consolidate',
   /** Hand received non-stock goods / services over to the requester (final user). */
   PURCHASING_HANDOVER: 'purchasing.handover',
+  /** Prepare payment vouchers from approved supplier invoices. */
+  PAYMENTS_PREPARE: 'payments.prepare',
+  /** Release approved payments (bank / cheque reference, or M-PESA dispatch); never the preparer or an approver. */
+  PAYMENTS_RELEASE: 'payments.release',
+  /** M-PESA statements, reconciliation and the payment review queue. */
+  PAYMENTS_RECONCILE: 'payments.reconcile',
   /** Chart of accounts (GL accounts used on non-stock lines). */
   GL_MANAGE: 'finance.gl_manage',
   PROJECTS_MANAGE: 'projects.manage',
@@ -293,6 +299,9 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'requisitions.read_all': "See every department's requisitions and the procurement queue",
   'purchasing.consolidate': 'Consolidate approved non-stock requisition lines into purchase requisitions',
   'purchasing.handover': 'Hand received non-stock goods and services over to the requester',
+  'payments.prepare': 'Prepare payment vouchers from approved supplier invoices',
+  'payments.release': 'Release approved payments (bank, cheque or M-PESA)',
+  'payments.reconcile': 'Reconcile M-PESA payments and work the payment review queue',
   'finance.gl_manage': 'Maintain the chart of accounts (GL accounts)',
   'projects.manage': 'Maintain projects',
   'finance.exchange_rates': 'Maintain currencies and exchange rates',

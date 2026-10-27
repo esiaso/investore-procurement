@@ -455,6 +455,8 @@ export enum NotificationCategory {
   APPROVALS = 'APPROVALS',
   /** Progress of my requisitions (approved, ordered, received, ready for collection). */
   REQUISITIONS = 'REQUISITIONS',
+  /** Payments made, failed or waiting for review. */
+  PAYMENTS = 'PAYMENTS',
 }
 
 export enum JobRunStatus {
@@ -1146,4 +1148,53 @@ export enum ItemCondition {
   GOOD = 'GOOD',
   DAMAGED = 'DAMAGED',
   INCOMPLETE = 'INCOMPLETE',
+}
+
+// ------------------------------------------------------------------ non-stock phase 4: payments and M-PESA payouts
+
+export enum PaymentMethod {
+  EFT = 'EFT',
+  CHEQUE = 'CHEQUE',
+  /** M-PESA B2B to a PayBill number + account. */
+  MPESA_PAYBILL = 'MPESA_PAYBILL',
+  /** M-PESA B2B to a Till (buy goods) number. */
+  MPESA_TILL = 'MPESA_TILL',
+  /** M-PESA B2C to a phone number (individuals, sole proprietors). */
+  MPESA_B2C = 'MPESA_B2C',
+  CASH = 'CASH',
+}
+
+export const MPESA_METHODS: PaymentMethod[] = [PaymentMethod.MPESA_PAYBILL, PaymentMethod.MPESA_TILL, PaymentMethod.MPESA_B2C];
+
+export enum PaymentVoucherStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  APPROVED = 'APPROVED',
+  RETURNED = 'RETURNED',
+  REJECTED = 'REJECTED',
+  /** Sent to the payment channel; waiting for its result. */
+  PROCESSING = 'PROCESSING',
+  PAID = 'PAID',
+  /** The channel refused or failed it (review queue: retry or cancel). */
+  FAILED = 'FAILED',
+  /** Outcome not known after the status checks (review queue). */
+  REVIEW = 'REVIEW',
+  REVERSED = 'REVERSED',
+  CANCELLED = 'CANCELLED',
+}
+
+/** One dispatch of a voucher to M-PESA. */
+export enum PayoutAttemptStatus {
+  /** Accepted by Daraja; result awaited. */
+  PENDING = 'PENDING',
+  /** No reliable answer (timeout / network): its status must be queried before anything else. */
+  UNKNOWN = 'UNKNOWN',
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+  REVERSED = 'REVERSED',
+}
+
+export enum ReconciliationStatus {
+  MATCHED = 'MATCHED',
+  EXCEPTIONS = 'EXCEPTIONS',
 }

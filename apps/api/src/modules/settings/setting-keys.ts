@@ -166,6 +166,9 @@ export interface SettingTypes {
   'purchasing.autoApproveMatchedInvoices': boolean;
   'requisitions.handoverOtpMinutes': number;
   'requisitions.handoverOtpMaxAttempts': number;
+  'payments.mpesaFollowUpMinutes': number;
+  'payments.mpesaMaxAttempts': number;
+  'payments.mpesaMaxStatusChecks': number;
   /** RFQs are sent to at least this many suppliers (fewer needs a justification). */
   'purchasing.rfqMinSuppliers': number;
   /** Default technical pass mark (0–100) for RFQ evaluation. */

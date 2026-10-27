@@ -13,7 +13,7 @@ import { NumberingService } from '../numbering/numbering.service';
 import { SettingsService } from '../settings/settings.service';
 import { MatchLineInput, threeWayMatch } from './matching';
 import { CreateInvoiceDto, DocListQueryDto, PayInvoiceDto } from './purchasing.dto';
-import { PaymentVoucher, PurchaseOrder, PurchaseOrderLine, SupplierInvoice, SupplierInvoiceLine } from './purchasing.entities';
+import { PurchaseOrder, PurchaseOrderLine, SupplierInvoice, SupplierInvoiceLine } from './purchasing.entities';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
@@ -41,10 +41,6 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
     this.links.registerResolver(DocumentType.SUPPLIER_INVOICE, async (ids) => {
       const rows = await this.ds.getRepository(SupplierInvoice).findBy({ id: In(ids) });
       return new Map(rows.map((r) => [r.id, { status: `${r.status} · ${r.matchStatus}`, date: r.invoiceDate, amount: r.total }]));
-    });
-    this.links.registerResolver(DocumentType.PAYMENT_VOUCHER, async (ids) => {
-      const rows = await this.ds.getRepository(PaymentVoucher).findBy({ id: In(ids) });
-      return new Map(rows.map((r) => [r.id, { status: 'PAID', date: r.paidOn, amount: r.amount }]));
     });
   }
 
@@ -247,26 +243,9 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
     await m.save(inv);
   }
 
-  /** Records payment (simple voucher for now). */
-  async pay(id: string, dto: PayInvoiceDto): Promise<SupplierInvoice> {
-    await this.ds.transaction(async (m) => {
-      const inv = await this.lock(m, id);
-      if (inv.status !== InvoiceStatus.APPROVED) throw new ConflictException(`Invoice is ${inv.status}; only approved invoices can be paid`);
-      const pv = await m.save(
-        m.create(PaymentVoucher, {
-          number: await this.numbering.next(DocumentType.PAYMENT_VOUCHER, { date: dto.paidOn, manager: m }),
-          invoiceId: inv.id,
-          amount: inv.total,
-          paidOn: dto.paidOn,
-          paymentReference: dto.paymentReference,
-          method: dto.method,
-        }),
-      );
-      await this.links.link(m, { type: DocumentType.SUPPLIER_INVOICE, id: inv.id, no: inv.number }, { type: DocumentType.PAYMENT_VOUCHER, id: pv.id, no: pv.number });
-      inv.status = InvoiceStatus.PAID;
-      await m.save(inv);
-    });
-    return this.get(id);
+  /** Replaced by payment vouchers (their own approval, preparer ≠ approver ≠ payer). */
+  async pay(_id: string, _dto: PayInvoiceDto): Promise<SupplierInvoice> {
+    throw new ConflictException({ code: 'USE_PAYMENT_VOUCHER', message: 'Pay approved invoices with a payment voucher (Payments → Payables); it goes through its own approval' });
   }
 
   async cancel(id: string, actor: SessionUser): Promise<SupplierInvoice> {

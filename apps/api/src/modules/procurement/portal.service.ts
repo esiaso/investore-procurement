@@ -264,9 +264,10 @@ export class PortalService {
     const sid = this.supplierOf(actor);
     return this.ds.query(
       `SELECT si.number, si.supplier_invoice_no AS "invoiceNo", si.invoice_date AS "invoiceDate", si.due_date AS "dueDate", si.total::float AS total,
-              si.status, po.number AS "purchaseOrder", pv.paid_on AS "paidOn", pv.amount::float AS "paidAmount", pv.payment_reference AS "paymentReference"
+              si.status, po.number AS "purchaseOrder", pv.paid_on AS "paidOn", si.paid_amount::float AS "paidAmount", pv.payment_reference AS "paymentReference"
          FROM supplier_invoice si JOIN purchase_order po ON po.id = si.purchase_order_id
-         LEFT JOIN payment_voucher pv ON pv.invoice_id = si.id
+         LEFT JOIN LATERAL (SELECT v.paid_on, v.payment_reference FROM payment_voucher v LEFT JOIN payment_voucher_line l ON l.voucher_id = v.id
+                             WHERE (l.invoice_id = si.id OR v.invoice_id = si.id) AND v.status = 'PAID' ORDER BY v.paid_on DESC LIMIT 1) pv ON true
         WHERE si.supplier_id = $1 AND si.status <> 'CANCELLED'
         ORDER BY si.invoice_date DESC LIMIT 500`,
       [sid],

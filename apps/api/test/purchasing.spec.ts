@@ -346,9 +346,17 @@ describe('Procurement', () => {
       expect(budgetAfter.actual - budgetBefore.actual).toBeCloseTo(inv.body.total, 2);
       expect(budgetBefore.committed - budgetAfter.committed).toBeCloseTo(Math.min(po.total, inv.body.total), 2);
 
-      await c['proc.officer'].post(`/invoices/${inv.body.id}/pay`, { paidOn: today(), paymentReference: 'EFT-1', method: 'EFT' }).expect(403);
-      const paid = await c['finance'].post(`/invoices/${inv.body.id}/pay`, { paidOn: today(), paymentReference: 'EFT-1', method: 'EFT' }).expect(200);
+      // Paying goes through a payment voucher with its own approval (the old one-step payment is gone).
+      expect((await c['finance'].post(`/invoices/${inv.body.id}/pay`, { paidOn: today(), paymentReference: 'EFT-1', method: 'EFT' }).expect(409)).body.code).toBe('USE_PAYMENT_VOUCHER');
+      const pv = (await c['accountant'].post('/payment-vouchers', { supplierId: inv.body.supplierId, method: 'EFT', invoices: [{ invoiceId: inv.body.id }] }).expect(201)).body;
+      await c['accountant'].post(`/payment-vouchers/${pv.id}/submit`).expect(200);
+      const pvReq = await pendingRequest('PV', pv.id);
+      if (!c['finance.manager']) c['finance.manager'] = await loggedIn(ctx, 'finance.manager');
+      await c['finance.manager'].post(`/approvals/${pvReq.id}/approve`, {}).expect(200);
+      await c['proc.officer'].post(`/payment-vouchers/${pv.id}/release`, { paymentReference: 'EFT-1' }).expect(403);
+      const paid = await c['finance'].post(`/payment-vouchers/${pv.id}/release`, { paymentReference: 'EFT-1', paidOn: today() }).expect(200);
       expect(paid.body.status).toBe('PAID');
+      expect((await c['finance'].get(`/invoices/${inv.body.id}`).expect(200)).body.status).toBe('PAID');
     });
 
     it('links every document of the chain, navigable from any of them', async () => {

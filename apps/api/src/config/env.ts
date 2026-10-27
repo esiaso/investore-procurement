@@ -30,6 +30,31 @@ export interface Env {
   /** Public URL of the web app, for links in emails (approve / reject links). Default: the first CORS origin. */
   appPublicUrl: string | null;
   /**
+   * M-PESA payouts (Daraja B2C / B2B, transaction status, reversal). Secrets
+   * live here only, never in the database or the code. `mock` = in-process
+   * simulator; `sandbox` / `production` = Daraja.
+   */
+  /** Requests per minute per IP on the public callback endpoints. */
+  callbackRateLimitPerMinute: number;
+  mpesaPayout: {
+    mode: 'mock' | 'sandbox' | 'production';
+    baseUrl: string | null;
+    consumerKey: string | null;
+    consumerSecret: string | null;
+    /** Paying shortcode (B2C / B2B org shortcode). */
+    shortcode: string | null;
+    initiatorName: string | null;
+    /** Initiator password encrypted with Safaricom's public certificate (as issued for the API). */
+    securityCredential: string | null;
+    /** Public base URL Safaricom calls back (…/api/v1/callbacks/mpesa-payouts/…). */
+    callbackBaseUrl: string | null;
+    /** Secret in the callback path (Daraja callbacks carry no credentials). */
+    callbackToken: string | null;
+    /** Comma-separated source IPs accepted on the callbacks (empty = any; behind a proxy set TRUST_PROXY). */
+    callbackAllowedIps: string[];
+    timeoutMs: number;
+  };
+  /**
    * Background jobs: `queue` = BullMQ on Redis, processed by the worker process;
    * `inline` = run immediately in the calling process (tests, development); `off`.
    */
@@ -82,6 +107,12 @@ const DEV_SECRET = 'dev-only-session-secret-change-me-0123456789';
 const DEV_TOTP_KEY = '0'.repeat(64);
 const DEV_DATA_KEY = 'a'.repeat(64);
 
+function payoutMode(v: string | undefined): 'mock' | 'sandbox' | 'production' {
+  const m = (v || 'mock').toLowerCase();
+  if (m !== 'mock' && m !== 'sandbox' && m !== 'production') throw new Error('MPESA_PAYOUT_MODE must be mock, sandbox or production');
+  return m;
+}
+
 let cached: Env | null = null;
 
 export function loadEnv(): Env {
@@ -131,6 +162,20 @@ export function loadEnv(): Env {
     mailPollSeconds: int(e.MAIL_POLL_SECONDS, 10),
     chromiumPath: e.CHROMIUM_PATH || null,
     appPublicUrl: e.APP_PUBLIC_URL || null,
+    callbackRateLimitPerMinute: int(e.CALLBACK_RATE_LIMIT_PER_MINUTE, 120),
+    mpesaPayout: {
+      mode: payoutMode(e.MPESA_PAYOUT_MODE),
+      baseUrl: e.MPESA_PAYOUT_BASE_URL || null,
+      consumerKey: e.MPESA_PAYOUT_CONSUMER_KEY || null,
+      consumerSecret: e.MPESA_PAYOUT_CONSUMER_SECRET || null,
+      shortcode: e.MPESA_PAYOUT_SHORTCODE || null,
+      initiatorName: e.MPESA_PAYOUT_INITIATOR_NAME || null,
+      securityCredential: e.MPESA_PAYOUT_SECURITY_CREDENTIAL || null,
+      callbackBaseUrl: e.MPESA_PAYOUT_CALLBACK_BASE_URL || null,
+      callbackToken: e.MPESA_PAYOUT_CALLBACK_TOKEN || null,
+      callbackAllowedIps: (e.MPESA_PAYOUT_CALLBACK_ALLOWED_IPS ?? '').split(',').map((x) => x.trim()).filter(Boolean),
+      timeoutMs: int(e.MPESA_PAYOUT_TIMEOUT_MS, 20_000),
+    },
     jobsMode: jobsMode(e.JOBS_MODE),
     sampleEtimsUrl: e.SAMPLE_ETIMS_URL || null,
     sampleHmisUrl: e.SAMPLE_HMIS_URL || null,

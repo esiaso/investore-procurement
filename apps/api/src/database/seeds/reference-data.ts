@@ -47,6 +47,8 @@ export const REPORT_SCHEDULES: Record<string, string> = {
   'approvals.escalate': '*/15 * * * *',
   /** Non-stock phase 2: LPOs past their validity with nothing received. */
   'purchasing.expireOrders': '30 1 * * *',
+  'payments.mpesaFollowUp': '*/5 * * * *',
+  'payments.mpesaReconcile': '0 6 * * *',
 };
 
 /** Slice 9 HMIS jobs (also merged into existing installations by a migration). */
@@ -232,6 +234,9 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'purchasing.matchPriceToleranceAbs', value: 0, description: 'Three-way match: largest price difference tolerated per line (amount, order currency); 0 = percentage only', isPublic: false },
   { key: 'purchasing.autoApproveMatchedInvoices', value: false, description: 'Invoices that match the order and the receipts within tolerance are approved without the approval workflow (exceptions still go through it)', isPublic: false },
   { key: 'requisitions.handoverOtpMinutes', value: 15, description: 'How long a hand-over one-time code is valid (minutes)', isPublic: false },
+  { key: 'payments.mpesaFollowUpMinutes', value: 10, description: 'M-PESA payouts: minutes to wait for the result callback before asking M-PESA (Transaction Status)', isPublic: false },
+  { key: 'payments.mpesaMaxAttempts', value: 3, description: 'M-PESA payouts: attempts per voucher when M-PESA confirms a request was never processed (then the review queue)', isPublic: false },
+  { key: 'payments.mpesaMaxStatusChecks', value: 6, description: 'M-PESA payouts: unanswered status checks before the voucher goes to the review queue', isPublic: false },
   { key: 'requisitions.handoverOtpMaxAttempts', value: 5, description: 'Wrong one-time codes allowed before a new code is needed', isPublic: false },
   { key: 'requisitions.requireGlAccount', value: false, description: 'Requesters must give a GL account on non-stock requisition lines (otherwise Finance / procurement codes them)', isPublic: true },
   { key: 'reports.maxRows', value: 50000, description: 'Most rows a report returns or exports', isPublic: false },
@@ -432,6 +437,7 @@ const FINANCE_MASTER: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.STAFF_RE
 const FINANCE_PERMISSIONS: PermissionCode[] = [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
   P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
+  P.PAYMENTS_PREPARE, P.PAYMENTS_RELEASE, P.PAYMENTS_RECONCILE,
   P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE, P.HMIS_READ,
   P.POS_REPORTS, P.POS_APPROVE_VARIANCE, P.POS_MANAGE, P.POS_REFUND,
   P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST, P.REPORTS_SCHEDULE, P.DOCUMENTS_READ, ...FINANCE_MASTER,
@@ -600,5 +606,7 @@ export const DEFAULT_WORKFLOWS: {
   { code: 'DSL-2', name: 'Disposals over 100,000', documentType: DocumentType.DISPOSAL, minAmount: 100_000, maxAmount: null, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Finance approval', RoleCodes.FINANCE], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
   // Staff requisitions: the head of department; larger ones also Finance. Bands are edited under Approvals → Workflows.
   { code: 'REQ-1', name: 'Staff requisitions up to 500,000', documentType: DocumentType.STAFF_REQUISITION, minAmount: null, maxAmount: 500_000, steps: [['Head of department', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE]] },
+  { code: 'PV-1', name: 'Payments up to 1,000,000', documentType: DocumentType.PAYMENT_VOUCHER, minAmount: null, maxAmount: 1_000_000, steps: [['Finance manager', RoleCodes.FINANCE_MANAGER]] },
+  { code: 'PV-2', name: 'Payments over 1,000,000', documentType: DocumentType.PAYMENT_VOUCHER, minAmount: 1_000_000, maxAmount: null, steps: [['Finance manager', RoleCodes.FINANCE_MANAGER], ['Hospital management', RoleCodes.HOSPITAL_MANAGEMENT]] },
   { code: 'REQ-2', name: 'Staff requisitions over 500,000', documentType: DocumentType.STAFF_REQUISITION, minAmount: 500_000, maxAmount: null, steps: [['Head of department', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE], ['Finance manager', RoleCodes.FINANCE_MANAGER]] },
 ];

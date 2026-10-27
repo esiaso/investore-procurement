@@ -374,10 +374,15 @@ export class AccountingService implements OnModuleInit {
   }
 
   private async buildBillPayments(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
-    const rows: { id: string; number: string; invoice_id: string; amount: string; paid_on: string; reference: string; method: string; supplier_id: string; supplier: string }[] = await m.query(
-      `SELECT pv.id, pv.number, pv.invoice_id, pv.amount, to_char(pv.paid_on, 'YYYY-MM-DD') AS paid_on, pv.payment_reference AS reference, upper(pv.method) AS method, si.supplier_id, s.name AS supplier
-         FROM payment_voucher pv JOIN supplier_invoice si ON si.id = pv.invoice_id JOIN supplier s ON s.id = si.supplier_id
-        WHERE ${ids ? `pv.id = ANY($1::uuid[])` : `pv.paid_on BETWEEN $1::date AND $2::date`}`,
+    // A voucher pays one or more bills (its lines; older vouchers name one invoice).
+    const rows: { id: string; number: string; amount: string; paid_on: string; reference: string; method: string; supplier_id: string; supplier: string; lines: { invoice_id: string; amount: number }[] }[] = await m.query(
+      `SELECT pv.id, pv.number, pv.amount, to_char(pv.paid_on, 'YYYY-MM-DD') AS paid_on, pv.payment_reference AS reference, upper(pv.method) AS method, s.id AS supplier_id, s.name AS supplier,
+              COALESCE(json_agg(json_build_object('invoice_id', l.invoice_id, 'amount', l.net_amount)) FILTER (WHERE l.id IS NOT NULL),
+                       json_build_array(json_build_object('invoice_id', pv.invoice_id, 'amount', pv.amount))) AS lines
+         FROM payment_voucher pv LEFT JOIN supplier_invoice si ON si.id = pv.invoice_id LEFT JOIN payment_voucher_line l ON l.voucher_id = pv.id
+         JOIN supplier s ON s.id = COALESCE(pv.supplier_id, si.supplier_id)
+        WHERE pv.status = 'PAID' AND ${ids ? `pv.id = ANY($1::uuid[])` : `pv.paid_on BETWEEN $1::date AND $2::date`}
+        GROUP BY pv.id, s.id, s.name`,
       ids ? [ids] : [from, to],
     );
     return rows.map((p) => {
@@ -401,7 +406,7 @@ export class AccountingService implements OnModuleInit {
           TxnDate: p.paid_on,
           DocNumber: p.number.slice(0, 21),
           PrivateNote: `${p.method} ${p.reference}`,
-          Line: [{ Amount: amount, LinkedTxn: [{ TxnId: { $posting: `BILL|${p.invoice_id}` }, TxnType: 'Bill' }] }],
+          Line: p.lines.map((l) => ({ Amount: Number(l.amount), LinkedTxn: [{ TxnId: { $posting: `BILL|${l.invoice_id}` }, TxnType: 'Bill' }] })),
         },
         missing,
       };

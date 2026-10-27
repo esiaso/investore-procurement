@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import passport from 'passport';
 import { createClient, RedisClientType } from 'redis';
 import { CSRF_HEADER, csrfMiddleware } from './common/csrf';
+import { rateLimit } from './common/rate-limit';
 import { requestContextMiddleware } from './common/request-context';
 import { Env } from './config/env';
 import { SESSION_COOKIE } from './modules/auth/auth.controller';
@@ -65,6 +66,8 @@ export function configureApp(app: NestExpressApplication, env: Env, redis: Redis
   app.use(passport.initialize());
   app.use(passport.session());
   app.use(apiKeyMiddleware(app.get(ApiClientsService, { strict: false }), `/${API_PREFIX}/integration/`));
+  // Public callbacks (M-PESA, payouts): limited per caller.
+  app.use(`/${API_PREFIX}/callbacks`, rateLimit({ windowMs: 60_000, max: env.callbackRateLimitPerMinute }));
   app.use(csrfMiddleware);
   app.use(requestContextMiddleware);
 

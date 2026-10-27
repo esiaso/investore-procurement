@@ -229,7 +229,7 @@ describe('QuickBooks Online (mapping, batch posting, retries, reconciliation)', 
         [uniq('INV'), user.id, today, po.id, uniq('SUPINV'), sup.id],
       );
       await q(`INSERT INTO supplier_invoice_line (invoice_id, po_line_id, quantity, unit_price, tax_amount, line_total) VALUES ($1, $2, 10, 100, 160, 1160)`, [si.id, pl.id]);
-      const [pv] = await q(`INSERT INTO payment_voucher (invoice_id, method, payment_reference, paid_on, amount, number) VALUES ($1, 'EFT', 'EFT-QBO-1', $2, 1160, $3) RETURNING id`, [si.id, today, uniq('PV')]);
+      const [pv] = await q(`INSERT INTO payment_voucher (invoice_id, method, payment_reference, paid_on, amount, number, status) VALUES ($1, 'EFT', 'EFT-QBO-1', $2, 1160, $3, 'PAID') RETURNING id`, [si.id, today, uniq('PV')]);
       const [rts] = await q(
         `INSERT INTO return_to_supplier (number, supplier_id, store_id, reason_code, status, source, return_date, total_value, credit_note_no, credit_note_date, credit_note_amount) VALUES ($1, $2, $3, 'DAMAGED', 'CREDITED', 'STOCK', $4, 200, 'CN-77', $4, 200) RETURNING id`,
         [uniq('RTS'), sup.id, ids.MS, today],

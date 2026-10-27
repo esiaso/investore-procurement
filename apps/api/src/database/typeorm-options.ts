@@ -21,6 +21,7 @@ import {
   GoodsReceivedNote,
   GrnLine,
   PaymentVoucher,
+  PaymentVoucherLine,
   PurchaseOrder,
   PurchaseOrderLine,
   PurchaseOrderVersion,
@@ -101,6 +102,7 @@ import { Encounter, HmisCodeMapping, HmisConnection, HmisMessage, PatientCharge 
 import { ReportRun, ReportSchedule } from '../modules/reports/reports.entities';
 import { Currency, ExchangeRate, GlAccount, Project } from '../modules/finance/finance.entities';
 import { Handover, HandoverLine, StaffRequisition, StaffRequisitionLine } from '../modules/staff-requisitions/staff-requisitions.entities';
+import { MpesaPayout, MpesaStatementLine, PaymentReconciliation } from '../modules/payments/payments.entities';
 import { AccountingBatch, AccountingConnection, AccountingPosting, AccountMapping, ExternalRef, PayerSettlement } from '../modules/accounting/accounting.entities';
 import { Customer, CustomerLedger, MpesaConfig, MpesaTransaction, PosEvent, PosPromotion, PosSale, PosShift, PosTerminal } from '../modules/pos/pos.entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
@@ -172,6 +174,7 @@ export const ENTITIES = [
   SupplierInvoice,
   SupplierInvoiceLine,
   PaymentVoucher,
+  PaymentVoucherLine,
   StoreRequisition,
   StoreRequisitionLine,
   IssueVoucher,
@@ -250,6 +253,9 @@ export const ENTITIES = [
   StaffRequisitionLine,
   Handover,
   HandoverLine,
+  MpesaPayout,
+  MpesaStatementLine,
+  PaymentReconciliation,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

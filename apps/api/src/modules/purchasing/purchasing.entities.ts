@@ -4,6 +4,7 @@ import {
   GrnStatus,
   InvoiceStatus,
   MatchStatus,
+  PaymentVoucherStatus,
   PurchaseLineType,
   PurchaseOrderSource,
   PurchaseOrderStatus,
@@ -921,6 +922,10 @@ export class SupplierInvoice extends AppBaseEntity {
   @Column({ ...MONEY, default: 0 })
   whtTotal: number;
 
+  /** Settled so far (cash paid + withholding tax), in the invoice currency. */
+  @Column({ ...MONEY, default: 0 })
+  paidAmount: number;
+
   @Column({ type: 'uuid' })
   capturedBy: string;
 
@@ -965,12 +970,109 @@ export class SupplierInvoiceLine extends AppBaseEntity {
   whtAmount: number;
 }
 
-/** Simple payment record for now (full payments/finance integration later). */
+/**
+ * Payment voucher: pays one supplier one or more approved invoices (a batch),
+ * by bank transfer, cheque or M-PESA. It goes through its own approval; the
+ * person who releases it is neither its preparer nor an approver.
+ */
 @Entity('payment_voucher')
+@Index(['status', 'dueDate'])
+@Index(['supplierId', 'status'])
 export class PaymentVoucher extends AppBaseEntity {
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 60 })
   number: string;
+
+  /** Single-invoice vouchers (and those from before batching); otherwise see the lines. */
+  @Column({ type: 'uuid', nullable: true })
+  invoiceId: string | null;
+
+  @ManyToOne(() => SupplierInvoice, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'invoice_id' })
+  invoice?: SupplierInvoice | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  supplierId: string | null;
+
+  @ManyToOne(() => Supplier, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'supplier_id' })
+  supplier?: Supplier | null;
+
+  @Column({ type: 'enum', enum: PaymentVoucherStatus, enumName: 'payment_voucher_status', default: PaymentVoucherStatus.DRAFT })
+  status: PaymentVoucherStatus;
+
+  /** PaymentMethod. */
+  @Column({ type: 'varchar', length: 40 })
+  method: string;
+
+  @Column({ type: 'varchar', length: 3, default: 'KES' })
+  currency: string;
+
+  /** Settled against the invoices (net + withholding tax). */
+  @Column({ ...MONEY, default: 0 })
+  grossAmount: number;
+
+  @Column({ ...MONEY, default: 0 })
+  whtAmount: number;
+
+  /** Cash paid to the supplier (gross − WHT). */
+  @Column(MONEY)
+  amount: number;
+
+  /** When it should be paid (payment schedule). */
+  @Column({ type: 'date', nullable: true })
+  dueDate: string | null;
+
+  @Column({ type: 'date', nullable: true })
+  paidOn: string | null;
+
+  /** Bank / cheque number / M-PESA receipt. */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  paymentReference: string | null;
+
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  payeeName: string | null;
+
+  /** B2C: 2547XXXXXXXX / 2541XXXXXXXX. */
+  @Column({ type: 'varchar', length: 15, nullable: true })
+  payeePhone: string | null;
+
+  /** B2B: PayBill or Till number. */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  payeeShortcode: string | null;
+
+  /** B2B PayBill account number. */
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  payeeAccountRef: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  narrative: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  preparedBy: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  releasedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  releasedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  lastComment: string | null;
+
+  @OneToMany(() => PaymentVoucherLine, (l) => l.voucher, { cascade: true })
+  lines?: PaymentVoucherLine[];
+}
+
+@Entity('payment_voucher_line')
+@Index(['invoiceId'])
+export class PaymentVoucherLine extends AppBaseEntity {
+  @Column({ type: 'uuid' })
+  voucherId: string;
+
+  @ManyToOne(() => PaymentVoucher, (v) => v.lines, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'voucher_id' })
+  voucher?: PaymentVoucher;
 
   @Column({ type: 'uuid' })
   invoiceId: string;
@@ -979,18 +1081,15 @@ export class PaymentVoucher extends AppBaseEntity {
   @JoinColumn({ name: 'invoice_id' })
   invoice?: SupplierInvoice;
 
+  /** Settled against the invoice (net + WHT). */
   @Column(MONEY)
   amount: number;
 
-  @Column({ type: 'date' })
-  paidOn: string;
+  @Column({ ...MONEY, default: 0 })
+  whtAmount: number;
 
-  /** Bank / M-Pesa / cheque reference. */
-  @Column({ type: 'varchar', length: 100 })
-  paymentReference: string;
-
-  @Column({ type: 'varchar', length: 40 })
-  method: string;
+  @Column(MONEY)
+  netAmount: number;
 }
 
 /** One committee member's technical score of one quotation (0–100). */
