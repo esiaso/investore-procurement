@@ -4,6 +4,7 @@ import {
   GrnStatus,
   InvoiceStatus,
   MatchStatus,
+  PurchaseLineType,
   PurchaseOrderSource,
   PurchaseOrderStatus,
   RegularisationStatus,
@@ -76,11 +77,16 @@ export class PurchaseRequisition extends AppBaseEntity {
   @Column({ type: 'varchar', length: 1000, nullable: true })
   lastComment: string | null;
 
+  /** Suppliers procurement proposes to invite or buy from. */
+  @Column({ type: 'jsonb', default: () => `'[]'::jsonb` })
+  suggestedSupplierIds: string[];
+
   @OneToMany(() => PurchaseRequisitionLine, (l) => l.requisition, { cascade: true })
   lines?: PurchaseRequisitionLine[];
 }
 
 @Entity('purchase_requisition_line')
+@Index(['sourceRequisitionLineId'])
 export class PurchaseRequisitionLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   requisitionId: string;
@@ -89,12 +95,41 @@ export class PurchaseRequisitionLine extends AppBaseEntity {
   @JoinColumn({ name: 'requisition_id' })
   requisition?: PurchaseRequisition;
 
-  @Column({ type: 'uuid' })
-  itemId: string;
+  @Column({ type: 'enum', enum: PurchaseLineType, enumName: 'purchase_line_type', default: PurchaseLineType.STOCK })
+  lineType: PurchaseLineType;
 
-  @ManyToOne(() => Item, { onDelete: 'RESTRICT' })
+  /** Catalog item (required for STOCK lines; optional for non-stock goods and services). */
+  @Column({ type: 'uuid', nullable: true })
+  itemId: string | null;
+
+  @ManyToOne(() => Item, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'item_id' })
-  item?: Item;
+  item?: Item | null;
+
+  /** What is bought (non-stock lines; stock lines show the item). */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  description: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  categoryId: string | null;
+
+  /** Unit of the quantity for non-stock lines (stock lines are in base units). */
+  @Column({ type: 'uuid', nullable: true })
+  uomId: string | null;
+
+  @ManyToOne(() => UnitOfMeasure, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'uom_id' })
+  uom?: UnitOfMeasure | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  glAccountId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  projectId: string | null;
+
+  /** Staff requisition line this was consolidated from. */
+  @Column({ type: 'uuid', nullable: true })
+  sourceRequisitionLineId: string | null;
 
   /** Base units. */
   @Column(QUANTITY)

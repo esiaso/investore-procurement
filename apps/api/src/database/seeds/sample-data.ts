@@ -1,4 +1,4 @@
-import { ControlledSchedule, RoleCodes, SalesClass, ServicePoint, StoreType } from '@sil/shared';
+import { ControlledSchedule, GlAccountType, RoleCodes, SalesClass, ServicePoint, StoreType } from '@sil/shared';
 
 /*
  * Sample data for a fictitious private hospital. Brand and manufacturer names
@@ -65,12 +65,46 @@ export const SAMPLE_USERS: { username: string; fullName: string; role: string; s
   { username: 'finance', fullName: 'Mwangi Finance', role: RoleCodes.FINANCE, stores: [], department: 'ADMIN' },
   // A second finance user so invoices can be captured and approved by different people.
   { username: 'accountant', fullName: 'Atieno Accountant', role: RoleCodes.FINANCE, stores: [], department: 'ADMIN' },
+  { username: 'finance.manager', fullName: 'Njoroge Finance Manager', role: RoleCodes.FINANCE_MANAGER, stores: [], department: 'ADMIN' },
   { username: 'tender', fullName: 'Hassan Committee', role: RoleCodes.TENDER_COMMITTEE, stores: [] },
   { username: 'scm', fullName: 'Wafula Supply Chain', role: RoleCodes.SUPPLY_CHAIN_MANAGER, stores: [] },
   { username: 'supplier', fullName: 'Sample Supplier Ltd', role: RoleCodes.SUPPLIER, stores: [] },
   { username: 'supplier2', fullName: 'Second Sample Supplier', role: RoleCodes.SUPPLIER, stores: [] },
   { username: 'auditor', fullName: 'Internal Auditor', role: RoleCodes.AUDITOR, stores: [] },
   { username: 'management', fullName: 'Medical Director', role: RoleCodes.HOSPITAL_MANAGEMENT, stores: [] },
+];
+
+/** Chart of accounts for non-stock buying (codes as in a typical hospital ledger). */
+export const SAMPLE_GL_ACCOUNTS: [code: string, name: string, type: GlAccountType][] = [
+  ['5100', 'Repairs and maintenance - buildings', GlAccountType.EXPENSE],
+  ['5110', 'Repairs and maintenance - medical equipment', GlAccountType.EXPENSE],
+  ['5200', 'Consultancy and professional fees', GlAccountType.EXPENSE],
+  ['5210', 'Legal and audit fees', GlAccountType.EXPENSE],
+  ['5300', 'Office supplies and stationery', GlAccountType.EXPENSE],
+  ['5310', 'Printing and publications', GlAccountType.EXPENSE],
+  ['5400', 'Utilities - electricity and water', GlAccountType.EXPENSE],
+  ['5410', 'Telephone and internet', GlAccountType.EXPENSE],
+  ['5500', 'Cleaning and laundry services', GlAccountType.EXPENSE],
+  ['5510', 'Security services', GlAccountType.EXPENSE],
+  ['5600', 'Travel and accommodation', GlAccountType.EXPENSE],
+  ['5610', 'Staff training and conferences', GlAccountType.EXPENSE],
+  ['5700', 'Small equipment expensed (below capitalisation threshold)', GlAccountType.EXPENSE],
+  ['5800', 'Bank and M-Pesa charges', GlAccountType.EXPENSE],
+  ['1600', 'Furniture and fittings', GlAccountType.ASSET],
+  ['1610', 'Computers and IT equipment', GlAccountType.ASSET],
+];
+
+export const SAMPLE_PROJECTS: [code: string, name: string, department: string, budget: number | null][] = [
+  ['MAT-WING', 'Maternity wing renovation', 'MAT', 5_000_000],
+  ['ICU-UPGRADE', 'ICU equipment upgrade', 'ICU', 12_000_000],
+  ['EMR-ROLLOUT', 'Electronic records roll-out', 'ADMIN', 3_500_000],
+];
+
+/** KES per unit (indicative). */
+export const SAMPLE_EXCHANGE_RATES: [currency: string, rate: number][] = [
+  ['USD', 129.35],
+  ['EUR', 140.2],
+  ['GBP', 165.8],
 ];
 
 export interface SampleGeneric {

@@ -162,6 +162,17 @@ export const Permissions = {
   REPORTS_SCHEDULE: 'reports.schedule',
   /** The documents register: every attachment the user's other permissions let them read, and expiring supplier documents. */
   DOCUMENTS_READ: 'documents.read',
+  /** Raise staff / departmental requisitions (goods and services). */
+  STAFF_REQUISITION_CREATE: 'requisitions.create',
+  /** See every department's requisitions and the procurement queue of approved non-stock lines. */
+  STAFF_REQUISITION_READ_ALL: 'requisitions.read_all',
+  /** Consolidate approved non-stock requisition lines into purchase requisitions. */
+  PURCHASING_CONSOLIDATE: 'purchasing.consolidate',
+  /** Chart of accounts (GL accounts used on non-stock lines). */
+  GL_MANAGE: 'finance.gl_manage',
+  PROJECTS_MANAGE: 'projects.manage',
+  /** Currencies and exchange rates. */
+  FX_MANAGE: 'finance.exchange_rates',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -276,6 +287,12 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'accounting.post': 'Preview and post batches to QuickBooks; reprocess failed postings',
   'reports.schedule': 'Schedule reports to be emailed',
   'documents.read': 'Search the documents register and see expiring supplier documents',
+  'requisitions.create': 'Raise staff / departmental requisitions for goods and services',
+  'requisitions.read_all': "See every department's requisitions and the procurement queue",
+  'purchasing.consolidate': 'Consolidate approved non-stock requisition lines into purchase requisitions',
+  'finance.gl_manage': 'Maintain the chart of accounts (GL accounts)',
+  'projects.manage': 'Maintain projects',
+  'finance.exchange_rates': 'Maintain currencies and exchange rates',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */
@@ -291,6 +308,8 @@ export const RoleCodes = {
   WARD_IN_CHARGE: 'WARD_IN_CHARGE',
   WARD_STAFF: 'WARD_STAFF',
   FINANCE: 'FINANCE',
+  /** Finance manager / CFO: higher approval levels for purchases, payments and petty cash. */
+  FINANCE_MANAGER: 'FINANCE_MANAGER',
   TENDER_COMMITTEE: 'TENDER_COMMITTEE',
   SUPPLY_CHAIN_MANAGER: 'SUPPLY_CHAIN_MANAGER',
   SUPPLIER: 'SUPPLIER',

@@ -158,6 +158,10 @@ export interface SettingTypes {
   'reports.deadStockDays': number;
   'reports.nearExpiryDays': number;
   'reports.maxRows': number;
+  /** Approve / reject links in approval emails stop working after this many hours. */
+  'approvals.linkExpiryHours': number;
+  /** Requisitions: non-stock lines must carry a GL account (else Finance codes them on the PR). */
+  'requisitions.requireGlAccount': boolean;
 }
 
 export interface SourcingMethodRule {

@@ -27,6 +27,8 @@ export interface Env {
   mailPollSeconds: number;
   /** Chromium for PDF rendering; default: Playwright's bundled browser. */
   chromiumPath: string | null;
+  /** Public URL of the web app, for links in emails (approve / reject links). Default: the first CORS origin. */
+  appPublicUrl: string | null;
   /**
    * Background jobs: `queue` = BullMQ on Redis, processed by the worker process;
    * `inline` = run immediately in the calling process (tests, development); `off`.
@@ -128,6 +130,7 @@ export function loadEnv(): Env {
     smtpUrl: e.SMTP_URL || null,
     mailPollSeconds: int(e.MAIL_POLL_SECONDS, 10),
     chromiumPath: e.CHROMIUM_PATH || null,
+    appPublicUrl: e.APP_PUBLIC_URL || null,
     jobsMode: jobsMode(e.JOBS_MODE),
     sampleEtimsUrl: e.SAMPLE_ETIMS_URL || null,
     sampleHmisUrl: e.SAMPLE_HMIS_URL || null,

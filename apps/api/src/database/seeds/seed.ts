@@ -17,6 +17,7 @@ import { PaymentMode, PriceList } from '../../modules/billing/billing.entities';
 import { EtimsCodeMapping } from '../../modules/etims/etims.entities';
 import { orderPair } from '../../modules/pharmacy/interactions';
 import { DrugInteraction } from '../../modules/pharmacy/pharmacy.entities';
+import { Currency, ExchangeRate, GlAccount, Project } from '../../modules/finance/finance.entities';
 import { DEFAULT_ETIMS_MAPPINGS, DEFAULT_PAYMENT_MODES, DEFAULT_PRICE_LISTS, DEMO_INTERACTIONS } from './reference-billing';
 import { seedSampleStock } from './sample-stock';
 import { seedSampleSuppliers } from './sample-suppliers';
@@ -24,6 +25,7 @@ import {
   DEFAULT_ADJUSTMENT_REASONS,
   DEFAULT_CATEGORIES,
   DEFAULT_CONVERSIONS,
+  DEFAULT_CURRENCIES,
   DEFAULT_NUMBERING,
   DEFAULT_RETURN_REASONS,
   DEFAULT_ROLES,
@@ -34,8 +36,11 @@ import {
 } from './reference-data';
 import {
   SAMPLE_DEPARTMENTS,
+  SAMPLE_EXCHANGE_RATES,
   SAMPLE_FACILITY,
   SAMPLE_GENERICS,
+  SAMPLE_GL_ACCOUNTS,
+  SAMPLE_PROJECTS,
   SAMPLE_STORES,
   SAMPLE_SUPPLIES,
   SAMPLE_USERS,
@@ -88,9 +93,22 @@ export async function seedDatabase(dataSource: DataSource, options: SeedOptions)
           `UPDATE app_user u SET supplier_id = s.id FROM supplier s
             WHERE u.supplier_id IS NULL AND ((u.username = 'supplier' AND s.code = 'SUP0001') OR (u.username = 'supplier2' AND s.code = 'SUP0002'))`,
         );
+        // Non-stock procurement: chart of accounts, projects and exchange rates (added once).
+        if (sample > 0 && !(await m.exists(GlAccount))) await seedSampleFinance(m, log);
       }
     }),
   );
+}
+
+/** Sample chart of accounts (expense and asset accounts for non-stock buying), projects and exchange rates. */
+async function seedSampleFinance(m: EntityManager, log: (msg: string) => void): Promise<void> {
+  for (const [code, name, type] of SAMPLE_GL_ACCOUNTS) await m.save(m.create(GlAccount, { code, name, type, isActive: true }));
+  const departments = new Map((await m.find(Department)).map((d) => [d.code, d.id]));
+  for (const [code, name, dept, budget] of SAMPLE_PROJECTS) await m.save(m.create(Project, { code, name, departmentId: departments.get(dept) ?? null, budget, isActive: true }));
+  const [{ value: tz }] = await m.query(`SELECT value FROM system_setting WHERE key = 'locale.timezone'`);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+  for (const [currencyCode, rate] of SAMPLE_EXCHANGE_RATES) await m.save(m.create(ExchangeRate, { currencyCode, rate, rateDate: today, source: 'Sample (CBK indicative)' }));
+  log(`sample finance: ${SAMPLE_GL_ACCOUNTS.length} GL accounts, ${SAMPLE_PROJECTS.length} projects, ${SAMPLE_EXCHANGE_RATES.length} exchange rates`);
 }
 
 async function seedReference(m: EntityManager, log: (msg: string) => void): Promise<void> {
@@ -181,6 +199,9 @@ async function seedReference(m: EntityManager, log: (msg: string) => void): Prom
     );
   }
 
+  for (const [code, name] of DEFAULT_CURRENCIES) {
+    if (!(await m.existsBy(Currency, { code }))) await m.save(m.create(Currency, { code, name, isActive: true }));
+  }
   for (const p of DEFAULT_PRICE_LISTS) {
     if (!(await m.existsBy(PriceList, { code: p.code }))) await m.save(m.create(PriceList, { ...p, isActive: true }));
   }

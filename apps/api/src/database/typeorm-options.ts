@@ -6,6 +6,7 @@ import {
   ApprovalDelegation,
   ApprovalRequest,
   ApprovalStep,
+  ApprovalToken,
   ApprovalWorkflow,
   DocumentLink,
   Notification,
@@ -97,6 +98,8 @@ import { LOGISTICS_ENTITIES } from '../modules/logistics/logistics.module';
 import { QUALITY_ENTITIES } from '../modules/quality/entities';
 import { Encounter, HmisCodeMapping, HmisConnection, HmisMessage, PatientCharge } from '../modules/hmis/hmis.entities';
 import { ReportRun, ReportSchedule } from '../modules/reports/reports.entities';
+import { Currency, ExchangeRate, GlAccount, Project } from '../modules/finance/finance.entities';
+import { StaffRequisition, StaffRequisitionLine } from '../modules/staff-requisitions/staff-requisitions.entities';
 import { AccountingBatch, AccountingConnection, AccountingPosting, AccountMapping, ExternalRef, PayerSettlement } from '../modules/accounting/accounting.entities';
 import { Customer, CustomerLedger, MpesaConfig, MpesaTransaction, PosEvent, PosPromotion, PosSale, PosShift, PosTerminal } from '../modules/pos/pos.entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
@@ -236,6 +239,13 @@ export const ENTITIES = [
   PayerSettlement,
   ReportSchedule,
   ReportRun,
+  ApprovalToken,
+  GlAccount,
+  Project,
+  Currency,
+  ExchangeRate,
+  StaffRequisition,
+  StaffRequisitionLine,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

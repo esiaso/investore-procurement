@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
-import { ApprovalActionType, ApprovalStatus, ApproverType, NotificationCategory } from '@sil/shared';
+import { ApprovalActionType, ApprovalChannel, ApprovalStatus, ApproverType, NotificationCategory } from '@sil/shared';
 import { AppBaseEntity } from '../../common/entities/base.entity';
 import { MONEY } from '../../common/entities/transformers';
 import { Role } from '../rbac/rbac.entities';
@@ -36,6 +36,10 @@ export class ApprovalWorkflow extends AppBaseEntity {
 
   @Column({ type: 'uuid', nullable: true })
   itemCategoryId: string | null;
+
+  /** Only documents in this currency (null = any). Amount bands are always in the base currency. */
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  currency: string | null;
 
   /** Higher wins between equally specific workflows. */
   @Column({ type: 'int', default: 0 })
@@ -76,6 +80,24 @@ export class ApprovalStep extends AppBaseEntity {
 
   @Column({ type: 'uuid', nullable: true })
   userId: string | null;
+
+  /**
+   * Approvals needed at this level before it moves on (a parallel level: any N
+   * of the eligible approvers, each a different person).
+   */
+  @Column({ type: 'int', default: 1 })
+  minApprovals: number;
+
+  /** Remind the approvers once after this many hours at the step. */
+  @Column({ type: 'int', nullable: true })
+  remindAfterHours: number | null;
+
+  /** After this many hours at the step, members of `escalateToRoleId` may also act on it. */
+  @Column({ type: 'int', nullable: true })
+  escalateAfterHours: number | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  escalateToRoleId: string | null;
 }
 
 /** One approval cycle of one document. */
@@ -123,6 +145,27 @@ export class ApprovalRequest extends AppBaseEntity {
   @Column({ type: 'varchar', length: 300, nullable: true })
   link: string | null;
 
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  currency: string | null;
+
+  /**
+   * Segregation of duties: people who may not approve this document (besides
+   * the requester), e.g. whoever prepared a payment.
+   */
+  @Column({ type: 'jsonb', default: () => `'[]'::jsonb` })
+  excludedUserIds: string[];
+
+  /** When the current step started (reminder and escalation timers). */
+  @Column({ type: 'timestamptz', default: () => 'now()' })
+  stepStartedAt: Date;
+
+  /** Step that was reminded / escalated (once per step). */
+  @Column({ type: 'int', nullable: true })
+  remindedStep: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  escalatedStep: number | null;
+
   @OneToMany(() => ApprovalAction, (a) => a.request)
   actions?: ApprovalAction[];
 }
@@ -149,8 +192,9 @@ export class ApprovalAction {
   @Column({ type: 'enum', enum: ApprovalActionType, enumName: 'approval_action_type' })
   action: ApprovalActionType;
 
-  @Column({ type: 'uuid' })
-  userId: string;
+  /** Null for system actions (reminders, escalations). */
+  @Column({ type: 'uuid', nullable: true })
+  userId: string | null;
 
   /** Set when the user acted as a delegate. */
   @Column({ type: 'uuid', nullable: true })
@@ -159,8 +203,50 @@ export class ApprovalAction {
   @Column({ type: 'varchar', length: 1000, nullable: true })
   comment: string | null;
 
+  @Column({ type: 'enum', enum: ApprovalChannel, enumName: 'approval_channel', nullable: true })
+  channel: ApprovalChannel | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  ip: string | null;
+
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  userAgent: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   at: Date;
+}
+
+/**
+ * Single-use link to approve or reject from an email or SMS, issued to one
+ * approver for one step. Only the SHA-256 of the token is stored.
+ */
+@Entity('approval_token')
+@Index(['requestId'])
+export class ApprovalToken {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'char', length: 64 })
+  tokenHash: string;
+
+  @Column({ type: 'uuid' })
+  requestId: string;
+
+  @Column({ type: 'int' })
+  stepSequence: number;
+
+  @Column({ type: 'uuid' })
+  userId: string;
+
+  @Column({ type: 'timestamptz' })
+  expiresAt: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  usedAt: Date | null;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
 }
 
 /** While away, `fromUserId`'s approvals can be done by `toUserId`. */

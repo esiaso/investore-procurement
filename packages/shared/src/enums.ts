@@ -99,6 +99,8 @@ export enum DocumentType {
   CUSTOMER = 'CUS',
   ACCOUNTING_BATCH = 'QBB',
   PAYER_SETTLEMENT = 'RCV',
+  /** Staff / departmental requisition (goods or services; stock lines go to the stores, the rest to procurement). */
+  STAFF_REQUISITION = 'REQ',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -124,6 +126,17 @@ export enum ApprovalActionType {
   REJECT = 'REJECT',
   RETURN = 'RETURN',
   CANCEL = 'CANCEL',
+  /** System: the step passed its SLA and was escalated. */
+  ESCALATE = 'ESCALATE',
+  /** System: approvers reminded. */
+  REMIND = 'REMIND',
+}
+
+/** Where an approver acted. */
+export enum ApprovalChannel {
+  IN_APP = 'IN_APP',
+  EMAIL_LINK = 'EMAIL_LINK',
+  SMS_LINK = 'SMS_LINK',
 }
 
 // ------------------------------------------------------------------ suppliers & purchasing
@@ -415,6 +428,10 @@ export enum NotificationCategory {
   CONTRACTS = 'CONTRACTS',
   /** HMIS messages that failed or are stuck. */
   HMIS = 'HMIS',
+  /** Documents waiting for my approval (email carries approve / reject links). */
+  APPROVALS = 'APPROVALS',
+  /** Progress of my requisitions (approved, ordered, received, ready for collection). */
+  REQUISITIONS = 'REQUISITIONS',
 }
 
 export enum JobRunStatus {
@@ -786,6 +803,8 @@ export enum AttachmentOwner {
   ASSET = 'ASSET',
   SERVICE_CERTIFICATE = 'SERVICE_CERTIFICATE',
   STOCK_ADJUSTMENT = 'STOCK_ADJUSTMENT',
+  /** Quotes, specifications, photos attached to a staff requisition. */
+  STAFF_REQUISITION = 'STAFF_REQUISITION',
 }
 
 // ------------------------------------------------------------------ slice 9: HMIS integration
@@ -1025,4 +1044,58 @@ export enum ReportPeriod {
   LAST_WEEK = 'LAST_WEEK',
   LAST_MONTH = 'LAST_MONTH',
   MONTH_TO_DATE = 'MONTH_TO_DATE',
+}
+
+// ------------------------------------------------------------------ non-stock procurement (phase 1)
+
+/**
+ * What a requisition / purchase line is. STOCK lines are catalog items held in
+ * a store; the others are bought for a user or department and never change
+ * stock levels (they post to expense or asset GL accounts).
+ */
+export enum PurchaseLineType {
+  STOCK = 'STOCK',
+  NON_STOCK_GOODS = 'NON_STOCK_GOODS',
+  SERVICE = 'SERVICE',
+  /** Capital item expensed directly (not held as stock). */
+  CAPEX_EXPENSED = 'CAPEX_EXPENSED',
+}
+
+/**
+ * Staff / departmental requisition: DRAFT → SUBMITTED (head of department and
+ * further levels) → APPROVED → PARTLY_CONVERTED / CONVERTED (stock lines sent
+ * to the store, non-stock lines on purchase requisitions) → CLOSED (all delivered);
+ * REJECTED, RETURNED (amend and resubmit), CANCELLED.
+ */
+export enum StaffRequisitionStatus {
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  RETURNED = 'RETURNED',
+  PARTLY_CONVERTED = 'PARTLY_CONVERTED',
+  CONVERTED = 'CONVERTED',
+  CLOSED = 'CLOSED',
+  CANCELLED = 'CANCELLED',
+}
+
+/** Where a requisition line is in the cycle. */
+export enum StaffRequisitionLineStatus {
+  OPEN = 'OPEN',
+  /** Stock line: on an internal store requisition. */
+  TO_STORE = 'TO_STORE',
+  /** Non-stock line: on a purchase requisition. */
+  ON_PR = 'ON_PR',
+  DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum GlAccountType {
+  EXPENSE = 'EXPENSE',
+  ASSET = 'ASSET',
+  LIABILITY = 'LIABILITY',
+  EQUITY = 'EQUITY',
+  INCOME = 'INCOME',
+  COST_OF_SALES = 'COST_OF_SALES',
+  BANK = 'BANK',
 }

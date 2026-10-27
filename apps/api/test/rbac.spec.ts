@@ -20,7 +20,7 @@ describe('RBAC and store scoping', () => {
     const roles = await admin.get('/roles').expect(200);
     expect(roles.body.filter((r: { isSystem: boolean }) => r.isSystem).map((r: { code: string }) => r.code).sort()).toEqual(
       [
-        'AUDITOR', 'FINANCE', 'HOSPITAL_MANAGEMENT', 'PHARMACIST', 'PHARMACY_TECHNICIAN', 'POS_CASHIER',
+        'AUDITOR', 'FINANCE', 'FINANCE_MANAGER', 'HOSPITAL_MANAGEMENT', 'PHARMACIST', 'PHARMACY_TECHNICIAN', 'POS_CASHIER',
         'PROCUREMENT_MANAGER', 'PROCUREMENT_OFFICER', 'QUALITY_OFFICER', 'STOREKEEPER', 'SUPPLIER',
         'SUPPLY_CHAIN_MANAGER', 'SYSTEM_ADMIN', 'TENDER_COMMITTEE', 'WARD_IN_CHARGE', 'WARD_STAFF',
       ].sort(),
