@@ -1430,9 +1430,8 @@ lines from every department.
 * If the PR is rejected or cancelled, its lines go back to the queue.
 * The document chain shows REQ → SR and REQ → PR.
 
-Quoting, ordering (LPO / LSO), service acceptance and payment of non-stock lines arrive
-in phases 2–4. Until then, a PR with non-stock lines cannot go on a stock RFQ or PO; it
-is refused with `NON_STOCK_LINES`.
+Quoting and ordering (LPO / LSO) are covered in phase 2 below. Service acceptance and
+payment of non-stock lines arrive in phases 3–4.
 
 ### Approval engine (shared by every document)
 
@@ -1492,6 +1491,130 @@ The sample data adds 16 GL accounts, 3 projects and USD / EUR / GBP rates.
 | Jobs | `approvals.escalate` (every 15 min) |
 | Notification categories | APPROVALS, REQUISITIONS |
 | API | `/staff-requisitions` (+ `/queue`, `/consolidate`, `/:id/submit`, `/:id/cancel`, `/:id/pdf`), `/gl-accounts`, `/projects`, `/currencies`, `/exchange-rates`, `/approval-links/:token` (public) |
+
+## Non-stock procurement — phase 2: RFQ, quotation evaluation, LPO / LSO
+
+A purchase requisition with non-stock lines (or a mix) goes on an RFQ or straight to an
+order, like a stock PR.
+
+### Requisition status
+
+The PR shows where it stands:
+* **RFQ issued**: an RFQ is open on it.
+* **Partially fulfilled**: some lines are ordered.
+* **LPO raised**: every non-stock line is ordered.
+* **Closed**: a stock-only PR that is fully ordered.
+
+Cancelling or expiring an order gives its quantities back to the PR.
+
+### RFQ (*Purchasing → RFQs*)
+
+**Lines.** An RFQ copies the PR lines, including descriptions, units and GL accounts for
+non-stock lines.
+
+**Sending.** Each invited supplier is emailed the RFQ with its PDF attached; *PDF* prints
+the same document.
+* At least `purchasing.rfqMinSuppliers` (3) suppliers must be invited.
+* Otherwise *Send invitations* needs a justification, and is refused with `MIN_SUPPLIERS`
+  without one. The justification is kept on the RFQ.
+
+**Quotations.**
+* A quotation can be in any currency that has an exchange rate. Blank means the base
+  currency.
+* Each quotation records delivery days, payment terms and compliance.
+* The comparison converts every price to KES at today's rate and also shows the quoted
+  price.
+
+**Closing bidding.** *Close bidding* stops further quotations (status **Closed**).
+
+### Evaluation
+
+*Evaluation set-up* is done before scoring starts. It sets:
+* the **technical weight** (0–100 %);
+* the **pass mark** (default `purchasing.rfqPassMark`, 70);
+* the **evaluation committee**.
+
+**Scores.** The financial and combined scores are calculated as follows:
+* financial score = lowest complete compliant total ÷ this total × 100;
+* technical score = the committee's average;
+* combined score = technical × weight + financial × (100 − weight).
+
+With a weight of 0 the award is on price alone. A quotation below the pass mark cannot be
+recommended, however cheap it is.
+
+**Committee scoring.** Once bidding is closed, each committee member scores every
+compliant quotation (0–100, with a comment) on the RFQ page.
+* Only members can score.
+* Non-compliant quotations are not scored.
+
+**Completing the evaluation.** When every score is in, *Complete evaluation* records the
+committee's recommendation. The status becomes **Evaluated** and the top-ranked supplier
+is marked as recommended.
+
+### Award
+
+**Pre-selection.** The award pre-selects the recommended supplier, or the lowest compliant
+quote when nothing is recommended.
+
+**Justification.** Awarding any line past the lowest compliant quote needs a
+justification (`JUSTIFICATION_REQUIRED`).
+
+**Evaluation first.** With a technical weight above 0 the RFQ must be evaluated before it
+is awarded.
+
+**The order.** The award creates one draft order per supplier:
+* in the quotation currency, with the exchange rate fixed on the order;
+* with the delivery address / site.
+
+### LPO / LSO
+
+An order with only non-stock lines is a **Local purchase order**. If every line is a
+service it is a **Local service order**. The order kind is used in the title, the PDF and
+the email subject.
+
+**Non-stock lines:**
+* They use the description and the order unit. The default unit is `purchasing.nonStockUom`:
+  JOB for services, PCS otherwise.
+* VAT uses `purchasing.nonStockTaxCategory` (STANDARD).
+* **Withholding tax** is `purchasing.whtRates` by line type (default: 5 % on services). It
+  is calculated on the pre-VAT amount and can be overridden per line.
+* The order shows the WHT total and the **net payable**.
+
+**Order header.**
+* `expiresOn` is the order date + `purchasing.lpoValidityDays` (60).
+* `terms` defaults to `purchasing.lpoTerms`.
+* A foreign-currency order also stores `baseTotal` in KES.
+
+**Approval and budget.** Approval bands and the budget commitment use the KES value. The
+approval request records the order currency, so the matrix can route foreign-currency
+orders separately.
+
+**Sending.** With `purchasing.autoSendOnApproval` on, an approved order is emailed to the
+supplier at once. Otherwise it waits for *Send to supplier*.
+
+**Expiry.** The `purchasing.expireOrders` job runs nightly at 01:30. It expires approved or
+sent orders past their validity that have nothing received or invoiced:
+* the budget commitment is released;
+* the quantities go back to the PR;
+* procurement is notified.
+
+**Amending.** Amending an LPO or LSO works as for a PO: a new version and re-approval on
+the new value.
+
+**Receiving.** Non-stock lines are never received into a store; a GRN refuses them
+(`NON_STOCK_LINE`). The requesting department accepts them in phase 3 (GRN / service
+acceptance certificate).
+
+### Configuration added
+
+| | |
+|---|---|
+| Settings | `purchasing.rfqMinSuppliers` (3), `purchasing.rfqPassMark` (70), `purchasing.whtRates` ({SERVICE: 5}), `purchasing.nonStockTaxCategory` (STANDARD), `purchasing.nonStockUom` ({SERVICE: JOB, default: PCS}), `purchasing.lpoValidityDays` (60), `purchasing.lpoTerms`, `purchasing.autoSendOnApproval` (false) |
+| Units | JOB (job / service), LOT |
+| Statuses | PR: RFQ_ISSUED, PARTIALLY_FULFILLED, LPO_RAISED; RFQ: CLOSED, EVALUATED; PO: EXPIRED (INVOICED and PAID are reserved for phases 3–4) |
+| Jobs | `purchasing.expireOrders` (`30 1 * * *`) |
+| API | `POST /rfqs/:id/send` {fewerSuppliersJustification}, `GET /rfqs/:id/pdf`, `POST /rfqs/:id/close`, `PUT /rfqs/:id/evaluation`, `POST /rfqs/:id/scores`, `POST /rfqs/:id/evaluate`; quotation `currency`, `paymentTermsDays`, `notes`; award `deliveryAddress`; PO `currency`, `deliveryAddress`, `terms`, `expiresOn`, line `taxCategoryId`, `whtRatePercent` |
+| Migration | `1762300000000-NonStockPhase2` |
 
 ## Known limitations / next slices
 
