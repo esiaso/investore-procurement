@@ -18,6 +18,8 @@ export const DOC_ROUTES: Partial<Record<string, (id: string) => string>> = {
   GRN: (id) => `/grns/${id}`,
   INV: (id) => `/invoices/${id}`,
   PV: (id) => `/payment-vouchers/${id}`,
+  PCV: (id) => `/petty-cash/${id}`,
+  PCRP: (id) => `/petty-cash/replenishments/${id}`,
   RTS: (id) => `/supplier-returns/${id}`,
   SR: (id) => `/store-requisitions/${id}`,
   ISS: (id) => `/issues/${id}`,
@@ -41,6 +43,8 @@ export const DOC_LABELS: Record<string, string> = {
   GRN: 'Goods received',
   INV: 'Invoice',
   PV: 'Payment voucher',
+  PCV: 'Petty cash voucher',
+  PCRP: 'Petty cash replenishment',
   RTS: 'Return to supplier',
   SR: 'Internal requisition',
   ISS: 'Issue voucher',
@@ -57,7 +61,7 @@ export const DOC_LABELS: Record<string, string> = {
   DRN: 'Delivery run',
 };
 
-const ORDER = ['APP', 'REQ', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'SHP', 'GRN', 'SCC', 'RTS', 'INV', 'PV', 'HOV', 'SR', 'ISS', 'DRT', 'DRN', 'RCL', 'DSL'];
+const ORDER = ['APP', 'REQ', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'SHP', 'GRN', 'SCC', 'RTS', 'INV', 'PV', 'HOV', 'PCRP', 'PCV', 'SR', 'ISS', 'DRT', 'DRN', 'RCL', 'DSL'];
 
 export function useMoney() {
   const { currency } = useSettings();

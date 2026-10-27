@@ -15,6 +15,7 @@ import { ApproveLinkPage } from './nonstock/ApproveLinkPage';
 import { FinanceSetupPage } from './nonstock/FinanceSetupPage';
 import { HandoverDetailPage } from './nonstock/HandoverPages';
 import { PayablesPage, PaymentVoucherDetailPage, PaymentVouchersPage, ReconciliationPage } from './payments/PaymentPages';
+import { FloatsPage, FloatStatementPage, PettyCashPage, PettyRequestDetailPage, ReplenishmentPage } from './pettycash/PettyCashPages';
 import { ProcurementQueuePage, StaffRequisitionDetailPage, StaffRequisitionFormPage, StaffRequisitionsPage } from './nonstock/StaffRequisitionPages';
 import { DocumentsPage } from './reports/DocumentsPage';
 import { ReportsPage } from './reports/ReportsPage';
@@ -139,6 +140,11 @@ export function App() {
         <Route path="payments" element={guardedAny([Permissions.PAYMENTS_PREPARE, Permissions.PAYMENTS_RELEASE, Permissions.PAYMENTS_RECONCILE], <PayablesPage />)} />
         <Route path="payment-vouchers" element={guardedAny([Permissions.PAYMENTS_PREPARE, Permissions.PAYMENTS_RELEASE, Permissions.PAYMENTS_RECONCILE], <PaymentVouchersPage />)} />
         <Route path="payment-vouchers/:id" element={guardedAny([Permissions.PAYMENTS_PREPARE, Permissions.PAYMENTS_RELEASE, Permissions.PAYMENTS_RECONCILE], <PaymentVoucherDetailPage />)} />
+        <Route path="petty-cash" element={guardedAny([Permissions.PETTY_CASH_REQUEST, Permissions.PETTY_CASH_DISBURSE, Permissions.PETTY_CASH_MANAGE], <PettyCashPage />)} />
+        <Route path="petty-cash/floats" element={guardedAny([Permissions.PETTY_CASH_DISBURSE, Permissions.PETTY_CASH_MANAGE, Permissions.PETTY_CASH_REQUEST], <FloatsPage />)} />
+        <Route path="petty-cash/floats/:id" element={guardedAny([Permissions.PETTY_CASH_DISBURSE, Permissions.PETTY_CASH_MANAGE], <FloatStatementPage />)} />
+        <Route path="petty-cash/replenishments/:id" element={guardedAny([Permissions.PETTY_CASH_DISBURSE, Permissions.PETTY_CASH_MANAGE], <ReplenishmentPage />)} />
+        <Route path="petty-cash/:id" element={<PettyRequestDetailPage />} />
         <Route path="payments/reconciliation" element={guarded([Permissions.PAYMENTS_RECONCILE], <ReconciliationPage />)} />
         <Route path="payments/reconciliation/:id" element={guarded([Permissions.PAYMENTS_RECONCILE], <ReconciliationPage />)} />
         <Route path="procurement-queue" element={guarded([Permissions.STAFF_REQUISITION_READ_ALL], <ProcurementQueuePage />)} />

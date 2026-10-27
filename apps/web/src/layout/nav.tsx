@@ -112,6 +112,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Invoices', path: '/invoices', icon: <ReceiptLongIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
   { label: 'Payables', path: '/payments', icon: <PaidIcon />, permissions: [], anyOf: [P.PAYMENTS_PREPARE, P.PAYMENTS_RELEASE, P.PAYMENTS_RECONCILE], section: 'Payments' },
   { label: 'Payment vouchers', path: '/payment-vouchers', icon: <RequestQuoteIcon />, permissions: [], anyOf: [P.PAYMENTS_PREPARE, P.PAYMENTS_RELEASE, P.PAYMENTS_RECONCILE], section: 'Payments' },
+  { label: 'Petty cash', path: '/petty-cash', icon: <PaymentsIcon />, permissions: [], anyOf: [P.PETTY_CASH_REQUEST, P.PETTY_CASH_DISBURSE, P.PETTY_CASH_MANAGE], section: 'Payments' },
+  { label: 'Petty cash floats', path: '/petty-cash/floats', icon: <AccountBalanceIcon />, permissions: [], anyOf: [P.PETTY_CASH_DISBURSE, P.PETTY_CASH_MANAGE], section: 'Payments' },
   { label: 'M-PESA reconciliation', path: '/payments/reconciliation', icon: <FactCheckIcon />, permissions: [P.PAYMENTS_RECONCILE], section: 'Payments' },
   { label: 'Suppliers', path: '/suppliers', icon: <HandshakeIcon />, permissions: [Permissions.SUPPLIERS_READ], section: 'Procurement' },
   { label: 'Budgets', path: '/budgets', icon: <AccountBalanceIcon />, permissions: [Permissions.BUDGETS_READ], section: 'Procurement' },

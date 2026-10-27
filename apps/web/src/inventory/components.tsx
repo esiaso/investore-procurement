@@ -78,6 +78,9 @@ const STATUS_COLOURS: Record<string, 'default' | 'info' | 'warning' | 'success' 
   SUCCESS: 'success',
   UNKNOWN: 'warning',
   MATCHED: 'success',
+  DISBURSED: 'success',
+  RETIREMENT_SUBMITTED: 'info',
+  RETIRED: 'default',
   EXCEPTIONS: 'warning',
 };
 
