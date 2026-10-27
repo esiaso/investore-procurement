@@ -2013,6 +2013,90 @@ reconciliation covers both.
 replenishments as Transfer) is phase 6. The petty cash reports (spend by category,
 department and user; outstanding advances; replenishment history) are phase 7.
 
+## Non-stock procurement — phase 6: QuickBooks Online
+
+This builds on the slice-11 QuickBooks integration: the OAuth connection with encrypted,
+refreshed tokens; the sandbox / production / mock company; mappings; previewed batches;
+retries; and reconciliation. Phase 6 adds the non-stock, payment and petty cash documents
+to it.
+
+### What is posted
+
+| Local document | QuickBooks | Accounts / details |
+|---|---|---|
+| Approved LPO / LSO | **PurchaseOrder** (non-posting) | Stock lines → GRNI; non-stock lines → their GL account; class; tax code; currency and rate. An **amended** order is sent again as an **update** with its Id and **SyncToken**. |
+| Approved supplier invoice (matched, or exception approved through the matrix) | **Bill** | Stock lines → GRNI (store class); non-stock lines → GL account (cost-centre class); input VAT unless `purchasing.costIncludesVat`; **CurrencyRef / ExchangeRate** for foreign invoices (ledger in KES); each line **linked to the QuickBooks purchase order line** when the PO was sent. Now includes Scheduled / Partially paid invoices. |
+| Withholding tax on a paid voucher | **VendorCredit** to WHT payable | Applied by the bill payment. |
+| Paid payment voucher | **BillPayment** | Bills settled in full for their share; the WHT credit applied; **TotalAmt = cash paid** from the method's account (PAYMENT_ACCOUNT, else M-PESA paying account / default bank). |
+| M-PESA charges on a payout (voucher or petty cash) | **Purchase** | M-PESA account → bank charges. |
+| Petty cash payment | **Purchase** (Cash) | Float cash account (M-PESA account for M-PESA) → expense GL, cost-centre class, vendor when known. |
+| Petty cash advance | **JournalEntry** | Dr staff advances, Cr float. |
+| Retirement of an advance | **JournalEntry** | Dr each receipt's GL (class); Dr float with the refund (or Cr with the overspend); Cr staff advances. |
+| Petty cash replenishment (received) | **Transfer** | Bank → float. |
+
+**GL accounts.** GL accounts imported from QuickBooks carry their QuickBooks id. Others
+are mapped by code under *Mappings → GL accounts* (`GL_ACCOUNT`).
+
+**Control accounts.** The new control accounts are `MPESA_CLEARING`, `WHT_PAYABLE`,
+`BANK_CHARGES` and `STAFF_ADVANCES`.
+
+**Classes.** Cost centres map to QuickBooks classes through `DEPARTMENT_CLASS`; stores
+through `STORE_CLASS`.
+
+**Sample data.** The sample mappings link every new account, and the sample GL accounts,
+to the mock company.
+
+### Sync engine
+
+**The queue.** `accounting_posting` is the queue: one row per QuickBooks document.
+* It is idempotent: the posting id is QuickBooks' `requestid`, and posted documents are
+  never sent twice.
+* It stores the **QuickBooks Id and SyncToken**, and the source version for purchase orders.
+* Statuses are READY, BLOCKED (with what to map), PENDING (retrying with back-off),
+  POSTED and FAILED.
+
+**The error log.** *QuickBooks → Postings & errors* lists failed and blocked postings. Its retry action
+rebuilds a posting from its source after a mapping is fixed, and sends it again.
+
+**Automatic sync.** Set `accounting.autoSync` (off by default). The job
+`accounting.autoSync` runs every 15 minutes and previews and posts new purchases, payments
+and petty cash from `accounting.autoSyncFrom` (default: the last 30 days).
+`accounting.dispatch` retries the rest. *Run automatic sync now* runs it on demand.
+
+**Sync status on every document.** Purchase orders, invoices, payment vouchers and petty
+cash vouchers show a **QuickBooks: synced / pending / failed / not sent** chip. Its tooltip
+shows each posting, its QuickBooks id and any error (`GET /accounting/sync-status?ids=`).
+
+**Vendors.** *Link QuickBooks vendors* (PULL) links existing vendors to suppliers by KRA PIN
+(tax id) or name. *Create missing vendors* (PUSH) creates the rest. Vendors are otherwise
+created on first use.
+
+The mock company now supports PurchaseOrder, Purchase, Transfer, updates with
+`SyncToken` (a stale token is refused, as QuickBooks does), vendor credits applied in bill
+payments, and foreign-currency transactions.
+
+### Configuration added
+
+| | |
+|---|---|
+| Settings | `accounting.autoSync` (false), `accounting.autoSyncFrom` ('' = last 30 days) |
+| Jobs | `accounting.autoSync` (`*/15 * * * *`) |
+| Mappings | `GL_ACCOUNT`; SYSTEM `MPESA_CLEARING`, `WHT_PAYABLE`, `BANK_CHARGES`, `STAFF_ADVANCES`; PAYMENT_ACCOUNT for `CHEQUE`, `MPESA_PAYBILL`, `MPESA_TILL`, `MPESA_B2C` |
+| Batch kinds | `PETTY_CASH` (new); `PURCHASES` now includes purchase orders, WHT credits and M-PESA charges |
+| API | `GET /accounting/sync-status?ids=`, `POST /accounting/vendors/sync` {direction: PULL \| PUSH}, `POST /accounting/auto-sync` |
+| Migration | `1762700000000-NonStockPhase6` |
+
+**Not yet covered:**
+* QuickBooks webhooks / CDC (changes made in QuickBooks flowing back) are not
+  implemented. Vendor and account changes are picked up by *Link QuickBooks vendors* and
+  *Import from QuickBooks* (GL accounts).
+* Reversed M-PESA payments and reversed petty cash are not posted automatically; correct
+  them in QuickBooks.
+* Foreign-currency bill payments use the invoice's rate (no realised exchange gain or
+  loss).
+* As before, the integration has been exercised against the mock company only. Connect an
+  Intuit sandbox company before production.
+
 ## Known limitations / next slices
 
 * Reports run on the live database (no reporting replica or pre-aggregation); very
