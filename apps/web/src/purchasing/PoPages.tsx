@@ -19,7 +19,7 @@ import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Permissions, PurchaseOrderStatus } from '@sil/shared';
+import { Permissions, PurchaseLineType, PurchaseOrderStatus } from '@sil/shared';
 import { API_BASE, api } from '../api/client';
 import { useAll, useApiMutation, useList, usePaged } from '../api/hooks';
 import type { PurchaseOrder } from '../api/purchasing-types';
@@ -29,7 +29,7 @@ import { FormDialog } from '../components/FormDialog';
 import { useNotify } from '../components/Notify';
 import { PageHeader } from '../components/PageHeader';
 import { ItemPicker, StatusChip } from '../inventory/components';
-import { humanise } from '../lib/format';
+import { formatMoney, humanise } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate, useMoney } from './common';
 import { useSupplierOptions } from './RequisitionsPages';
@@ -37,7 +37,7 @@ import { useSupplierOptions } from './RequisitionsPages';
 function AmendDialog({ po, onClose }: { po: PurchaseOrder; onClose(): void }) {
   const [reason, setReason] = useState('');
   const [expectedDelivery, setExpectedDelivery] = useState(po.expectedDelivery ?? '');
-  const [lines, setLines] = useState((po.lines ?? []).map((l) => ({ lineId: l.id, name: l.item?.name, uom: l.uom?.code, quantity: String(l.quantity), unitPrice: String(l.unitPrice) })));
+  const [lines, setLines] = useState((po.lines ?? []).map((l) => ({ lineId: l.id, name: l.item?.name ?? l.description, uom: l.uom?.code, quantity: String(l.quantity), unitPrice: String(l.unitPrice) })));
   const amend = useApiMutation<void>(
     () => [
       `/purchase-orders/${po.id}/amend`,
@@ -79,6 +79,13 @@ interface Version {
   snapshot: { total: number; status: string; lines: { lineNo: number; quantity: number; unitPrice: number }[] };
 }
 
+/** LPO / LSO for non-stock orders (services only → LSO), else purchase order. */
+export function orderKind(po: PurchaseOrder): string {
+  const types = (po.lines ?? []).map((l) => l.lineType ?? PurchaseLineType.STOCK);
+  if (!types.length || types.includes(PurchaseLineType.STOCK)) return 'Purchase order';
+  return types.every((t) => t === PurchaseLineType.SERVICE) ? 'Local service order' : 'Local purchase order';
+}
+
 export function PurchaseOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -96,10 +103,14 @@ export function PurchaseOrderDetailPage() {
   const manage = can(Permissions.PURCHASING_PO);
   const s = po.status as PurchaseOrderStatus;
   const open = [PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.SENT, PurchaseOrderStatus.PARTIALLY_RECEIVED].includes(s);
+  const stock = (po.lines ?? []).some((l) => (l.lineType ?? PurchaseLineType.STOCK) === PurchaseLineType.STOCK);
+  const foreign = !!po.exchangeRate && po.exchangeRate !== 1;
+  // Order lines are in the order currency.
+  const cur = (v: number | null | undefined) => (foreign ? formatMoney(v ?? 0, po.currency) : money(v));
   return (
     <>
       <PageHeader
-        title={`Purchase order ${po.number}`}
+        title={`${orderKind(po)} ${po.number}`}
         actions={
           <Button startIcon={<PictureAsPdfIcon />} href={`${API_BASE}/purchase-orders/${po.id}/pdf`} target="_blank" rel="noopener">
             PDF
@@ -121,38 +132,53 @@ export function PurchaseOrderDetailPage() {
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ mb: 2 }}>
                 <Field label="Order date">{date(po.orderDate)}</Field>
                 <Field label="Expected delivery">{date(po.expectedDelivery) || '—'}</Field>
-                <Field label="Total (incl. VAT)">{money(po.total)}</Field>
+                <Field label="Total (incl. VAT)">{cur(po.total)}</Field>
+                {foreign && <Field label={`Base value (rate ${po.exchangeRate})`}>{money(po.baseTotal)}</Field>}
+                {!!po.whtTotal && <Field label="Withholding tax">{cur(po.whtTotal)}</Field>}
+                {!!po.whtTotal && <Field label="Net payable">{cur(po.total - po.whtTotal)}</Field>}
+                {po.expiresOn && <Field label="Valid until">{date(po.expiresOn)}</Field>}
                 <Field label="Committed">{money(po.committedTotal)}</Field>
               </Stack>
+              {po.deliveryAddress && <Typography variant="body2" sx={{ mb: 1 }}>Deliver to: {po.deliveryAddress}</Typography>}
               <Table size="small" aria-label="Order lines">
                 <TableHead>
                   <TableRow>
                     <TableCell>#</TableCell><TableCell>Item</TableCell><TableCell align="right">Qty</TableCell><TableCell>Unit</TableCell>
-                    <TableCell align="right">Price</TableCell><TableCell align="right">VAT</TableCell><TableCell align="right">Total</TableCell><TableCell align="right">Received (base)</TableCell>
+                    <TableCell align="right">Price</TableCell><TableCell align="right">VAT</TableCell><TableCell align="right">Total</TableCell>{stock && <TableCell align="right">Received (base)</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {(po.lines ?? []).map((l) => (
                     <TableRow key={l.id}>
                       <TableCell>{l.lineNo}</TableCell>
-                      <TableCell>{l.item?.name}</TableCell>
+                      <TableCell>
+                        {l.item?.name ?? l.description}
+                        {l.lineType && l.lineType !== PurchaseLineType.STOCK && <Chip size="small" variant="outlined" label={humanise(l.lineType)} sx={{ ml: 1 }} />}
+                        {!!l.whtAmount && <Box sx={{ fontSize: 11, color: 'text.secondary' }}>WHT {l.whtRatePercent}%: {cur(l.whtAmount)}</Box>}
+                      </TableCell>
                       <TableCell align="right">{l.quantity}</TableCell>
                       <TableCell>{l.uom?.code}{l.conversionFactor !== 1 ? ` (×${l.conversionFactor})` : ''}</TableCell>
-                      <TableCell align="right">{money(l.unitPrice)}</TableCell>
+                      <TableCell align="right">{cur(l.unitPrice)}</TableCell>
                       <TableCell align="right">{l.taxRatePercent}%</TableCell>
-                      <TableCell align="right">{money(l.lineTotal)}</TableCell>
-                      <TableCell align="right">{l.receivedBaseQty} / {l.quantity * l.conversionFactor}</TableCell>
+                      <TableCell align="right">{cur(l.lineTotal)}</TableCell>
+                      {stock && <TableCell align="right">{l.itemId ? `${l.receivedBaseQty} / ${l.quantity * l.conversionFactor}` : '—'}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              {po.terms && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">Terms</Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }} color="text.secondary">{po.terms}</Typography>
+                </Box>
+              )}
             </Paper>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {manage && [PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.RETURNED].includes(s) && (
                 <Button variant="contained" onClick={() => submit.mutate(undefined, { onSuccess: (r) => r.budgetWarning && notify.info(r.budgetWarning) })}>Submit for approval</Button>
               )}
               {manage && [PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.SENT].includes(s) && <Button variant="contained" onClick={() => send.mutate()}>{s === 'SENT' ? 'Resend to supplier' : 'Send to supplier'}</Button>}
-              {open && can(Permissions.PURCHASING_RECEIVE) && <Button variant="outlined" onClick={() => navigate(`/grns/new?poId=${po.id}`)}>Receive goods</Button>}
+              {open && stock && can(Permissions.PURCHASING_RECEIVE) && <Button variant="outlined" onClick={() => navigate(`/grns/new?poId=${po.id}`)}>Receive goods</Button>}
               {can(Permissions.PURCHASING_INVOICE) && ['SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED'].includes(s) && <Button variant="outlined" onClick={() => navigate(`/invoices/new?poId=${po.id}`)}>Capture invoice</Button>}
               {manage && open && <Button onClick={() => setDialog('amend')}>Amend</Button>}
               {manage && [...(open ? [s] : []), PurchaseOrderStatus.RECEIVED].includes(s) && <Button onClick={() => setDialog('close')}>Close</Button>}

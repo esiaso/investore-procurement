@@ -146,26 +146,62 @@ export interface Rfq extends Base {
   status: string;
   supplierIds: string[];
   awardJustification: string | null;
-  lines?: (Base & { itemId: string; item?: Item; quantity: number; awardedQuotationLineId: string | null })[];
+  fewerSuppliersJustification?: string | null;
+  technicalWeight: number;
+  passMark: number;
+  committeeUserIds: string[];
+  recommendation: string | null;
+  recommendedSupplierId: string | null;
+  evaluatedAt: string | null;
+  lines?: (Base & { itemId: string | null; item?: Item; lineType?: string; description?: string | null; uom?: Uom | null; quantity: number; awardedQuotationLineId: string | null })[];
+}
+
+export interface SupplierEvaluation {
+  quotationId: string;
+  supplierId: string;
+  supplierName: string;
+  compliant: boolean;
+  complianceNotes: string | null;
+  deliveryDays: number | null;
+  paymentTermsDays: number | null;
+  currency: string | null;
+  quotedTotal: number;
+  total: number;
+  linesQuoted: number;
+  lowestOnLines: number;
+  scores: { memberId: string; technicalScore: number; comment: string | null }[];
+  technicalScore: number | null;
+  financialScore: number | null;
+  combinedScore: number | null;
+  passes: boolean;
+  rank: number | null;
+  recommended: boolean;
 }
 
 export interface Comparison {
   rfq: Rfq;
   lines: {
     rfqLineId: string;
-    itemId: string;
+    itemId: string | null;
     itemName: string;
+    lineType?: string;
+    uom?: string | null;
     quantity: number;
     awardedQuotationLineId: string | null;
-    quotes: { quotationLineId: string; supplierId: string; supplierName: string; unitPrice: number; lineTotal: number; deliveryDays: number | null; compliant: boolean; offeredBrand: string | null; rank: number; lowestCompliant: boolean }[];
+    quotes: { quotationLineId: string; supplierId: string; supplierName: string; unitPrice: number; quotedUnitPrice: number; currency: string | null; lineTotal: number; deliveryDays: number | null; compliant: boolean; offeredBrand: string | null; rank: number; lowestCompliant: boolean }[];
   }[];
-  suppliers: { supplierId: string; supplierName: string; compliant: boolean; complianceNotes: string | null; deliveryDays: number | null; total: number; linesQuoted: number; lowestOnLines: number }[];
+  suppliers: SupplierEvaluation[];
 }
 
 export interface PoLine extends Base {
   lineNo: number;
-  itemId: string;
-  item?: Item;
+  itemId: string | null;
+  item?: Item | null;
+  lineType?: string;
+  description?: string | null;
+  glAccountId?: string | null;
+  whtRatePercent?: number;
+  whtAmount?: number;
   uomId: string;
   uom?: Uom;
   conversionFactor: number;
@@ -197,9 +233,15 @@ export interface PurchaseOrder extends Base {
   expectedDelivery: string | null;
   notes: string | null;
   currency: string;
+  exchangeRate?: number;
   subtotal: number;
   taxTotal: number;
   total: number;
+  baseTotal?: number;
+  whtTotal?: number;
+  deliveryAddress?: string | null;
+  terms?: string | null;
+  expiresOn?: string | null;
   committedTotal: number;
   lastComment: string | null;
   cancellationReason: string | null;
