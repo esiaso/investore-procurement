@@ -19,12 +19,16 @@ import {
   CreditNoteDto,
   DispatchSupplierReturnDto,
   DocListQueryDto,
+  EvaluateDto,
+  EvaluationSetupDto,
   InspectGrnDto,
   PayInvoiceDto,
   PostGrnDto,
   ReasonDto,
   RecordQuotationDto,
   RegulariseGrnDto,
+  ScoreDto,
+  SendRfqDto,
 } from './purchasing.dto';
 import { RequisitionsService } from './requisitions.service';
 import { RfqsService } from './rfqs.service';
@@ -92,9 +96,42 @@ export class RfqsController {
     return this.rfqs.create(dto);
   }
 
+  /** Emails the invited suppliers with the RFQ attached (minimum purchasing.rfqMinSuppliers, or a justification). */
   @Post(':id/send') @HttpCode(200) @RequirePermissions(Permissions.PURCHASING_RFQ)
-  send(@Param('id', ParseUUIDPipe) id: string) {
-    return this.rfqs.send(id);
+  send(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SendRfqDto) {
+    return this.rfqs.send(id, dto);
+  }
+
+  @Get(':id/pdf') @RequirePermissions(Permissions.PURCHASING_READ)
+  async pdf(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
+    const body = await this.rfqs.renderPdf(id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="rfq-${id}.pdf"`);
+    return new StreamableFile(body);
+  }
+
+  /** Bidding closed: no more quotations. */
+  @Post(':id/close') @HttpCode(200) @RequirePermissions(Permissions.PURCHASING_RFQ)
+  close(@Param('id', ParseUUIDPipe) id: string) {
+    return this.rfqs.close(id);
+  }
+
+  /** Technical weight, pass mark and evaluation committee. */
+  @Put(':id/evaluation') @RequirePermissions(Permissions.PURCHASING_RFQ)
+  setupEvaluation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: EvaluationSetupDto) {
+    return this.rfqs.setupEvaluation(id, dto);
+  }
+
+  /** A committee member scores a quotation (technical, 0–100). */
+  @Post(':id/scores') @HttpCode(200) @RequirePermissions(Permissions.PURCHASING_READ)
+  score(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ScoreDto, @CurrentUser() u: SessionUser) {
+    return this.rfqs.score(id, dto, u);
+  }
+
+  /** Completes the evaluation with the recommendation. */
+  @Post(':id/evaluate') @HttpCode(200) @RequirePermissions(Permissions.PURCHASING_RFQ)
+  evaluate(@Param('id', ParseUUIDPipe) id: string, @Body() dto: EvaluateDto, @CurrentUser() u: SessionUser) {
+    return this.rfqs.evaluate(id, dto, u);
   }
 
   @Post(':id/quotations') @HttpCode(200) @RequirePermissions(Permissions.PURCHASING_RFQ)

@@ -21,6 +21,7 @@ import { Department, Store } from '../org/org.entities';
 import { Supplier } from '../suppliers/suppliers.entities';
 
 const RATE = { type: 'numeric', precision: 7, scale: 4, transformer: numericTransformer } as const;
+const RATE6 = { type: 'numeric', precision: 18, scale: 6, transformer: numericTransformer } as const;
 const FACTOR = { type: 'numeric', precision: 18, scale: 6, transformer: numericTransformer } as const;
 
 // ------------------------------------------------------------------ requisitions
@@ -178,6 +179,38 @@ export class Rfq extends AppBaseEntity {
   @Column({ type: 'varchar', length: 2000, nullable: true })
   awardJustification: string | null;
 
+  /** Fewer suppliers invited than purchasing.rfqMinSuppliers: why. */
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  fewerSuppliersJustification: string | null;
+
+  /** Bidding closed (no more quotations). */
+  @Column({ type: 'timestamptz', nullable: true })
+  closedAt: Date | null;
+
+  /** Weight of the technical score in the combined score (0 = price only). */
+  @Column({ type: 'int', default: 0 })
+  technicalWeight: number;
+
+  /** Minimum average technical score to be considered. */
+  @Column({ type: 'int', default: 70 })
+  passMark: number;
+
+  /** Evaluation committee (user ids); each scores every compliant quotation. */
+  @Column({ type: 'jsonb', default: () => `'[]'::jsonb` })
+  committeeUserIds: string[];
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  recommendation: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  recommendedSupplierId: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  evaluatedAt: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  evaluatedBy: string | null;
+
   @OneToMany(() => RfqLine, (l) => l.rfq, { cascade: true })
   lines?: RfqLine[];
 
@@ -197,14 +230,31 @@ export class RfqLine extends AppBaseEntity {
   @Column({ type: 'uuid', nullable: true })
   requisitionLineId: string | null;
 
-  @Column({ type: 'uuid' })
-  itemId: string;
+  @Column({ type: 'enum', enum: PurchaseLineType, enumName: 'purchase_line_type', default: PurchaseLineType.STOCK })
+  lineType: PurchaseLineType;
 
-  @ManyToOne(() => Item, { onDelete: 'RESTRICT' })
+  /** Catalog item (stock lines; optional for non-stock). */
+  @Column({ type: 'uuid', nullable: true })
+  itemId: string | null;
+
+  @ManyToOne(() => Item, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'item_id' })
-  item?: Item;
+  item?: Item | null;
 
-  /** Base units. */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  description: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  uomId: string | null;
+
+  @ManyToOne(() => UnitOfMeasure, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'uom_id' })
+  uom?: UnitOfMeasure | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  glAccountId: string | null;
+
+  /** Base units (stock) or the line's unit (non-stock). */
   @Column(QUANTITY)
   quantity: number;
 
@@ -248,6 +298,16 @@ export class Quotation extends AppBaseEntity {
 
   @Column({ type: 'varchar', length: 1000, nullable: true })
   complianceNotes: string | null;
+
+  /** Currency of the prices (null = base currency). */
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  currency: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  paymentTermsDays: number | null;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  notes: string | null;
 
   @OneToMany(() => QuotationLine, (l) => l.quotation, { cascade: true })
   lines?: QuotationLine[];
@@ -344,6 +404,29 @@ export class PurchaseOrder extends AppBaseEntity {
   @Column({ type: 'varchar', length: 3 })
   currency: string;
 
+  /** Base-currency value of one unit of `currency` on the order date. */
+  @Column({ ...RATE6, default: 1 })
+  exchangeRate: number;
+
+  /** Total in the base currency (approval bands, budget). */
+  @Column({ ...MONEY, default: 0 })
+  baseTotal: number;
+
+  /** Withholding tax to deduct at payment (services). */
+  @Column({ ...MONEY, default: 0 })
+  whtTotal: number;
+
+  /** Where / to whom it is delivered (the final user for non-stock orders). */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  deliveryAddress: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  terms: string | null;
+
+  /** Valid until; not received by then → EXPIRED. */
+  @Column({ type: 'date', nullable: true })
+  expiresOn: string | null;
+
   @Column({ ...MONEY, default: 0 })
   subtotal: number;
 
@@ -397,12 +480,30 @@ export class PurchaseOrderLine extends AppBaseEntity {
   @Column({ type: 'int' })
   lineNo: number;
 
-  @Column({ type: 'uuid' })
-  itemId: string;
+  @Column({ type: 'enum', enum: PurchaseLineType, enumName: 'purchase_line_type', default: PurchaseLineType.STOCK })
+  lineType: PurchaseLineType;
 
-  @ManyToOne(() => Item, { onDelete: 'RESTRICT' })
+  /** Catalog item (stock lines; optional for non-stock goods and services). */
+  @Column({ type: 'uuid', nullable: true })
+  itemId: string | null;
+
+  @ManyToOne(() => Item, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'item_id' })
-  item?: Item;
+  item?: Item | null;
+
+  /** What is bought (non-stock lines). */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  description: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  glAccountId: string | null;
+
+  /** Withholding tax rate on this line (purchasing.whtRates by line type, or set on the order). */
+  @Column({ ...RATE, default: 0 })
+  whtRatePercent: number;
+
+  @Column({ ...MONEY, default: 0 })
+  whtAmount: number;
 
   /** Ordering unit (e.g. BOX) and its size in base units. */
   @Column({ type: 'uuid' })
@@ -872,4 +973,25 @@ export class PaymentVoucher extends AppBaseEntity {
 
   @Column({ type: 'varchar', length: 40 })
   method: string;
+}
+
+/** One committee member's technical score of one quotation (0–100). */
+@Entity('rfq_evaluation_score')
+@Index(['quotationId', 'memberId'], { unique: true })
+export class RfqEvaluationScore extends AppBaseEntity {
+  @Index()
+  @Column({ type: 'uuid' })
+  rfqId: string;
+
+  @Column({ type: 'uuid' })
+  quotationId: string;
+
+  @Column({ type: 'uuid' })
+  memberId: string;
+
+  @Column({ type: 'numeric', precision: 5, scale: 2, transformer: numericTransformer })
+  technicalScore: number;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  comment: string | null;
 }

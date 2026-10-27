@@ -9,6 +9,7 @@ import {
   RegularisationStatus,
   SessionUser,
   StockTxnType,
+  PurchaseLineType,
 } from '@sil/shared';
 import { likeTerm } from '../../common/pagination';
 import { StoreScope } from '../../common/store-scope';
@@ -108,6 +109,8 @@ export class GrnsService implements OnModuleInit {
         const where = `Line ${i + 1}`;
         const poLine = l.poLineId ? poLines.find((p) => p.id === l.poLineId) : undefined;
         if (po && !poLine) throw new BadRequestException(`${where}: choose the PO line being received`);
+        // Goods and services not held in stock are accepted by the requesting department (service acceptance), never into stock.
+        if (poLine && poLine.lineType !== PurchaseLineType.STOCK) throw new BadRequestException({ code: 'NON_STOCK_LINE', message: `${where}: ${poLine.description ?? 'this line'} is not a stock item; it is accepted by the requesting department, not received into a store` });
         const itemId = poLine?.itemId ?? l.itemId;
         if (!itemId) throw new BadRequestException(`${where}: item is required`);
         const [item] = await m.query(

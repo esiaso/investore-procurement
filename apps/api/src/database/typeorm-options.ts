@@ -32,6 +32,7 @@ import {
   ReturnToSupplierLine,
   Rfq,
   RfqLine,
+  RfqEvaluationScore,
   SupplierInvoice,
   SupplierInvoiceLine,
 } from '../modules/purchasing/purchasing.entities';
@@ -158,6 +159,7 @@ export const ENTITIES = [
   PurchaseRequisitionLine,
   Rfq,
   RfqLine,
+  RfqEvaluationScore,
   Quotation,
   QuotationLine,
   PurchaseOrder,

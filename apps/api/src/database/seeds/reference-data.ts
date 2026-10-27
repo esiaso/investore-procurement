@@ -45,6 +45,8 @@ export const REPORT_SCHEDULES: Record<string, string> = {
   'reports.scheduled': '*/15 * * * *',
   /** Non-stock procurement: approval reminders and escalations. */
   'approvals.escalate': '*/15 * * * *',
+  /** Non-stock phase 2: LPOs past their validity with nothing received. */
+  'purchasing.expireOrders': '30 1 * * *',
 };
 
 /** Slice 9 HMIS jobs (also merged into existing installations by a migration). */
@@ -219,6 +221,14 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'reports.deadStockDays', value: 180, description: 'Dead-stock report: stock with no issue, dispense or transfer out for this many days', isPublic: true },
   { key: 'reports.nearExpiryDays', value: 90, description: 'Near-expiry report: default horizon (days)', isPublic: true },
   { key: 'approvals.linkExpiryHours', value: 72, description: 'Approve / reject links in approval emails stop working after this many hours (each link works once)', isPublic: false },
+  { key: 'purchasing.rfqMinSuppliers', value: 3, description: 'RFQs are sent to at least this many suppliers; fewer needs a justification', isPublic: true },
+  { key: 'purchasing.rfqPassMark', value: 70, description: 'Default technical pass mark (0–100) when an RFQ is scored by a committee', isPublic: true },
+  { key: 'purchasing.whtRates', value: { STOCK: 0, NON_STOCK_GOODS: 0, SERVICE: 5, CAPEX_EXPENSED: 0 }, description: 'Withholding tax % by purchase line type (deducted at payment); can be changed on each order line', isPublic: true },
+  { key: 'purchasing.nonStockTaxCategory', value: 'STANDARD', description: 'Tax category for non-stock order lines unless chosen on the line', isPublic: true },
+  { key: 'purchasing.nonStockUom', value: { SERVICE: 'JOB', default: 'PCS' }, description: 'Unit for non-stock lines without one, by line type', isPublic: true },
+  { key: 'purchasing.lpoValidityDays', value: 60, description: 'LPOs / LSOs expire this many days after the order date if nothing is received', isPublic: true },
+  { key: 'purchasing.lpoTerms', value: '1. Deliver only the goods or services ordered, at the prices shown.\n2. Quote the order number on the delivery note and invoice.\n3. Invoices must be KRA eTIMS invoices.\n4. Withholding tax is deducted at payment where the law requires it.\n5. This order expires on the date shown unless extended in writing.', description: 'Terms and conditions printed on LPOs / LSOs', isPublic: true },
+  { key: 'purchasing.autoSendOnApproval', value: false, description: 'Email purchase orders to the supplier as soon as they are approved', isPublic: false },
   { key: 'requisitions.requireGlAccount', value: false, description: 'Requesters must give a GL account on non-stock requisition lines (otherwise Finance / procurement codes them)', isPublic: true },
   { key: 'reports.maxRows', value: 50000, description: 'Most rows a report returns or exports', isPublic: false },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
@@ -336,6 +346,8 @@ export const DEFAULT_UOMS: [code: string, name: string][] = [
   ['TUBE', 'Tube'],
   ['SACHET', 'Sachet'],
   ['PCS', 'Piece'],
+  ['JOB', 'Job / service'],
+  ['LOT', 'Lot'],
   ['PAIR', 'Pair'],
   ['PACK', 'Pack'],
   ['ROLL', 'Roll'],

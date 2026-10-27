@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
@@ -11,8 +12,10 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
+  MinLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -71,7 +74,7 @@ export class CreateRfqDto {
 
 export class QuotationLineDto {
   @ApiProperty() @IsUUID() rfqLineId: string;
-  @ApiProperty({ description: 'Per base unit, excl. VAT' }) @IsNumber(QTY) @Min(0) unitPrice: number;
+  @ApiProperty({ description: 'Per base unit (stock) or per unit of the line (non-stock), excl. VAT, in the quotation currency' }) @IsNumber(QTY) @Min(0) unitPrice: number;
   @ApiPropertyOptional() @IsOptional() @IsNumber(QTY) @Min(0) quantityOffered?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(300) offeredBrand?: string;
 }
@@ -83,6 +86,9 @@ export class RecordQuotationDto {
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) deliveryDays?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() compliant?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) complianceNotes?: string;
+  @ApiPropertyOptional({ description: 'Currency of the prices (default: base currency)' }) @IsOptional() @Matches(/^[A-Z]{3}$/) currency?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(365) paymentTermsDays?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
   @ApiProperty({ type: [QuotationLineDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => QuotationLineDto)
   lines: QuotationLineDto[];
 }
@@ -98,6 +104,27 @@ export class AwardRfqDto {
   @ApiPropertyOptional({ description: 'Required when any line is not awarded to the lowest compliant quote' })
   @IsOptional() @IsString() @MaxLength(2000) justification?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsDateString({ strict: true }) expectedDelivery?: string | null;
+  @ApiPropertyOptional({ description: 'LPO / LSO: delivery address or the final user' }) @IsOptional() @IsString() @MaxLength(500) deliveryAddress?: string;
+}
+
+export class SendRfqDto {
+  @ApiPropertyOptional({ description: 'Required when fewer suppliers are invited than purchasing.rfqMinSuppliers' }) @IsOptional() @IsString() @MaxLength(1000) fewerSuppliersJustification?: string;
+}
+
+export class EvaluationSetupDto {
+  @ApiProperty({ description: 'Weight of the technical score (0 = price only, 100 = technical only)' }) @IsInt() @Min(0) @Max(100) technicalWeight: number;
+  @ApiPropertyOptional({ description: 'Minimum average technical score (default purchasing.rfqPassMark)' }) @IsOptional() @IsInt() @Min(0) @Max(100) passMark?: number;
+  @ApiProperty({ type: [String], description: 'Evaluation committee members (each scores every compliant quotation)' }) @IsArray() @ArrayMaxSize(15) @IsUUID('all', { each: true }) committeeUserIds: string[];
+}
+
+export class ScoreDto {
+  @ApiProperty() @IsUUID() quotationId: string;
+  @ApiProperty() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100) technicalScore: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) comment?: string;
+}
+
+export class EvaluateDto {
+  @ApiProperty({ description: 'Recommendation of the evaluation (who and why)' }) @IsString() @MinLength(5) @MaxLength(2000) recommendation: string;
 }
 
 // ------------------------------------------------------------------ purchase orders
@@ -108,6 +135,8 @@ export class PoLineDto {
   @ApiPropertyOptional({ description: 'Ordering unit (default: base unit)' }) @IsOptional() @IsUUID() uomId?: string;
   @ApiPropertyOptional({ description: 'In ordering units (default: remaining requisition quantity)' }) @IsOptional() @IsNumber(QTY) @Min(0.0001) quantity?: number;
   @ApiPropertyOptional({ description: 'Per ordering unit excl. VAT (default: contract price)' }) @IsOptional() @IsNumber(QTY) @Min(0) unitPrice?: number;
+  @ApiPropertyOptional({ description: 'Non-stock lines: tax category (default purchasing.nonStockTaxCategory)' }) @IsOptional() @IsUUID() taxCategoryId?: string;
+  @ApiPropertyOptional({ description: 'Non-stock lines: withholding tax % (default purchasing.whtRates)' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(50) whtRatePercent?: number;
 }
 
 export class CreatePurchaseOrderDto {
@@ -118,6 +147,10 @@ export class CreatePurchaseOrderDto {
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsUUID() budgetId?: string | null;
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsDateString({ strict: true }) expectedDelivery?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+  @ApiPropertyOptional({ description: 'Currency (default: base currency)' }) @IsOptional() @Matches(/^[A-Z]{3}$/) currency?: string;
+  @ApiPropertyOptional({ description: 'LPO / LSO: delivery address or the final user' }) @IsOptional() @IsString() @MaxLength(500) deliveryAddress?: string;
+  @ApiPropertyOptional({ description: 'Terms and conditions (default purchasing.lpoTerms for non-stock orders)' }) @IsOptional() @IsString() @MaxLength(5000) terms?: string;
+  @ApiPropertyOptional({ description: 'Valid until (default: order date + purchasing.lpoValidityDays for non-stock orders)' }) @IsOptional() @Transform(emptyToNull) @IsDateString({ strict: true }) expiresOn?: string | null;
   @ApiProperty({ type: [PoLineDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => PoLineDto)
   lines: PoLineDto[];
 }

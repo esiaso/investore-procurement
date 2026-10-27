@@ -151,7 +151,7 @@ describe('Non-stock procurement phase 1: approval engine, requisitions → purch
       expect(chain.nodes.map((n: { type: string }) => n.type)).toEqual(expect.arrayContaining(['REQ', 'SR', 'PR']));
     });
 
-    it('the purchase requisition goes through its own approval; non-stock lines cannot go on a stock RFQ yet', async () => {
+    it('the purchase requisition goes through its own approval', async () => {
       await c['proc.officer'].put(`/requisitions/${prId}`, { departmentId: ids.ADMIN, storeId: ids.MS, justification: 'x', lines: [{ itemId: ids.stockItem, quantity: 1 }] }).expect(409);
       await c['proc.officer'].post(`/requisitions/${prId}/submit`).expect(200);
       const ar = await pending(prId);
@@ -160,9 +160,6 @@ describe('Non-stock procurement phase 1: approval engine, requisitions → purch
       // PR-2 band (100k–1M) needs supply chain approval too.
       await approve('scm', ar.id);
       expect((await c['proc.officer'].get(`/requisitions/${prId}`).expect(200)).body.status).toBe('APPROVED');
-      const supplier = await one(`SELECT id FROM supplier WHERE status = 'ACTIVE' LIMIT 1`);
-      const rfq = await c['proc.officer'].post('/rfqs', { requisitionId: prId, title: 'Services', closingDate: '2099-01-01', supplierIds: [supplier.id] }).expect(409);
-      expect(rfq.body.code).toBe('NON_STOCK_LINES');
     });
 
     it('a cancelled purchase requisition puts its lines back in the queue', async () => {

@@ -4,6 +4,7 @@ import { BudgetsModule } from '../budgets/budgets.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { EtimsModule } from '../etims/etims.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { FinanceModule } from '../finance/finance.module';
 import { NumberingModule } from '../numbering/numbering.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
 import { TaxModule } from '../tax/tax.module';
@@ -33,6 +34,7 @@ import {
   ReturnToSupplierLine,
   Rfq,
   RfqLine,
+  RfqEvaluationScore,
   SupplierInvoice,
   SupplierInvoiceLine,
 } from './purchasing.entities';
@@ -59,6 +61,7 @@ import { SupplierReturnsService } from './supplier-returns.service';
       SupplierInvoice,
       SupplierInvoiceLine,
       PaymentVoucher,
+      RfqEvaluationScore,
     ]),
     NumberingModule,
     TaxModule,
@@ -67,6 +70,7 @@ import { SupplierReturnsService } from './supplier-returns.service';
     BudgetsModule,
     InventoryModule,
     EtimsModule,
+    FinanceModule,
   ],
   controllers: [RequisitionsController, RfqsController, PurchaseOrdersController, GrnsController, InvoicesController, SupplierReturnsController],
   providers: [RequisitionsService, RfqsService, PurchaseOrdersService, GrnsService, InvoicesService, SupplierReturnsService],

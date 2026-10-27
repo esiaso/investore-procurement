@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In } from 'typeorm';
-import { DocumentType, Paginated, RequisitionPriority, RequisitionStatus, SessionUser } from '@sil/shared';
+import { DocumentType, OPEN_REQUISITION_STATUSES, Paginated, PurchaseLineType, RequisitionPriority, RequisitionStatus, SessionUser } from '@sil/shared';
 import { likeTerm } from '../../common/pagination';
 import { ApprovalRequest } from '../approvals/approvals.entities';
 import { ApprovalHandler, ApprovalsService } from '../approvals/approvals.service';
@@ -93,16 +93,6 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
       return pr.id;
     });
     return this.get(id);
-  }
-
-  /**
-   * Non-stock lines (consolidated from staff requisitions) are bought through
-   * the non-stock cycle (RFQ, LPO, service acceptance), which arrives in phase
-   * 2; until then they cannot go on an RFQ or a stock PO.
-   */
-  async assertStockOnly(m: EntityManager, prId: string): Promise<void> {
-    const [{ n }] = await m.query(`SELECT COUNT(*)::int AS n FROM purchase_requisition_line WHERE requisition_id = $1 AND line_type <> 'STOCK'`, [prId]);
-    if (n) throw new ConflictException({ code: 'NON_STOCK_LINES', message: `This requisition has ${n} non-stock line(s); they are bought through the non-stock LPO cycle` });
   }
 
   /** Only the requester may edit, and only while draft or returned. */
@@ -230,24 +220,41 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
     await m.save(pr);
   }
 
-  /** Records base quantities put on POs; closes the PR when everything is ordered. */
+  /**
+   * Records base quantities put on (or taken off) POs and moves the PR on:
+   * nothing ordered → APPROVED / RFQ_ISSUED; part → PARTIALLY_FULFILLED; all →
+   * CLOSED (stock) or LPO_RAISED (non-stock: closed once delivered to the users).
+   */
   async recordOrdered(m: EntityManager, lineQty: { requisitionLineId: string; baseQty: number }[]): Promise<void> {
     const touched = new Set<string>();
     for (const l of lineQty) {
       const line = await m.findOneBy(PurchaseRequisitionLine, { id: l.requisitionLineId });
       if (!line) continue;
-      line.orderedQty = Math.round((line.orderedQty + l.baseQty) * 10_000) / 10_000;
+      line.orderedQty = Math.max(0, Math.round((line.orderedQty + l.baseQty) * 10_000) / 10_000);
       await m.save(line);
       touched.add(line.requisitionId);
     }
-    for (const prId of touched) {
-      const lines = await m.find(PurchaseRequisitionLine, { where: { requisitionId: prId } });
-      if (lines.every((l) => l.orderedQty >= l.quantity)) {
-        const pr = await m.findOneByOrFail(PurchaseRequisition, { id: prId });
-        pr.status = RequisitionStatus.CLOSED;
-        await m.save(pr);
-      }
-    }
+    for (const prId of touched) await this.refreshOrderStatus(m, prId);
+  }
+
+  async refreshOrderStatus(m: EntityManager, prId: string): Promise<RequisitionStatus> {
+    const pr = await m.findOneByOrFail(PurchaseRequisition, { id: prId });
+    if (![...OPEN_REQUISITION_STATUSES, RequisitionStatus.LPO_RAISED, RequisitionStatus.CLOSED].includes(pr.status)) return pr.status;
+    const lines = await m.find(PurchaseRequisitionLine, { where: { requisitionId: prId } });
+    const all = lines.every((l) => l.orderedQty >= l.quantity);
+    const any = lines.some((l) => l.orderedQty > 0);
+    const [rfq] = await m.query(`SELECT 1 FROM rfq WHERE requisition_id = $1 AND status <> 'CANCELLED' LIMIT 1`, [prId]);
+    pr.status = all
+      ? lines.some((l) => l.lineType !== PurchaseLineType.STOCK)
+        ? RequisitionStatus.LPO_RAISED
+        : RequisitionStatus.CLOSED
+      : any
+        ? RequisitionStatus.PARTIALLY_FULFILLED
+        : rfq
+          ? RequisitionStatus.RFQ_ISSUED
+          : RequisitionStatus.APPROVED;
+    await m.save(pr);
+    return pr.status;
   }
 
   private async lock(m: EntityManager, id: string): Promise<PurchaseRequisition> {

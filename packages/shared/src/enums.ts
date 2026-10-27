@@ -187,14 +187,26 @@ export enum RequisitionStatus {
   REJECTED = 'REJECTED',
   RETURNED = 'RETURNED',
   CANCELLED = 'CANCELLED',
+  /** An RFQ was raised for it. */
+  RFQ_ISSUED = 'RFQ_ISSUED',
+  /** Part of it is on purchase orders. */
+  PARTIALLY_FULFILLED = 'PARTIALLY_FULFILLED',
+  /** Non-stock: everything is on LPOs / LSOs (closed once delivered to the users). */
+  LPO_RAISED = 'LPO_RAISED',
   /** Fully converted to RFQ / PO. */
   CLOSED = 'CLOSED',
 }
 
+/** Requisitions that can still go on RFQs and purchase orders. */
+export const OPEN_REQUISITION_STATUSES = [RequisitionStatus.APPROVED, RequisitionStatus.RFQ_ISSUED, RequisitionStatus.PARTIALLY_FULFILLED];
+
+/** DRAFT → SENT (issued) → EVALUATION (quotations coming in) → CLOSED (bidding closed) → EVALUATED (scored) → AWARDED; CANCELLED. */
 export enum RfqStatus {
   DRAFT = 'DRAFT',
   SENT = 'SENT',
   EVALUATION = 'EVALUATION',
+  CLOSED = 'CLOSED',
+  EVALUATED = 'EVALUATED',
   AWARDED = 'AWARDED',
   CANCELLED = 'CANCELLED',
 }
@@ -208,8 +220,14 @@ export enum PurchaseOrderStatus {
   SENT = 'SENT',
   PARTIALLY_RECEIVED = 'PARTIALLY_RECEIVED',
   RECEIVED = 'RECEIVED',
+  /** Fully invoiced (non-stock cycle, phase 3). */
+  INVOICED = 'INVOICED',
+  /** Fully paid (phase 4). */
+  PAID = 'PAID',
   CLOSED = 'CLOSED',
   CANCELLED = 'CANCELLED',
+  /** Past its validity with nothing received. */
+  EXPIRED = 'EXPIRED',
 }
 
 export enum PurchaseOrderSource {

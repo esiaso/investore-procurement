@@ -6,15 +6,19 @@ import {
   DocumentType,
   Paginated,
   PurchaseOrderSource,
+  OPEN_REQUISITION_STATUSES,
+  PurchaseLineType,
   PurchaseOrderStatus,
-  RequisitionStatus,
   SessionUser,
 } from '@sil/shared';
 import { likeTerm } from '../../common/pagination';
 import { ApprovalRequest } from '../approvals/approvals.entities';
 import { ApprovalHandler, ApprovalsService } from '../approvals/approvals.service';
 import { DocumentLinksService } from '../approvals/document-links.service';
+import { NotificationsService } from '../approvals/notifications.service';
 import { BudgetsService } from '../budgets/budgets.service';
+import { FinanceService } from '../finance/finance.service';
+import { JobsService } from '../jobs/jobs.service';
 import { UnitsService } from '../catalog/units.service';
 import { MailService } from '../mail/mail.service';
 import { PdfService } from '../mail/pdf.service';
@@ -29,9 +33,19 @@ import { RequisitionsService } from './requisitions.service';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 export interface DraftLine {
-  itemId: string;
+  /** Stock lines: the catalog item. Non-stock lines: optional. */
+  itemId?: string | null;
+  lineType?: PurchaseLineType;
+  /** Non-stock lines: what is bought. */
+  description?: string | null;
+  glAccountId?: string | null;
+  /** Non-stock lines: tax category (default purchasing.nonStockTaxCategory). */
+  taxCategoryId?: string | null;
+  /** Default: purchasing.whtRates for the line type. */
+  whtRatePercent?: number | null;
   uomId?: string | null;
   quantity: number;
   unitPrice: number;
@@ -51,6 +65,11 @@ export interface DraftHeader {
   expectedDelivery?: string | null;
   notes?: string | null;
   contractId?: string | null;
+  /** Default: the base currency. */
+  currency?: string | null;
+  deliveryAddress?: string | null;
+  terms?: string | null;
+  expiresOn?: string | null;
 }
 
 const OPEN_FOR_RECEIPT = [PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.SENT, PurchaseOrderStatus.PARTIALLY_RECEIVED];
@@ -70,10 +89,14 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
     private readonly mail: MailService,
     private readonly pdf: PdfService,
     private readonly requisitions: RequisitionsService,
+    private readonly finance: FinanceService,
+    private readonly notifications: NotificationsService,
+    private readonly jobs: JobsService,
   ) {}
 
   onModuleInit() {
     this.approvals.registerHandler(DocumentType.PURCHASE_ORDER, this);
+    this.jobs.register('purchasing.expireOrders', 'Expire LPOs / LSOs past their validity with nothing received or invoiced', () => this.expireOrders());
     this.mail.registerAttachment('PO_PDF', (id) => this.renderPdf(id));
     this.links.registerResolver(DocumentType.PURCHASE_ORDER, async (ids) => {
       const rows = await this.ds.getRepository(PurchaseOrder).findBy({ id: In(ids) });
@@ -84,6 +107,9 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
   // ------------------------------------------------------------------ building
 
   async buildLine(m: EntityManager, l: DraftLine, lineNo: number, onDate: string): Promise<Partial<PurchaseOrderLine>> {
+    const type = l.lineType ?? PurchaseLineType.STOCK;
+    if (type !== PurchaseLineType.STOCK) return this.buildNonStockLine(m, { ...l, lineType: type }, lineNo, onDate);
+    if (!l.itemId) throw new BadRequestException(`Line ${lineNo}: a stock line needs an item`);
     const [item] = await m.query(`SELECT id, code, base_uom_id, tax_category_id, is_active FROM item WHERE id = $1`, [l.itemId]);
     if (!item) throw new NotFoundException(`Item ${l.itemId} not found`);
     if (!item.is_active) throw new BadRequestException(`Item ${item.code} is inactive`);
@@ -94,6 +120,7 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
     const lineTax = round2((subtotal * rate) / 100);
     return {
       lineNo,
+      lineType: PurchaseLineType.STOCK,
       itemId: item.id,
       uomId,
       conversionFactor: factor,
@@ -110,10 +137,72 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
     };
   }
 
+  /**
+   * A goods / service / capital line not held in stock: quantity in its own
+   * unit (factor 1), tax from the line's category (default
+   * purchasing.nonStockTaxCategory), withholding tax by line type.
+   */
+  private async buildNonStockLine(m: EntityManager, l: DraftLine & { lineType: PurchaseLineType }, lineNo: number, onDate: string): Promise<Partial<PurchaseOrderLine>> {
+    let description = l.description?.trim() || null;
+    if (l.itemId) {
+      const [item] = await m.query(`SELECT name, is_active FROM item WHERE id = $1`, [l.itemId]);
+      if (!item) throw new NotFoundException(`Item ${l.itemId} not found`);
+      description = description ?? item.name;
+    }
+    if (!description) throw new BadRequestException(`Line ${lineNo}: describe what is ordered`);
+    let taxCategoryId = l.taxCategoryId ?? null;
+    if (!taxCategoryId) {
+      const code = await this.settings.get('purchasing.nonStockTaxCategory', m);
+      const [t] = await m.query(`SELECT id FROM tax_category WHERE code = $1`, [code]);
+      if (!t) throw new BadRequestException(`Tax category ${code} (purchasing.nonStockTaxCategory) not found`);
+      taxCategoryId = t.id;
+    }
+    let uomId = l.uomId ?? null;
+    if (!uomId) {
+      const units = await this.settings.get('purchasing.nonStockUom', m);
+      const code = units[l.lineType] ?? units.default ?? 'PCS';
+      const [u] = await m.query(`SELECT id FROM unit_of_measure WHERE code = $1`, [code]);
+      if (!u) throw new BadRequestException(`Unit ${code} (purchasing.nonStockUom) not found`);
+      uomId = u.id;
+    }
+    const rate = await this.tax.rateFor(taxCategoryId!, onDate);
+    const wht = l.whtRatePercent ?? (await this.settings.get('purchasing.whtRates', m))[l.lineType] ?? 0;
+    const subtotal = round2(l.quantity * l.unitPrice);
+    const lineTax = round2((subtotal * rate) / 100);
+    return {
+      lineNo,
+      lineType: l.lineType,
+      itemId: l.itemId ?? null,
+      description: description.slice(0, 500),
+      glAccountId: l.glAccountId ?? null,
+      uomId: uomId!,
+      conversionFactor: 1,
+      quantity: round4(l.quantity),
+      unitPrice: l.unitPrice,
+      taxCategoryId: taxCategoryId!,
+      taxRatePercent: rate,
+      lineSubtotal: subtotal,
+      lineTax,
+      lineTotal: round2(subtotal + lineTax),
+      whtRatePercent: wht,
+      // Withholding tax is on the amount before VAT.
+      whtAmount: round2((subtotal * wht) / 100),
+      requisitionLineId: l.requisitionLineId ?? null,
+      rfqLineId: l.rfqLineId ?? null,
+      contractLineId: null,
+    };
+  }
+
   private totals(lines: Partial<PurchaseOrderLine>[]) {
     const subtotal = round2(lines.reduce((s, l) => s + l.lineSubtotal!, 0));
     const taxTotal = round2(lines.reduce((s, l) => s + l.lineTax!, 0));
-    return { subtotal, taxTotal, total: round2(subtotal + taxTotal) };
+    const whtTotal = round2(lines.reduce((s, l) => s + (l.whtAmount ?? 0), 0));
+    return { subtotal, taxTotal, total: round2(subtotal + taxTotal), whtTotal };
+  }
+
+  /** Total in the base currency at the order's rate (approval bands and budget). */
+  private baseTotal(total: number, rate: number) {
+    return round2(total * rate);
   }
 
   private async assertSupplier(m: EntityManager, supplierId: string, onDate: string) {
@@ -130,6 +219,12 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
     const [supplier] = await m.query(`SELECT payment_terms_days, observed_lead_time_days FROM supplier WHERE id = $1`, [header.supplierId]);
     // No date given: the supplier's observed lead time (shipment history) sets it.
     const defaultExpected = supplier?.observed_lead_time_days != null ? new Date(Date.parse(`${today}T00:00:00Z`) + supplier.observed_lead_time_days * 86_400_000).toISOString().slice(0, 10) : null;
+    const base = await this.settings.get('locale.currency', m);
+    const currency = header.currency ?? base;
+    const exchangeRate = await this.finance.rateOn(m, currency, today);
+    const totals = this.totals(built);
+    const nonStock = built.some((l) => l.lineType && l.lineType !== PurchaseLineType.STOCK);
+    const validity = await this.settings.get('purchasing.lpoValidityDays', m);
     const po = await m.save(
       m.create(PurchaseOrder, {
         number: await this.numbering.next(DocumentType.PURCHASE_ORDER, { storeId: header.storeId, date: today, manager: m }),
@@ -140,11 +235,17 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         expectedDelivery: header.expectedDelivery ?? defaultExpected,
         notes: header.notes ?? null,
         orderDate: today,
-        currency: await this.settings.get('locale.currency', m),
+        currency,
+        exchangeRate,
         paymentTermsDays: supplier?.payment_terms_days ?? null,
+        deliveryAddress: header.deliveryAddress ?? null,
+        // LPO / LSO terms and validity (non-stock orders, or when given).
+        terms: header.terms ?? (nonStock ? await this.settings.get('purchasing.lpoTerms', m) : null),
+        expiresOn: header.expiresOn ?? (nonStock ? addDays(today, validity) : null),
         status: PurchaseOrderStatus.DRAFT,
         createdByUser: actor.id,
-        ...this.totals(built),
+        ...totals,
+        baseTotal: this.baseTotal(totals.total, exchangeRate),
         lines: built.map((l) => m.create(PurchaseOrderLine, l)),
       }),
     );
@@ -164,14 +265,32 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
       if (dto.requisitionId) {
         const pr = await m.findOne(PurchaseRequisition, { where: { id: dto.requisitionId }, lock: { mode: 'pessimistic_write' } });
         if (!pr) throw new NotFoundException('Requisition not found');
-        if (pr.status !== RequisitionStatus.APPROVED) throw new ConflictException(`Requisition is ${pr.status}; it must be approved`);
-        await this.requisitions.assertStockOnly(m, pr.id);
+        if (!OPEN_REQUISITION_STATUSES.includes(pr.status)) throw new ConflictException(`Requisition is ${pr.status}; it must be approved`);
         const prLines = await m.find(PurchaseRequisitionLine, { where: { requisitionId: pr.id } });
         const lines: DraftLine[] = [];
         for (const l of dto.lines) {
           const prLine = prLines.find((p) => p.id === l.requisitionLineId);
           if (!prLine) throw new BadRequestException('Each line must reference a line of the requisition');
-          const itemId = prLine.itemId!; // stock-only (checked above)
+          if (prLine.lineType !== PurchaseLineType.STOCK) {
+            // Direct LPO / LSO for a non-stock line: quantity in the line's unit, price from the order or the estimate.
+            const remainingNs = round4(prLine.quantity - prLine.orderedQty);
+            const qty = l.quantity ?? remainingNs;
+            if (qty > remainingNs) throw new BadRequestException(`Ordering more than the remaining ${remainingNs} requested`);
+            lines.push({
+              lineType: prLine.lineType,
+              itemId: prLine.itemId,
+              description: prLine.description,
+              glAccountId: prLine.glAccountId,
+              uomId: prLine.uomId,
+              taxCategoryId: l.taxCategoryId ?? null,
+              whtRatePercent: l.whtRatePercent ?? null,
+              quantity: qty,
+              unitPrice: l.unitPrice ?? prLine.estimatedUnitPrice,
+              requisitionLineId: prLine.id,
+            });
+            continue;
+          }
+          const itemId = prLine.itemId!;
           const remaining = round4(prLine.quantity - prLine.orderedQty);
           const uomId = l.uomId ?? null;
           const factor = uomId ? await this.units.factorToBase(itemId, uomId) : 1;
@@ -193,6 +312,10 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
             requisitionId: pr.id,
             expectedDelivery: dto.expectedDelivery,
             notes: dto.notes,
+            currency: dto.currency ?? null,
+            deliveryAddress: dto.deliveryAddress ?? null,
+            terms: dto.terms ?? null,
+            expiresOn: dto.expiresOn ?? null,
           },
           lines,
           actor,
@@ -245,14 +368,16 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
 
   private async startApproval(m: EntityManager, po: PurchaseOrder, actor: SessionUser): Promise<string | null> {
     let warning: string | null = null;
-    const delta = round2(po.total - po.committedTotal);
+    const delta = round2(this.baseTotal(po.total, po.exchangeRate) - po.committedTotal);
     if (po.budgetId && delta > 0) {
       const check = await this.budgets.check(m, po.budgetId, delta);
       if (check.blocked) throw new BadRequestException({ message: check.message, code: 'BUDGET_EXCEEDED' });
       warning = check.message;
     }
     const categories: { category_id: string }[] = await m.query(
-      `SELECT DISTINCT i.category_id FROM purchase_order_line l JOIN item i ON i.id = l.item_id WHERE l.purchase_order_id = $1`,
+      `SELECT DISTINCT COALESCE(i.category_id, prl.category_id) AS category_id FROM purchase_order_line l
+         LEFT JOIN item i ON i.id = l.item_id LEFT JOIN purchase_requisition_line prl ON prl.id = l.requisition_line_id
+        WHERE l.purchase_order_id = $1 AND COALESCE(i.category_id, prl.category_id) IS NOT NULL`,
       [po.id],
     );
     const [supplier] = await m.query(`SELECT name FROM supplier WHERE id = $1`, [po.supplierId]);
@@ -260,7 +385,9 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
       documentType: DocumentType.PURCHASE_ORDER,
       documentId: po.id,
       documentNo: po.version > 1 ? `${po.number} v${po.version}` : po.number,
-      amount: po.total,
+      // Bands are in the base currency.
+      amount: this.baseTotal(po.total, po.exchangeRate),
+      currency: po.currency,
       departmentId: po.departmentId,
       itemCategoryIds: categories.map((c) => c.category_id),
       requestedBy: actor.id,
@@ -273,7 +400,8 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
   /** Commits (or releases) the budget for the approved total; BLOCK budgets stop the approval. */
   async onApproved(m: EntityManager, req: ApprovalRequest): Promise<void> {
     const po = await m.findOneByOrFail(PurchaseOrder, { id: req.documentId });
-    const delta = round2(po.total - po.committedTotal);
+    const baseTotal = this.baseTotal(po.total, po.exchangeRate);
+    const delta = round2(baseTotal - po.committedTotal);
     if (po.budgetId && delta !== 0) {
       if (delta > 0) {
         const check = await this.budgets.check(m, po.budgetId, delta);
@@ -285,12 +413,16 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         no: po.number,
       });
     }
-    po.committedTotal = po.total;
+    po.committedTotal = baseTotal;
+    po.baseTotal = baseTotal;
     // An approved amendment of a PO already sent or part-received keeps its delivery status.
     const previous = await this.previousStatus(m, po);
     po.status = previous && previous !== PurchaseOrderStatus.APPROVED ? previous : PurchaseOrderStatus.APPROVED;
     await m.save(po);
     await this.snapshot(m, po, null, req.requestedBy);
+    if (po.status === PurchaseOrderStatus.APPROVED && (await this.settings.get('purchasing.autoSendOnApproval', m))) {
+      await this.sendIn(m, po).catch(() => undefined); // no supplier email: it stays APPROVED for sending by hand
+    }
   }
 
   async onRejected(m: EntityManager, req: ApprovalRequest, _a: SessionUser, comment: string): Promise<void> {
@@ -361,8 +493,16 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         const old = l.lineId ? existing.find((e) => e.id === l.lineId) : undefined;
         if (l.lineId && !old) throw new BadRequestException(`Line ${l.lineId} is not on this PO`);
         const itemId = old?.itemId ?? l.itemId;
-        if (!itemId) throw new BadRequestException('New lines need an item');
-        const line = await this.buildLine(m, { itemId, uomId: old?.uomId ?? l.uomId, quantity: l.quantity, unitPrice: l.unitPrice, requisitionLineId: old?.requisitionLineId, rfqLineId: old?.rfqLineId, contractLineId: old?.contractLineId }, i + 1, today);
+        const nonStock = old && old.lineType !== PurchaseLineType.STOCK;
+        if (!itemId && !nonStock) throw new BadRequestException('New lines need an item');
+        const line = await this.buildLine(
+          m,
+          nonStock
+            ? { lineType: old.lineType, itemId: old.itemId, description: old.description, glAccountId: old.glAccountId, taxCategoryId: old.taxCategoryId, whtRatePercent: old.whtRatePercent, uomId: old.uomId, quantity: l.quantity, unitPrice: l.unitPrice, requisitionLineId: old.requisitionLineId, rfqLineId: old.rfqLineId }
+            : { itemId, uomId: old?.uomId ?? l.uomId, quantity: l.quantity, unitPrice: l.unitPrice, requisitionLineId: old?.requisitionLineId, rfqLineId: old?.rfqLineId, contractLineId: old?.contractLineId },
+          i + 1,
+          today,
+        );
         if (old && round4(l.quantity * line.conversionFactor!) < old.receivedBaseQty) {
           throw new BadRequestException(`Line ${old.lineNo}: cannot order less than already received`);
         }
@@ -373,8 +513,10 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
       }
       await m.delete(PurchaseOrderLine, { purchaseOrderId: id, id: In(existing.filter((e) => !built.some((b) => b.id === e.id)).map((e) => e.id).concat(['00000000-0000-0000-0000-000000000000'])) });
       for (const b of built) await m.save(m.create(PurchaseOrderLine, { ...b, purchaseOrderId: id }));
+      const totals = this.totals(built);
       Object.assign(po, {
-        ...this.totals(built),
+        ...totals,
+        baseTotal: this.baseTotal(totals.total, po.exchangeRate),
         version: po.version + 1,
         expectedDelivery: dto.expectedDelivery !== undefined ? dto.expectedDelivery : po.expectedDelivery,
         notes: dto.notes ?? po.notes,
@@ -393,12 +535,26 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
 
   // ------------------------------------------------------------------ sending, cancelling, closing
 
-  async send(id: string, actor: SessionUser): Promise<PurchaseOrder> {
+  async send(id: string, _actor: SessionUser): Promise<PurchaseOrder> {
     await this.ds.transaction(async (m) => {
       const po = await this.lock(m, id);
       if (po.status !== PurchaseOrderStatus.APPROVED && po.status !== PurchaseOrderStatus.SENT) {
         throw new ConflictException(`PO is ${po.status}; only approved orders can be sent`);
       }
+      await this.sendIn(m, po);
+    });
+    return this.get(id);
+  }
+
+  /** LPO for goods, LSO when every line is a service. */
+  private async kind(m: EntityManager, poId: string): Promise<{ short: string; long: string }> {
+    const [r] = await m.query(`SELECT bool_and(line_type = 'SERVICE') AS services, bool_or(line_type <> 'STOCK') AS non_stock FROM purchase_order_line WHERE purchase_order_id = $1`, [poId]);
+    if (r?.services) return { short: 'LSO', long: 'Local service order' };
+    return r?.non_stock ? { short: 'LPO', long: 'Local purchase order' } : { short: 'PO', long: 'Purchase order' };
+  }
+
+  /** Emails the order (PDF attached) to the supplier and marks it sent. */
+  private async sendIn(m: EntityManager, po: PurchaseOrder): Promise<void> {
       const [s] = await m.query(
         `SELECT s.name, COALESCE(s.email, (SELECT email FROM supplier_contact c WHERE c.supplier_id = s.id AND c.email IS NOT NULL ORDER BY c.is_primary DESC LIMIT 1)) AS email
            FROM supplier s WHERE s.id = $1`,
@@ -406,18 +562,51 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
       );
       if (!s?.email) throw new BadRequestException('The supplier has no email address');
       const [facility] = await m.query(`SELECT name FROM facility ORDER BY created_at LIMIT 1`);
+      const kind = await this.kind(m, po.id);
       await this.mail.enqueue(m, {
         to: s.email,
-        subject: `Purchase order ${po.number}${po.version > 1 ? ` (version ${po.version})` : ''} from ${facility?.name ?? 'the hospital'}`,
-        text: `Dear ${s.name},\n\nPlease find attached purchase order ${po.number}. Kindly confirm receipt and the expected delivery date.\n\nRegards,\nProcurement`,
+        subject: `${kind.long} ${po.number}${po.version > 1 ? ` (version ${po.version})` : ''} from ${facility?.name ?? 'the hospital'}`,
+        text: `Dear ${s.name},\n\nPlease find attached ${kind.long.toLowerCase()} ${po.number}.${po.expiresOn ? ` It is valid until ${po.expiresOn}.` : ''} Kindly confirm receipt and the expected delivery date.\n\nRegards,\nProcurement`,
         attachments: [{ kind: 'PO_PDF', id: po.id, filename: `${po.number.replace(/\//g, '-')}.pdf` }],
         doc: { type: DocumentType.PURCHASE_ORDER, id: po.id },
       });
       if (po.status === PurchaseOrderStatus.APPROVED) po.status = PurchaseOrderStatus.SENT;
       po.sentAt = new Date();
       await m.save(po);
-    });
-    return this.get(id);
+  }
+
+  /**
+   * Job purchasing.expireOrders: approved / sent orders past their validity
+   * with nothing received expire; the open commitment is released and the
+   * requisition quantities given back.
+   */
+  async expireOrders() {
+    const today = await this.settings.today();
+    const due: { id: string }[] = await this.ds.query(
+      `SELECT po.id FROM purchase_order po WHERE po.status IN ('APPROVED', 'SENT') AND po.expires_on < $1::date
+          AND NOT EXISTS (SELECT 1 FROM purchase_order_line l WHERE l.purchase_order_id = po.id AND l.received_base_qty > 0)
+          AND NOT EXISTS (SELECT 1 FROM supplier_invoice i WHERE i.purchase_order_id = po.id AND i.status NOT IN ('CANCELLED', 'REJECTED'))`,
+      [today],
+    );
+    for (const d of due) {
+      await this.ds.transaction(async (m) => {
+        const po = await this.lock(m, d.id);
+        await this.releaseOpenCommitment(m, po);
+        await this.giveBackRequisition(m, po);
+        po.status = PurchaseOrderStatus.EXPIRED;
+        po.lastComment = `Expired on ${po.expiresOn} with nothing received or invoiced`;
+        await m.save(po);
+        if (po.createdByUser) await this.notifications.notify(m, [po.createdByUser], { title: `${po.number} expired`, body: 'Nothing was received before its expiry date', link: `/purchase-orders/${po.id}` });
+      });
+    }
+    return { expired: due.length };
+  }
+
+  /** The order's quantities go back to its requisition lines (cancelled or expired order). */
+  private async giveBackRequisition(m: EntityManager, po: PurchaseOrder): Promise<void> {
+    const lines = await m.find(PurchaseOrderLine, { where: { purchaseOrderId: po.id } });
+    const back = lines.filter((l) => l.requisitionLineId).map((l) => ({ requisitionLineId: l.requisitionLineId!, baseQty: -round4(l.quantity * l.conversionFactor) }));
+    if (back.length) await this.requisitions.recordOrdered(m, back);
   }
 
   async cancel(id: string, reason: string, actor: SessionUser): Promise<PurchaseOrder> {
@@ -430,19 +619,8 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
       }
       await this.approvals.cancelPending(m, DocumentType.PURCHASE_ORDER, id, actor.id);
       await this.releaseOpenCommitment(m, po);
-      // Give the requisition quantities back.
-      const lines = await m.find(PurchaseOrderLine, { where: { purchaseOrderId: id } });
-      const back = lines.filter((l) => l.requisitionLineId).map((l) => ({ requisitionLineId: l.requisitionLineId!, baseQty: -round4(l.quantity * l.conversionFactor) }));
-      if (back.length) {
-        await this.requisitions.recordOrdered(m, back);
-        if (po.requisitionId) {
-          const pr = await m.findOneBy(PurchaseRequisition, { id: po.requisitionId });
-          if (pr?.status === RequisitionStatus.CLOSED) {
-            pr.status = RequisitionStatus.APPROVED;
-            await m.save(pr);
-          }
-        }
-      }
+      // Give the requisition quantities back (its status follows).
+      await this.giveBackRequisition(m, po);
       po.status = PurchaseOrderStatus.CANCELLED;
       po.cancellationReason = reason;
       await m.save(po);
@@ -503,7 +681,7 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
     const stamps = history
       .filter((r) => r.status === 'APPROVED')
       .flatMap((r) => r.actions.filter((a) => a.action === 'APPROVE').map((a) => ({ step: a.stepName ?? '', name: a.userName ?? '', at: a.at, onBehalfOf: a.onBehalfOfName })));
-    const html = renderPurchaseOrderHtml(po, facility, stamps, {
+    const html = renderPurchaseOrderHtml(po, facility, stamps, await this.kind(this.ds.manager, id), {
       dateFormat: await this.settings.get('locale.dateFormat'),
       timezone: await this.settings.get('locale.timezone'),
     });

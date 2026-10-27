@@ -162,6 +162,22 @@ export interface SettingTypes {
   'approvals.linkExpiryHours': number;
   /** Requisitions: non-stock lines must carry a GL account (else Finance codes them on the PR). */
   'requisitions.requireGlAccount': boolean;
+  /** RFQs are sent to at least this many suppliers (fewer needs a justification). */
+  'purchasing.rfqMinSuppliers': number;
+  /** Default technical pass mark (0–100) for RFQ evaluation. */
+  'purchasing.rfqPassMark': number;
+  /** Withholding tax % by purchase line type (STOCK, NON_STOCK_GOODS, SERVICE, CAPEX_EXPENSED); editable per order line. */
+  'purchasing.whtRates': Record<string, number>;
+  /** Tax category code for non-stock order lines unless chosen on the line. */
+  'purchasing.nonStockTaxCategory': string;
+  /** Unit of measure code for non-stock lines without one, by line type (default for the others). */
+  'purchasing.nonStockUom': Record<string, string>;
+  /** LPOs / LSOs are valid this many days from the order date. */
+  'purchasing.lpoValidityDays': number;
+  /** Terms and conditions printed on LPOs / LSOs. */
+  'purchasing.lpoTerms': string;
+  /** Email a purchase order to the supplier as soon as it is approved. */
+  'purchasing.autoSendOnApproval': boolean;
 }
 
 export interface SourcingMethodRule {

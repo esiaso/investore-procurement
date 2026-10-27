@@ -1,0 +1,130 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class NonStockPhase21762300000000 implements MigrationInterface {
+    name = 'NonStockPhase21762300000000'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`CREATE TABLE "rfq_evaluation_score" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "rfq_id" uuid NOT NULL, "quotation_id" uuid NOT NULL, "member_id" uuid NOT NULL, "technical_score" numeric(5,2) NOT NULL, "comment" character varying(1000), CONSTRAINT "pk_rfq_evaluation_score" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE INDEX "IDX_95d84cd3c4f6da1d60db382168" ON "rfq_evaluation_score" ("rfq_id") `);
+        await queryRunner.query(`CREATE UNIQUE INDEX "IDX_7f76bce1ed489a7d710cd8dd2b" ON "rfq_evaluation_score" ("quotation_id", "member_id") `);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "fewer_suppliers_justification" character varying(1000)`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "closed_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "technical_weight" integer NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "pass_mark" integer NOT NULL DEFAULT '70'`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "committee_user_ids" jsonb NOT NULL DEFAULT '[]'::jsonb`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "recommendation" character varying(2000)`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "recommended_supplier_id" uuid`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "evaluated_at" TIMESTAMP WITH TIME ZONE`);
+        await queryRunner.query(`ALTER TABLE "rfq" ADD "evaluated_by" uuid`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD "line_type" "public"."purchase_line_type" NOT NULL DEFAULT 'STOCK'`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD "description" character varying(500)`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD "uom_id" uuid`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD "gl_account_id" uuid`);
+        await queryRunner.query(`ALTER TABLE "quotation" ADD "currency" character varying(3)`);
+        await queryRunner.query(`ALTER TABLE "quotation" ADD "payment_terms_days" integer`);
+        await queryRunner.query(`ALTER TABLE "quotation" ADD "notes" character varying(1000)`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ADD "exchange_rate" numeric(18,6) NOT NULL DEFAULT '1'`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ADD "base_total" numeric(18,4) NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ADD "wht_total" numeric(18,4) NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ADD "delivery_address" character varying(500)`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ADD "terms" text`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ADD "expires_on" date`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD "line_type" "public"."purchase_line_type" NOT NULL DEFAULT 'STOCK'`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD "description" character varying(500)`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD "gl_account_id" uuid`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD "wht_rate_percent" numeric(7,4) NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD "wht_amount" numeric(18,4) NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TYPE "public"."requisition_status" RENAME TO "requisition_status_old"`);
+        await queryRunner.query(`CREATE TYPE "public"."requisition_status" AS ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'RETURNED', 'CANCELLED', 'RFQ_ISSUED', 'PARTIALLY_FULFILLED', 'LPO_RAISED', 'CLOSED')`);
+        await queryRunner.query(`ALTER TABLE "purchase_requisition" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "purchase_requisition" ALTER COLUMN "status" TYPE "public"."requisition_status" USING "status"::"text"::"public"."requisition_status"`);
+        await queryRunner.query(`ALTER TABLE "purchase_requisition" ALTER COLUMN "status" SET DEFAULT 'DRAFT'`);
+        await queryRunner.query(`DROP TYPE "public"."requisition_status_old"`);
+        await queryRunner.query(`ALTER TYPE "public"."rfq_status" RENAME TO "rfq_status_old"`);
+        await queryRunner.query(`CREATE TYPE "public"."rfq_status" AS ENUM('DRAFT', 'SENT', 'EVALUATION', 'CLOSED', 'EVALUATED', 'AWARDED', 'CANCELLED')`);
+        await queryRunner.query(`ALTER TABLE "rfq" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "rfq" ALTER COLUMN "status" TYPE "public"."rfq_status" USING "status"::"text"::"public"."rfq_status"`);
+        await queryRunner.query(`ALTER TABLE "rfq" ALTER COLUMN "status" SET DEFAULT 'DRAFT'`);
+        await queryRunner.query(`DROP TYPE "public"."rfq_status_old"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP CONSTRAINT "FK_26e54054846ab8cf442258b4901"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ALTER COLUMN "item_id" DROP NOT NULL`);
+        await queryRunner.query(`ALTER TYPE "public"."purchase_order_status" RENAME TO "purchase_order_status_old"`);
+        await queryRunner.query(`CREATE TYPE "public"."purchase_order_status" AS ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'RETURNED', 'REJECTED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'INVOICED', 'PAID', 'CLOSED', 'CANCELLED', 'EXPIRED')`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ALTER COLUMN "status" TYPE "public"."purchase_order_status" USING "status"::"text"::"public"."purchase_order_status"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ALTER COLUMN "status" SET DEFAULT 'DRAFT'`);
+        await queryRunner.query(`DROP TYPE "public"."purchase_order_status_old"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP CONSTRAINT "FK_b1a53331c2f8280eacd42c1de1f"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ALTER COLUMN "item_id" DROP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD CONSTRAINT "FK_26e54054846ab8cf442258b4901" FOREIGN KEY ("item_id") REFERENCES "item"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD CONSTRAINT "FK_f49b1b5d5f78dc792afe284de79" FOREIGN KEY ("uom_id") REFERENCES "unit_of_measure"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD CONSTRAINT "FK_b1a53331c2f8280eacd42c1de1f" FOREIGN KEY ("item_id") REFERENCES "item"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        // Hand-written: a stock line always names its catalog item.
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD CONSTRAINT "ck_po_line_stock_item" CHECK (line_type <> 'STOCK' OR item_id IS NOT NULL)`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD CONSTRAINT "ck_rfq_line_stock_item" CHECK (line_type <> 'STOCK' OR item_id IS NOT NULL)`);
+        await queryRunner.query(`UPDATE purchase_order SET base_total = total WHERE base_total = 0`);
+        await queryRunner.query(`UPDATE system_setting SET value = value || '{"purchasing.expireOrders": "30 1 * * *"}'::jsonb WHERE key = 'jobs.schedules'`);
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`UPDATE system_setting SET value = value - 'purchasing.expireOrders' WHERE key = 'jobs.schedules'`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP CONSTRAINT "ck_rfq_line_stock_item"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP CONSTRAINT "ck_po_line_stock_item"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP CONSTRAINT "FK_b1a53331c2f8280eacd42c1de1f"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP CONSTRAINT "FK_f49b1b5d5f78dc792afe284de79"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP CONSTRAINT "FK_26e54054846ab8cf442258b4901"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ALTER COLUMN "item_id" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" ADD CONSTRAINT "FK_b1a53331c2f8280eacd42c1de1f" FOREIGN KEY ("item_id") REFERENCES "item"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`CREATE TYPE "public"."purchase_order_status_old" AS ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'RETURNED', 'REJECTED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED', 'CANCELLED')`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ALTER COLUMN "status" TYPE "public"."purchase_order_status_old" USING "status"::"text"::"public"."purchase_order_status_old"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" ALTER COLUMN "status" SET DEFAULT 'DRAFT'`);
+        await queryRunner.query(`DROP TYPE "public"."purchase_order_status"`);
+        await queryRunner.query(`ALTER TYPE "public"."purchase_order_status_old" RENAME TO "purchase_order_status"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ALTER COLUMN "item_id" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" ADD CONSTRAINT "FK_26e54054846ab8cf442258b4901" FOREIGN KEY ("item_id") REFERENCES "item"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`CREATE TYPE "public"."rfq_status_old" AS ENUM('DRAFT', 'SENT', 'EVALUATION', 'AWARDED', 'CANCELLED')`);
+        await queryRunner.query(`ALTER TABLE "rfq" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "rfq" ALTER COLUMN "status" TYPE "public"."rfq_status_old" USING "status"::"text"::"public"."rfq_status_old"`);
+        await queryRunner.query(`ALTER TABLE "rfq" ALTER COLUMN "status" SET DEFAULT 'DRAFT'`);
+        await queryRunner.query(`DROP TYPE "public"."rfq_status"`);
+        await queryRunner.query(`ALTER TYPE "public"."rfq_status_old" RENAME TO "rfq_status"`);
+        await queryRunner.query(`CREATE TYPE "public"."requisition_status_old" AS ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'RETURNED', 'CANCELLED', 'CLOSED')`);
+        await queryRunner.query(`ALTER TABLE "purchase_requisition" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "purchase_requisition" ALTER COLUMN "status" TYPE "public"."requisition_status_old" USING "status"::"text"::"public"."requisition_status_old"`);
+        await queryRunner.query(`ALTER TABLE "purchase_requisition" ALTER COLUMN "status" SET DEFAULT 'DRAFT'`);
+        await queryRunner.query(`DROP TYPE "public"."requisition_status"`);
+        await queryRunner.query(`ALTER TYPE "public"."requisition_status_old" RENAME TO "requisition_status"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP COLUMN "wht_amount"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP COLUMN "wht_rate_percent"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP COLUMN "gl_account_id"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP COLUMN "description"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order_line" DROP COLUMN "line_type"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" DROP COLUMN "expires_on"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" DROP COLUMN "terms"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" DROP COLUMN "delivery_address"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" DROP COLUMN "wht_total"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" DROP COLUMN "base_total"`);
+        await queryRunner.query(`ALTER TABLE "purchase_order" DROP COLUMN "exchange_rate"`);
+        await queryRunner.query(`ALTER TABLE "quotation" DROP COLUMN "notes"`);
+        await queryRunner.query(`ALTER TABLE "quotation" DROP COLUMN "payment_terms_days"`);
+        await queryRunner.query(`ALTER TABLE "quotation" DROP COLUMN "currency"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP COLUMN "gl_account_id"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP COLUMN "uom_id"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP COLUMN "description"`);
+        await queryRunner.query(`ALTER TABLE "rfq_line" DROP COLUMN "line_type"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "evaluated_by"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "evaluated_at"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "recommended_supplier_id"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "recommendation"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "committee_user_ids"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "pass_mark"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "technical_weight"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "closed_at"`);
+        await queryRunner.query(`ALTER TABLE "rfq" DROP COLUMN "fewer_suppliers_justification"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_7f76bce1ed489a7d710cd8dd2b"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_95d84cd3c4f6da1d60db382168"`);
+        await queryRunner.query(`DROP TABLE "rfq_evaluation_score"`);
+    }
+
+}
