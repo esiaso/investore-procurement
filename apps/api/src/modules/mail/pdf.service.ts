@@ -18,8 +18,8 @@ export class PdfService implements OnModuleDestroy {
     return this.browser;
   }
 
-  /** A4 by default; `page` sets e.g. a thermal roll ({ width: '80mm' }, height fitted to the content). */
-  async render(html: string, page?: { width: string; marginMm?: number }): Promise<Buffer> {
+  /** A4 by default (landscape on request); `page` sets e.g. a thermal roll ({ width: '80mm' }, height fitted to the content). */
+  async render(html: string, page?: { width: string; marginMm?: number }, opts: { landscape?: boolean } = {}): Promise<Buffer> {
     let browser: Browser;
     try {
       browser = await this.getBrowser();
@@ -35,7 +35,7 @@ export class PdfService implements OnModuleDestroy {
         const height = await tab.evaluate(() => document.documentElement.scrollHeight);
         return await tab.pdf({ width: page.width, height: `${Math.ceil((height * 25.4) / 96) + 2 * (page.marginMm ?? 3)}mm`, printBackground: true, margin: { top: m, bottom: m, left: m, right: m } });
       }
-      return await tab.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '12mm', right: '12mm' } });
+      return await tab.pdf({ format: 'A4', landscape: !!opts.landscape, printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '12mm', right: '12mm' } });
     } finally {
       await tab.close();
     }

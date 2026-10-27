@@ -54,6 +54,11 @@ export class AttachmentsService {
     this.owners.set(type, policy);
   }
 
+  /** Owner types and who may read them (the documents register). */
+  readableOwnerTypes(user: SessionUser): string[] {
+    return [...this.owners.entries()].filter(([, p]) => p.read.some((x) => user.permissions.includes(x))).map(([t]) => t);
+  }
+
   private policy(type: string): OwnerPolicy {
     const p = this.owners.get(type);
     if (!p) throw new BadRequestException(`Files cannot be attached to ${type}`);
