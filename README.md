@@ -893,8 +893,8 @@ New permissions: `forecasting.read/manage`, `plans.read/manage/consolidate`,
 * Wired into supplier documents (scans), tender documents (downloadable by bidders in
   the portal), GRN delivery notes / certificates of analysis, write-off and disposal
   certificates, complaints, recalls, assets and service certificates; suppliers attach
-  the scanned delivery note or invoice when they submit it in the portal. Full document
-  management screens come in slice 12.
+  the scanned delivery note or invoice when they submit it in the portal. The *Documents*
+  register (slice 12) searches them all.
 
 ### Quality
 
@@ -1294,8 +1294,95 @@ Jobs: `accounting.dispatch` (every 5 min) and `accounting.refresh` (hourly). Num
 QBB (batches) and RCV (payer settlements). `customer_ledger.mode_code` records how a
 payment on account was made.
 
+## Reports, dashboards and documents (slice 12)
+
+### Reports (*Reports* screen)
+
+Every report is filterable by date range, store, category (sub-categories included),
+item, supplier or department, as the report allows. Reports stay within the user's
+store scope. Each one is shown on screen, with a totals row and notes on how it is
+worked out, and downloads as **CSV**, **Excel** (titled, filters listed, typed cells) or
+**PDF**. Each export is logged in `report_run`.
+
+| Group | Reports |
+|---|---|
+| Inventory | Stock status / on hand (by item, store, category or batch, valued from the stock ledger); stock movement summary (opening, receipts, issues, adjustments, closing); item ledger / bin card with running balance; consumption by department / cost centre; GRN, issue, transfer and adjustment registers; stock-take variance; near-expiry; expired; reorder; stock-out; dead stock; inventory turnover and days of inventory |
+| Pharmacy performance | Prescriptions and items dispensed (per pharmacist, outlet, day, month); dispensing turnaround (average, median, 90th percentile); revenue, cost of sales and gross margin (by item, category, payer, outlet); top-moving and slow / non-moving items; ABC and VED analysis; fill rate and stock-out frequency; interaction alerts raised vs overridden; expiry losses and write-offs (value and % of average stock) |
+| Purchasing | PO status; outstanding POs (value still to come, days late); supplier performance (orders, deliveries, lead time, on time %, rejected %, returns); price history and variance |
+| Supply chain | KPIs: lead times, OTIF, requisition fill rate, stock-outs, months of stock, turnover, wastage |
+
+Who can run a report depends on the permissions it uses: `inventory.read`,
+`inventory.valuation`, `pharmacy.read`, `purchasing.read`, `billing.read` / `pos.reports`,
+or `procurement.kpis`.
+
+How the figures are worked out:
+* Valuation and turnover come from the stock ledger (the same figures as *Inventory →
+  Valuation*).
+* Margin is sales net of VAT and credit notes, less the FEFO batch cost of what was sold.
+* Consumption is dispensed plus issued, net of returns.
+* ABC class uses the `reports.abcThresholds` setting.
+* VED is set per generic (*Generics → VED class*). The sample data classifies the common
+  generics.
+
+**Scheduled reports** (`reports.schedule`): *Email on a schedule* on any report.
+* **Timing:** daily, weekly (weekday) or monthly (day 1–28), at a local hour.
+* **Content:** a period worked out on the day (yesterday, last 7 / 30 days, last week,
+  last month, month to date) and a format (Excel, PDF, CSV).
+* **Recipients:** a list of email addresses.
+
+The report runs with the owner's permissions and stores at the time it is sent. It goes
+through the mail outbox with the file attached, via the `reports.scheduled` job (every
+15 minutes). If a run fails (for example the owner lost the permission), the error shows
+on the *Scheduled* tab. *Send now* sends it straight away.
+
+### Dashboard
+
+The home page shows tiles for the user's role, within their stores:
+* **My work:** approvals waiting.
+* **Pharmacy:** prescriptions waiting, dispenses today, overrides.
+* **Stock:** expired, near-expiry, reorder, stock-outs, requisitions to issue.
+* **Value:** stock value, value expiring, write-offs this month.
+* **Procurement:** outstanding and late orders, deliveries awaiting inspection, spend
+  this month, invoices to pay.
+* **Sales:** today and this month.
+* **Integrations:** eTIMS, HMIS and QuickBooks errors.
+* **Documents:** supplier documents expiring.
+
+It also shows six-month trends (stock value, write-offs, orders, sales). Each tile opens
+the screen or report behind it (`GET /dashboard`).
+
+### Documents (*Documents* screen, `documents.read`)
+
+The **register** searches every file attached across the system: delivery notes on
+GRNs, supplier licences, bid documents, disposal and service certificates, complaint
+and recall evidence, asset documents, and adjustment attachments.
+* **Search:** by file name, record number, note or SHA-256.
+* **Filters:** record type, category, date, and earlier versions.
+* **Each row:** links to its record and downloads the file.
+* **Visibility:** only records the user's other permissions and stores allow.
+
+**Expiring supplier documents** lists licences and certificates expired or expiring
+within 30–180 days. Files keep their versions as before (uploading the same name adds a
+version).
+
+New permissions:
+* `reports.schedule`: procurement, pharmacist, finance, supply chain and management.
+* `documents.read`: procurement, stores, quality, finance, supply chain, auditor and
+  management.
+
+New settings:
+* `reports.abcThresholds`
+* `reports.deadStockDays`
+* `reports.nearExpiryDays`
+* `reports.maxRows`
+
+Job: `reports.scheduled`. Generic field `vedClass`.
+
 ## Known limitations / next slices
 
+* Reports run on the live database (no reporting replica or pre-aggregation); very
+  long periods over millions of ledger rows are slower than two seconds. Scheduled
+  reports are capped at `reports.maxRows` rows.
 * Redis holds sessions and the BullMQ job queue. The mail outbox is still sent by a
   poller in the API process.
 * Schedule changes in `jobs.schedules` apply when the worker restarts.
