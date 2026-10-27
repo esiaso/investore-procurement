@@ -14,7 +14,7 @@ import { GrnsService } from '../purchasing/grns.service';
 import { PurchasingModule } from '../purchasing/purchasing.module';
 import { DistributionService } from './distribution.service';
 import {
-  CertificateDto,
+  CertificateDto, CertificateRejectDto,
   CertificateQueryDto,
   DispatchRunDto,
   PackDto,
@@ -168,35 +168,53 @@ export class ServiceCertificatesController {
     return this.certs.list(q);
   }
 
-  @Get('open-orders') @RequirePermissions(P.SERVICES_CERTIFY)
+  @Get('open-orders') @RequireAnyPermission(P.SERVICES_CERTIFY, P.PURCHASING_RECEIVE)
   openOrders() {
     return this.certs.openServiceOrders();
   }
 
-  @Get(':id') @RequirePermissions(P.PURCHASING_READ)
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.certs.get(id);
+  /** Draft certificates waiting for the user's sign-off (their requisitions or department). */
+  @Get('awaiting-me') @RequirePermissions()
+  awaitingMe(@CurrentUser() u: SessionUser) {
+    return this.certs.awaitingMe(u);
   }
 
-  @Post() @RequirePermissions(P.SERVICES_CERTIFY)
+  /** Purchasing, or the requester / department it is waiting for. */
+  @Get(':id') @RequirePermissions()
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
+    return this.certs.get(id, u);
+  }
+
+  @Post() @RequireAnyPermission(P.SERVICES_CERTIFY, P.PURCHASING_RECEIVE)
   create(@Body() dto: CertificateDto, @CurrentUser() u: SessionUser) {
     return this.certs.create(dto, u);
   }
 
   /** Posting counts the certified quantities as received (three-way match). */
-  @Post(':id/post') @HttpCode(200) @RequirePermissions(P.SERVICES_CERTIFY)
+  @Post(':id/post') @HttpCode(200) @RequireAnyPermission(P.SERVICES_CERTIFY, P.PURCHASING_RECEIVE)
   post(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
     return this.certs.post(id, u);
   }
 
-  @Post(':id/cancel') @HttpCode(200) @RequirePermissions(P.SERVICES_CERTIFY)
+  /** The requester or their department signs the delivery off (orders bought for staff requisitions). */
+  @Post(':id/accept') @HttpCode(200) @RequireAnyPermission(P.SERVICES_CERTIFY, P.STAFF_REQUISITION_CREATE)
+  accept(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
+    return this.certs.accept(id, u);
+  }
+
+  @Post(':id/reject') @HttpCode(200) @RequireAnyPermission(P.SERVICES_CERTIFY, P.STAFF_REQUISITION_CREATE)
+  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CertificateRejectDto, @CurrentUser() u: SessionUser) {
+    return this.certs.reject(id, dto.reason, u);
+  }
+
+  @Post(':id/cancel') @HttpCode(200) @RequireAnyPermission(P.SERVICES_CERTIFY, P.PURCHASING_RECEIVE)
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
     return this.certs.cancel(id, u);
   }
 
-  @Get(':id/pdf') @RequirePermissions(P.PURCHASING_READ) @Header('Content-Type', 'application/pdf')
-  async pdf(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
-    const r = await this.certs.renderPdf(id);
+  @Get(':id/pdf') @RequirePermissions() @Header('Content-Type', 'application/pdf')
+  async pdf(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser, @Res({ passthrough: true }) res: Response) {
+    const r = await this.certs.renderPdf(id, u);
     return pdf(res, r.number, r.pdf);
   }
 }

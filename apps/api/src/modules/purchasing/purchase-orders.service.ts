@@ -29,6 +29,7 @@ import { TaxService } from '../tax/tax.service';
 import { renderPurchaseOrderHtml } from './po-pdf';
 import { AmendPurchaseOrderDto, CreatePurchaseOrderDto, DocListQueryDto } from './purchasing.dto';
 import { PurchaseOrder, PurchaseOrderLine, PurchaseOrderVersion, PurchaseRequisition, PurchaseRequisitionLine } from './purchasing.entities';
+import { notifyRequesters } from './requester-notices';
 import { RequisitionsService } from './requisitions.service';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -571,8 +572,12 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         doc: { type: DocumentType.PURCHASE_ORDER, id: po.id },
       });
       if (po.status === PurchaseOrderStatus.APPROVED) po.status = PurchaseOrderStatus.SENT;
+      const first = !po.sentAt;
       po.sentAt = new Date();
       await m.save(po);
+      if (first) {
+        await notifyRequesters(m, this.notifications, { poId: po.id }, (r) => ({ title: `${r.number}: ${kind.short} issued`, body: `${kind.long} ${po.number} was sent to ${s.name}${po.expectedDelivery ? `; delivery expected ${po.expectedDelivery}` : ''}` }));
+      }
   }
 
   /**

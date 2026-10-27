@@ -16,6 +16,12 @@ export interface MatchTolerances {
   quantityPct: number;
   /** % price difference accepted (either way). */
   pricePct: number;
+  /**
+   * Largest price difference accepted on a line as an amount (|invoice − PO
+   * price| × invoiced quantity, order currency). 0 or absent: percentage only.
+   * When set, a difference must be within both.
+   */
+  priceAbs?: number;
 }
 
 export interface Variance {
@@ -46,11 +52,13 @@ export function threeWayMatch(lines: MatchLineInput[], tol: MatchTolerances): Va
     }
     if (l.poUnitPrice > 0) {
       const diffPct = ((l.invoiceUnitPrice - l.poUnitPrice) / l.poUnitPrice) * 100;
-      if (Math.abs(diffPct) > tol.pricePct + 1e-9) {
+      const diffAmount = Math.round((l.invoiceUnitPrice - l.poUnitPrice) * l.invoicedQty * 100) / 100;
+      const overAbs = !!tol.priceAbs && Math.abs(diffAmount) > tol.priceAbs + 1e-9;
+      if (Math.abs(diffPct) > tol.pricePct + 1e-9 || overAbs) {
         out.push({
           poLineId: l.poLineId,
           code: 'PRICE_VARIANCE',
-          message: `${l.label}: invoice price ${l.invoiceUnitPrice} vs PO ${l.poUnitPrice} (${diffPct > 0 ? '+' : ''}${diffPct.toFixed(2)}%)`,
+          message: `${l.label}: invoice price ${l.invoiceUnitPrice} vs PO ${l.poUnitPrice} (${diffPct > 0 ? '+' : ''}${diffPct.toFixed(2)}%, ${diffAmount > 0 ? '+' : ''}${diffAmount} on the line)`,
         });
       }
     } else if (l.invoiceUnitPrice > 0) {

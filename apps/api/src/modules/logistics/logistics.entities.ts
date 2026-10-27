@@ -274,6 +274,14 @@ export class ServiceCertificate extends AppBaseEntity {
   @Column({ type: 'timestamptz', nullable: true })
   postedAt: Date | null;
 
+  /** Requester / requesting department member who signed the acceptance (non-stock orders from staff requisitions). */
+  @Column({ type: 'uuid', nullable: true })
+  acceptedBy: string | null;
+
+  /** Why the requesting department refused it. */
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  rejectionReason: string | null;
+
   @OneToMany(() => ServiceCertificateLine, (l) => l.certificate, { cascade: true })
   lines?: ServiceCertificateLine[];
 }
@@ -290,9 +298,16 @@ export class ServiceCertificateLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   poLineId: string;
 
-  /** In the PO line's ordering unit (e.g. 1 visit, 3 months, 100%). */
+  /** Accepted, in the PO line's ordering unit (e.g. 1 visit, 3 months, 100%). */
   @Column({ type: 'numeric', precision: 18, scale: 4, transformer: num })
   quantity: number;
+
+  /** Delivered but refused (not counted as received). */
+  @Column({ type: 'numeric', precision: 18, scale: 4, default: 0, transformer: num })
+  rejectedQty: number;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  rejectionReason: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   remarks: string | null;

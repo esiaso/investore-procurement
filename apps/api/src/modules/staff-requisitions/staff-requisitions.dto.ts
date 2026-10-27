@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
-import { PurchaseLineType, RequisitionPriority, StaffRequisitionStatus } from '@sil/shared';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { HandoverStatus, ItemCondition, PurchaseLineType, RequisitionPriority, StaffRequisitionStatus } from '@sil/shared';
 import { PageQueryDto } from '../../common/pagination';
 
 const emptyToNull = ({ value }: { value: unknown }) => (value === '' ? null : value);
@@ -59,4 +59,32 @@ export class ConsolidateDto {
 
 export class CancelDto {
   @ApiProperty() @IsString() @MinLength(3) @MaxLength(1000) reason: string;
+}
+
+export class HandoverLineDto {
+  @ApiProperty() @IsUUID() requisitionLineId: string;
+  @ApiProperty() @IsNumber(QTY) @Min(0.0001) quantity: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) remarks?: string;
+}
+
+export class HandoverDto {
+  @ApiProperty() @IsUUID() requisitionId: string;
+  @ApiPropertyOptional({ description: 'Default: the requester; otherwise an active member of the requesting department' }) @IsOptional() @IsUUID() receivedBy?: string;
+  @ApiPropertyOptional({ enum: ItemCondition }) @IsOptional() @IsEnum(ItemCondition) condition?: ItemCondition;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+  @ApiProperty({ type: [HandoverLineDto] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => HandoverLineDto) lines: HandoverLineDto[];
+}
+
+export class HandoverAckDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) comment?: string;
+}
+
+export class HandoverOtpDto {
+  @ApiProperty({ description: 'The 6-digit code sent to the receiver' }) @Matches(/^\d{6}$/) code: string;
+}
+
+export class HandoverQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsUUID() requisitionId?: string;
+  @ApiPropertyOptional({ description: 'Only hand-overs waiting for me' }) @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() mine?: boolean;
+  @ApiPropertyOptional({ enum: HandoverStatus }) @IsOptional() @IsEnum(HandoverStatus) status?: HandoverStatus;
 }

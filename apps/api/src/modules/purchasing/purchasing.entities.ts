@@ -906,6 +906,21 @@ export class SupplierInvoice extends AppBaseEntity {
   @Column({ ...MONEY, default: 0 })
   total: number;
 
+  /** The order's currency. */
+  @Column({ type: 'varchar', length: 3, default: 'KES' })
+  currency: string;
+
+  /** Base-currency value of one unit of `currency` on the invoice date. */
+  @Column({ ...RATE6, default: 1 })
+  exchangeRate: number;
+
+  @Column({ ...MONEY, default: 0 })
+  baseTotal: number;
+
+  /** Withholding tax to deduct when paying (rates from the order lines). */
+  @Column({ ...MONEY, default: 0 })
+  whtTotal: number;
+
   @Column({ type: 'uuid' })
   capturedBy: string;
 
@@ -945,6 +960,9 @@ export class SupplierInvoiceLine extends AppBaseEntity {
 
   @Column(MONEY)
   lineTotal: number;
+
+  @Column({ ...MONEY, default: 0 })
+  whtAmount: number;
 }
 
 /** Simple payment record for now (full payments/finance integration later). */

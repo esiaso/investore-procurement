@@ -6,6 +6,7 @@ import { likeTerm } from '../../common/pagination';
 import { ApprovalRequest } from '../approvals/approvals.entities';
 import { ApprovalHandler, ApprovalsService } from '../approvals/approvals.service';
 import { DocumentLinksService } from '../approvals/document-links.service';
+import { NotificationsService } from '../approvals/notifications.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { methodProblem, recommendMethod } from '../procurement/sourcing';
@@ -13,6 +14,7 @@ import { SettingsService } from '../settings/settings.service';
 import { releasePurchaseRequisitionLines } from '../staff-requisitions/staff-requisition-status';
 import { CreateRequisitionDto, DocListQueryDto } from './purchasing.dto';
 import { PurchaseRequisition, PurchaseRequisitionLine } from './purchasing.entities';
+import { notifyRequesters } from './requester-notices';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -25,6 +27,7 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
     private readonly links: DocumentLinksService,
     private readonly budgets: BudgetsService,
     private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit() {
@@ -203,6 +206,7 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
     const pr = await m.findOneByOrFail(PurchaseRequisition, { id: req.documentId });
     pr.status = RequisitionStatus.APPROVED;
     await m.save(pr);
+    await notifyRequesters(m, this.notifications, { prId: pr.id }, (r) => ({ title: `${r.number}: purchase request approved`, body: `${pr.number} is approved; procurement will source the items` }));
   }
 
   async onRejected(m: EntityManager, req: ApprovalRequest, _a: SessionUser, comment: string): Promise<void> {

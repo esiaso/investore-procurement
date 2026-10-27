@@ -168,6 +168,8 @@ export const Permissions = {
   STAFF_REQUISITION_READ_ALL: 'requisitions.read_all',
   /** Consolidate approved non-stock requisition lines into purchase requisitions. */
   PURCHASING_CONSOLIDATE: 'purchasing.consolidate',
+  /** Hand received non-stock goods / services over to the requester (final user). */
+  PURCHASING_HANDOVER: 'purchasing.handover',
   /** Chart of accounts (GL accounts used on non-stock lines). */
   GL_MANAGE: 'finance.gl_manage',
   PROJECTS_MANAGE: 'projects.manage',
@@ -290,6 +292,7 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'requisitions.create': 'Raise staff / departmental requisitions for goods and services',
   'requisitions.read_all': "See every department's requisitions and the procurement queue",
   'purchasing.consolidate': 'Consolidate approved non-stock requisition lines into purchase requisitions',
+  'purchasing.handover': 'Hand received non-stock goods and services over to the requester',
   'finance.gl_manage': 'Maintain the chart of accounts (GL accounts)',
   'projects.manage': 'Maintain projects',
   'finance.exchange_rates': 'Maintain currencies and exchange rates',

@@ -101,6 +101,8 @@ export enum DocumentType {
   PAYER_SETTLEMENT = 'RCV',
   /** Staff / departmental requisition (goods or services; stock lines go to the stores, the rest to procurement). */
   STAFF_REQUISITION = 'REQ',
+  /** Hand-over of received goods / services to the requester (final user). */
+  HANDOVER = 'HOV',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -257,6 +259,9 @@ export enum InvoiceStatus {
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
   RETURNED = 'RETURNED',
+  /** On an approved payment run, not yet paid (phase 4). */
+  SCHEDULED = 'SCHEDULED',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
   PAID = 'PAID',
   CANCELLED = 'CANCELLED',
 }
@@ -805,7 +810,10 @@ export enum AssetStatus {
 
 export enum CertificateStatus {
   DRAFT = 'DRAFT',
+  /** Accepted / signed off: the quantities count as received. */
   POSTED = 'POSTED',
+  /** Refused at sign-off by the requesting department. */
+  REJECTED = 'REJECTED',
   CANCELLED = 'CANCELLED',
 }
 
@@ -823,6 +831,7 @@ export enum AttachmentOwner {
   STOCK_ADJUSTMENT = 'STOCK_ADJUSTMENT',
   /** Quotes, specifications, photos attached to a staff requisition. */
   STAFF_REQUISITION = 'STAFF_REQUISITION',
+  HANDOVER = 'HANDOVER',
 }
 
 // ------------------------------------------------------------------ slice 9: HMIS integration
@@ -1116,4 +1125,25 @@ export enum GlAccountType {
   INCOME = 'INCOME',
   COST_OF_SALES = 'COST_OF_SALES',
   BANK = 'BANK',
+}
+
+// ------------------------------------------------------------------ non-stock phase 3: delivery to the final user
+
+export enum HandoverStatus {
+  /** Ready for collection: waiting for the receiver's acknowledgement. */
+  PENDING = 'PENDING',
+  ACKNOWLEDGED = 'ACKNOWLEDGED',
+  CANCELLED = 'CANCELLED',
+}
+
+/** How the receiver acknowledged a hand-over. */
+export enum HandoverChannel {
+  IN_APP = 'IN_APP',
+  OTP = 'OTP',
+}
+
+export enum ItemCondition {
+  GOOD = 'GOOD',
+  DAMAGED = 'DAMAGED',
+  INCOMPLETE = 'INCOMPLETE',
 }

@@ -111,8 +111,14 @@ export class ReasonBody {
 
 export class CertificateLineDto {
   @ApiProperty() @IsUUID() poLineId: string;
-  @ApiProperty({ description: 'In the PO line unit' }) @IsNumber(QTY) @Min(0.0001) quantity: number;
+  @ApiProperty({ description: 'Accepted, in the PO line unit' }) @IsNumber(QTY) @Min(0) quantity: number;
+  @ApiPropertyOptional({ description: 'Delivered but refused (needs rejectionReason)' }) @IsOptional() @IsNumber(QTY) @Min(0) rejectedQty?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) rejectionReason?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) remarks?: string;
+}
+
+export class CertificateRejectDto {
+  @ApiProperty() @IsString() @MinLength(5) @MaxLength(1000) reason: string;
 }
 
 export class CertificateDto {

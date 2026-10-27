@@ -41,6 +41,13 @@ interface Pick {
  */
 @Injectable()
 export class IssuesService implements OnModuleInit {
+  /** Run in the issue transaction (e.g. staff requisition lines become delivered). */
+  private readonly issueHooks: ((m: EntityManager, storeRequisitionId: string) => Promise<void>)[] = [];
+
+  onIssued(hook: (m: EntityManager, storeRequisitionId: string) => Promise<void>) {
+    this.issueHooks.push(hook);
+  }
+
   constructor(
     @InjectDataSource() private readonly ds: DataSource,
     private readonly numbering: NumberingService,
@@ -245,6 +252,7 @@ export class IssuesService implements OnModuleInit {
         }
       }
       const status = await this.requisitions.refreshStatus(m, sr);
+      for (const hook of this.issueHooks) await hook(m, sr.id);
       // Whatever is still owed is reserved again from what is left.
       if (await this.settings.get('inventory.reserveOnApproval', m)) await this.reservations.reserve(m, sr, today);
       await this.links.link(m, { type: DocumentType.STORE_REQUISITION, id: sr.id, no: sr.number }, { type: DocumentType.ISSUE_NOTE, id: voucher.id, no: voucher.number });

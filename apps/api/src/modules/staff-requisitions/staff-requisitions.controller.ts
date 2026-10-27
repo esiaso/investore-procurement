@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Res, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, Res, StreamableFile } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { Permissions, SessionUser } from '@sil/shared';
 import { CurrentUser, RequirePermissions } from '../../common/decorators';
-import { CancelDto, ConsolidateDto, QueueQueryDto, StaffRequisitionDto, StaffRequisitionQueryDto } from './staff-requisitions.dto';
+import { CancelDto, ConsolidateDto, HandoverAckDto, HandoverDto, HandoverOtpDto, HandoverQueryDto, QueueQueryDto, StaffRequisitionDto, StaffRequisitionQueryDto } from './staff-requisitions.dto';
+import { HandoversService } from './handovers.service';
 import { StaffRequisitionsService } from './staff-requisitions.service';
 
 const P = Permissions;
@@ -62,5 +63,53 @@ export class StaffRequisitionsController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="requisition-${id}.pdf"`);
     return new StreamableFile(body);
+  }
+}
+
+const ip = (req: Request) => req.ip ?? undefined;
+
+/** Delivery to the final user: hand-over of received non-stock goods, acknowledged in the app or with a one-time code. */
+@ApiTags('handovers')
+@Controller('handovers')
+export class HandoversController {
+  constructor(private readonly handovers: HandoversService) {}
+
+  /** ?requisitionId=, ?mine=true (waiting for my confirmation), ?status= */
+  @Get() @RequirePermissions()
+  list(@Query() q: HandoverQueryDto, @CurrentUser() u: SessionUser) {
+    return this.handovers.list(q, u);
+  }
+
+  @Get(':id') @RequirePermissions()
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
+    return this.handovers.get(id, u);
+  }
+
+  @Post() @RequirePermissions(P.PURCHASING_HANDOVER)
+  create(@Body() dto: HandoverDto, @CurrentUser() u: SessionUser) {
+    return this.handovers.create(dto, u);
+  }
+
+  /** The receiver confirms they have the items. */
+  @Post(':id/acknowledge') @HttpCode(200) @RequirePermissions()
+  acknowledge(@Param('id', ParseUUIDPipe) id: string, @Body() dto: HandoverAckDto, @CurrentUser() u: SessionUser, @Req() req: Request) {
+    return this.handovers.acknowledge(id, dto.comment, u, ip(req));
+  }
+
+  /** Sends the receiver a one-time code (hand-over at the counter). */
+  @Post(':id/otp') @HttpCode(200) @RequirePermissions(P.PURCHASING_HANDOVER)
+  sendOtp(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
+    return this.handovers.sendOtp(id, u);
+  }
+
+  /** The officer enters the code the receiver gives them. */
+  @Post(':id/otp/verify') @HttpCode(200) @RequirePermissions(P.PURCHASING_HANDOVER)
+  verifyOtp(@Param('id', ParseUUIDPipe) id: string, @Body() dto: HandoverOtpDto, @CurrentUser() u: SessionUser, @Req() req: Request) {
+    return this.handovers.verifyOtp(id, dto.code, u, ip(req));
+  }
+
+  @Post(':id/cancel') @HttpCode(200) @RequirePermissions(P.PURCHASING_HANDOVER)
+  cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SessionUser) {
+    return this.handovers.cancel(id, u);
   }
 }

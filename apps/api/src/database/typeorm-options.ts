@@ -100,7 +100,7 @@ import { QUALITY_ENTITIES } from '../modules/quality/entities';
 import { Encounter, HmisCodeMapping, HmisConnection, HmisMessage, PatientCharge } from '../modules/hmis/hmis.entities';
 import { ReportRun, ReportSchedule } from '../modules/reports/reports.entities';
 import { Currency, ExchangeRate, GlAccount, Project } from '../modules/finance/finance.entities';
-import { StaffRequisition, StaffRequisitionLine } from '../modules/staff-requisitions/staff-requisitions.entities';
+import { Handover, HandoverLine, StaffRequisition, StaffRequisitionLine } from '../modules/staff-requisitions/staff-requisitions.entities';
 import { AccountingBatch, AccountingConnection, AccountingPosting, AccountMapping, ExternalRef, PayerSettlement } from '../modules/accounting/accounting.entities';
 import { Customer, CustomerLedger, MpesaConfig, MpesaTransaction, PosEvent, PosPromotion, PosSale, PosShift, PosTerminal } from '../modules/pos/pos.entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
@@ -248,6 +248,8 @@ export const ENTITIES = [
   ExchangeRate,
   StaffRequisition,
   StaffRequisitionLine,
+  Handover,
+  HandoverLine,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

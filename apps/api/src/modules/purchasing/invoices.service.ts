@@ -8,6 +8,7 @@ import { ApprovalHandler, ApprovalsService } from '../approvals/approvals.servic
 import { DocumentLinksService } from '../approvals/document-links.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { EtimsService } from '../etims/etims.service';
+import { FinanceService } from '../finance/finance.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { SettingsService } from '../settings/settings.service';
 import { MatchLineInput, threeWayMatch } from './matching';
@@ -16,6 +17,9 @@ import { PaymentVoucher, PurchaseOrder, PurchaseOrderLine, SupplierInvoice, Supp
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+
+/** Invoices that count towards the order being fully invoiced. */
+const APPROVED_INVOICE = [InvoiceStatus.APPROVED, InvoiceStatus.SCHEDULED, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID];
 
 const INVOICEABLE = [PurchaseOrderStatus.SENT, PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED, PurchaseOrderStatus.RECEIVED, PurchaseOrderStatus.CLOSED];
 
@@ -29,6 +33,7 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
     private readonly budgets: BudgetsService,
     private readonly settings: SettingsService,
     private readonly etims: EtimsService,
+    private readonly finance: FinanceService,
   ) {}
 
   onModuleInit() {
@@ -56,7 +61,7 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
       const pl = poLines.find((p) => p.id === l.poLineId)!;
       return {
         poLineId: l.poLineId,
-        label: `Line ${pl.lineNo} ${pl.item?.name ?? ''}`,
+        label: `Line ${pl.lineNo} ${pl.item?.name ?? pl.description ?? ''}`,
         orderedQty: pl.quantity,
         receivedQty: round4(pl.receivedBaseQty / pl.conversionFactor),
         previouslyInvoicedQty: Number(previous.find((p) => p.po_line_id === l.poLineId)?.q ?? 0),
@@ -68,6 +73,7 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
     const variances = threeWayMatch(inputs, {
       quantityPct: await this.settings.get('purchasing.matchQtyTolerancePct', m),
       pricePct: await this.settings.get('purchasing.matchPriceTolerancePct', m),
+      priceAbs: await this.settings.get('purchasing.matchPriceToleranceAbs', m),
     });
     // Fourth leg: the supplier's sale must be on KRA eTIMS.
     if (invoice.etimsStatus === EtimsStatus.NOT_ON_ETIMS) {
@@ -96,10 +102,14 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
         if (!pl) throw new BadRequestException('Invoice lines must reference lines of the PO');
         const amount = round2(l.quantity * l.unitPrice);
         const taxAmount = l.taxAmount ?? round2((amount * pl.taxRatePercent) / 100);
-        return m.create(SupplierInvoiceLine, { poLineId: pl.id, quantity: l.quantity, unitPrice: l.unitPrice, taxAmount, lineTotal: round2(amount + taxAmount) });
+        // Withholding tax at the order line's rate, on the amount before VAT.
+        const whtAmount = round2((amount * (pl.whtRatePercent ?? 0)) / 100);
+        return m.create(SupplierInvoiceLine, { poLineId: pl.id, quantity: l.quantity, unitPrice: l.unitPrice, taxAmount, lineTotal: round2(amount + taxAmount), whtAmount });
       });
       const subtotal = round2(lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0));
       const taxTotal = round2(lines.reduce((s, l) => s + l.taxAmount, 0));
+      // Invoiced in the order currency, at the rate on the invoice date.
+      const exchangeRate = await this.finance.rateOn(m, po.currency, dto.invoiceDate);
       const inv = await m.save(
         m.create(SupplierInvoice, {
           number: await this.numbering.next(DocumentType.SUPPLIER_INVOICE, { date: dto.invoiceDate, manager: m }),
@@ -114,6 +124,10 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
           subtotal,
           taxTotal,
           total: round2(subtotal + taxTotal),
+          currency: po.currency,
+          exchangeRate,
+          baseTotal: round2((subtotal + taxTotal) * exchangeRate),
+          whtTotal: round2(lines.reduce((s, l) => s + l.whtAmount, 0)),
           status: InvoiceStatus.CAPTURED,
           lines,
         }),
@@ -159,11 +173,19 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
       await this.match(m, inv);
       const [po] = await m.query(`SELECT department_id FROM purchase_order WHERE id = $1`, [inv.purchaseOrderId]);
       const [s] = await m.query(`SELECT name FROM supplier WHERE id = $1`, [inv.supplierId]);
+      // Optionally, a clean three-way match needs no approval; exceptions always do.
+      if (inv.matchStatus === MatchStatus.MATCHED && (await this.settings.get('purchasing.autoApproveMatchedInvoices', m))) {
+        inv.lastComment = 'Approved automatically: matches the order and the receipts within tolerance';
+        await m.save(inv);
+        await this.approve(m, inv.id);
+        return;
+      }
       await this.approvals.start(m, {
         documentType: DocumentType.SUPPLIER_INVOICE,
         documentId: inv.id,
         documentNo: inv.number,
-        amount: inv.total,
+        amount: inv.baseTotal,
+        currency: inv.currency,
         departmentId: po?.department_id,
         requestedBy: actor.id,
         summary: `${s?.name ?? ''} ${inv.supplierInvoiceNo} · ${inv.matchStatus === MatchStatus.MATCHED ? 'matched' : `${inv.variances.length} variance(s)`}`,
@@ -177,17 +199,38 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
 
   /** Approved: the spend becomes actual and the matching commitment is released. */
   async onApproved(m: EntityManager, req: ApprovalRequest): Promise<void> {
-    const inv = await m.findOneByOrFail(SupplierInvoice, { id: req.documentId });
+    await this.approve(m, req.documentId);
+  }
+
+  /** Approved for payment: the spend (base currency) becomes actual, the commitment is released and the order may become INVOICED. */
+  private async approve(m: EntityManager, id: string): Promise<void> {
+    const inv = await m.findOneByOrFail(SupplierInvoice, { id });
     const po = await m.findOneByOrFail(PurchaseOrder, { id: inv.purchaseOrderId });
+    const value = inv.baseTotal || inv.total;
     if (po.budgetId) {
       const doc = { type: DocumentType.PURCHASE_ORDER, id: po.id, no: po.number };
       const open = await this.budgets.openCommitment(m, po.budgetId, DocumentType.PURCHASE_ORDER, po.id);
-      const release = Math.min(open, inv.total);
+      const release = Math.min(open, value);
       if (release > 0) await this.budgets.entry(m, po.budgetId, BudgetEntryType.RELEASE, -release, doc);
-      await this.budgets.entry(m, po.budgetId, BudgetEntryType.ACTUAL, inv.total, { type: DocumentType.SUPPLIER_INVOICE, id: inv.id, no: inv.number });
+      await this.budgets.entry(m, po.budgetId, BudgetEntryType.ACTUAL, value, { type: DocumentType.SUPPLIER_INVOICE, id: inv.id, no: inv.number });
     }
     inv.status = InvoiceStatus.APPROVED;
     await m.save(inv);
+    await this.refreshOrderInvoiced(m, po);
+  }
+
+  /** A fully received order whose every line is covered by approved invoices is INVOICED. */
+  private async refreshOrderInvoiced(m: EntityManager, po: PurchaseOrder): Promise<void> {
+    if (po.status !== PurchaseOrderStatus.RECEIVED) return;
+    const [{ open }] = await m.query(
+      `SELECT COUNT(*)::int AS open FROM purchase_order_line l
+        WHERE l.purchase_order_id = $1 AND l.quantity > COALESCE((SELECT SUM(il.quantity) FROM supplier_invoice_line il JOIN supplier_invoice i ON i.id = il.invoice_id
+                                                                   WHERE il.po_line_id = l.id AND i.status = ANY($2::invoice_status[])), 0)`,
+      [po.id, APPROVED_INVOICE],
+    );
+    if (open) return;
+    po.status = PurchaseOrderStatus.INVOICED;
+    await m.save(po);
   }
 
   async onRejected(m: EntityManager, req: ApprovalRequest, _a: SessionUser, comment: string): Promise<void> {
@@ -253,7 +296,7 @@ export class InvoicesService implements OnModuleInit, ApprovalHandler {
         return {
           poLineId: pl.id,
           lineNo: pl.lineNo,
-          item: pl.item?.name,
+          item: pl.item?.name ?? pl.description,
           uom: pl.uom?.code,
           orderedQty: pl.quantity,
           poUnitPrice: pl.unitPrice,

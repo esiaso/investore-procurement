@@ -162,6 +162,10 @@ export interface SettingTypes {
   'approvals.linkExpiryHours': number;
   /** Requisitions: non-stock lines must carry a GL account (else Finance codes them on the PR). */
   'requisitions.requireGlAccount': boolean;
+  'purchasing.matchPriceToleranceAbs': number;
+  'purchasing.autoApproveMatchedInvoices': boolean;
+  'requisitions.handoverOtpMinutes': number;
+  'requisitions.handoverOtpMaxAttempts': number;
   /** RFQs are sent to at least this many suppliers (fewer needs a justification). */
   'purchasing.rfqMinSuppliers': number;
   /** Default technical pass mark (0–100) for RFQ evaluation. */

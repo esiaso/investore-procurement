@@ -229,6 +229,10 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'purchasing.lpoValidityDays', value: 60, description: 'LPOs / LSOs expire this many days after the order date if nothing is received', isPublic: true },
   { key: 'purchasing.lpoTerms', value: '1. Deliver only the goods or services ordered, at the prices shown.\n2. Quote the order number on the delivery note and invoice.\n3. Invoices must be KRA eTIMS invoices.\n4. Withholding tax is deducted at payment where the law requires it.\n5. This order expires on the date shown unless extended in writing.', description: 'Terms and conditions printed on LPOs / LSOs', isPublic: true },
   { key: 'purchasing.autoSendOnApproval', value: false, description: 'Email purchase orders to the supplier as soon as they are approved', isPublic: false },
+  { key: 'purchasing.matchPriceToleranceAbs', value: 0, description: 'Three-way match: largest price difference tolerated per line (amount, order currency); 0 = percentage only', isPublic: false },
+  { key: 'purchasing.autoApproveMatchedInvoices', value: false, description: 'Invoices that match the order and the receipts within tolerance are approved without the approval workflow (exceptions still go through it)', isPublic: false },
+  { key: 'requisitions.handoverOtpMinutes', value: 15, description: 'How long a hand-over one-time code is valid (minutes)', isPublic: false },
+  { key: 'requisitions.handoverOtpMaxAttempts', value: 5, description: 'Wrong one-time codes allowed before a new code is needed', isPublic: false },
   { key: 'requisitions.requireGlAccount', value: false, description: 'Requesters must give a GL account on non-stock requisition lines (otherwise Finance / procurement codes them)', isPublic: true },
   { key: 'reports.maxRows', value: 50000, description: 'Most rows a report returns or exports', isPublic: false },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
@@ -325,6 +329,7 @@ export const DEFAULT_NUMBERING: {
   { documentType: DocumentType.PAYER_SETTLEMENT, prefix: 'RCV', format: '{PREFIX}/{FY}/{SEQ}', padding: 5, resetEachYear: true },
   // REQ-2026-00001 (REQ-2026/27-00001 when the financial year does not start in January).
   { documentType: DocumentType.STAFF_REQUISITION, prefix: 'REQ', format: '{PREFIX}-{FY}-{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.HANDOVER, prefix: 'HOV', format: '{PREFIX}-{FY}-{SEQ}', padding: 5, resetEachYear: true },
 ];
 
 /** Currencies documents may be in (KES is the base, locale.currency). */
@@ -421,7 +426,7 @@ const READ_ALL: PermissionCode[] = [
   P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ, P.POS_REPORTS, P.ACCOUNTING_READ, P.DOCUMENTS_READ, P.STAFF_REQUISITION_READ_ALL,
 ];
 /** Procurement desk for non-stock requisitions: see them all and consolidate approved lines into PRs. */
-const NON_STOCK_DESK: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.STAFF_REQUISITION_READ_ALL, P.PURCHASING_CONSOLIDATE];
+const NON_STOCK_DESK: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.STAFF_REQUISITION_READ_ALL, P.PURCHASING_CONSOLIDATE, P.PURCHASING_HANDOVER];
 /** Finance master data for non-stock procurement and payments. */
 const FINANCE_MASTER: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.STAFF_REQUISITION_READ_ALL, P.GL_MANAGE, P.PROJECTS_MANAGE, P.FX_MANAGE];
 const FINANCE_PERMISSIONS: PermissionCode[] = [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
@@ -465,7 +470,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     description: 'Receives, stores and issues stock in assigned stores',
     permissions: [
       P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, ...STORE_OPS, P.INVENTORY_HANDLE_COLD_CHAIN, P.SUPPLIERS_READ, P.PURCHASING_READ,
-      P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_EMERGENCY_RECEIPT, P.FORECASTING_READ,
+      P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_HANDOVER, P.PURCHASING_EMERGENCY_RECEIPT, P.FORECASTING_READ,
       P.DISTRIBUTION_MANAGE, P.QUALITY_READ, P.FILES_UPLOAD, P.ASSETS_READ, P.DOCUMENTS_READ, P.STAFF_REQUISITION_CREATE,
     ],
   },

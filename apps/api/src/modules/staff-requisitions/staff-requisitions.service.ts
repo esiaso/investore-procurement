@@ -26,7 +26,9 @@ import { PdfService } from '../mail/pdf.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { PurchaseRequisition, PurchaseRequisitionLine } from '../purchasing/purchasing.entities';
 import { SettingsService } from '../settings/settings.service';
+import { IssuesService } from '../stores/issues.service';
 import { StoreRequisitionsService } from '../stores/store-requisitions.service';
+import { HandoversService } from './handovers.service';
 import { renderStaffRequisitionHtml } from './staff-requisition-pdf';
 import { IN_PROCUREMENT, refreshStaffRequisitionStatus } from './staff-requisition-status';
 import { ConsolidateDto, QueueQueryDto, StaffRequisitionDto, StaffRequisitionQueryDto } from './staff-requisitions.dto';
@@ -49,10 +51,13 @@ export class StaffRequisitionsService implements OnModuleInit, ApprovalHandler {
     private readonly storeRequisitions: StoreRequisitionsService,
     private readonly attachments: AttachmentsService,
     private readonly pdf: PdfService,
+    private readonly issues: IssuesService,
+    private readonly handovers: HandoversService,
   ) {}
 
   onModuleInit() {
     this.approvals.registerHandler(DocumentType.STAFF_REQUISITION, this);
+    this.issues.onIssued((m, srId) => this.handovers.onStoreIssue(m, srId));
     this.links.registerResolver(DocumentType.STAFF_REQUISITION, async (ids) => {
       const rows = await this.ds.getRepository(StaffRequisition).findBy({ id: In(ids) });
       return new Map(rows.map((r) => [r.id, { status: r.status, date: r.createdAt.toISOString(), amount: r.estimatedTotal }]));
@@ -471,9 +476,11 @@ export class StaffRequisitionsService implements OnModuleInit, ApprovalHandler {
         WHERE sl.requisition_id = $1`,
       [id],
     );
+    const deliverable = await this.handovers.deliverable(this.ds.manager, id);
     return {
       ...r,
       requestedByName: who?.full_name ?? null,
+      deliverable,
       lines: r.lines?.map((l) => {
         const route = routes.find((x) => x.line_id === l.id);
         return { ...l, purchaseRequisition: route?.pr_id ? { id: route.pr_id, number: route.pr_no, status: route.pr_status } : null, storeRequisition: route?.sr_id ? { id: route.sr_id, number: route.sr_no } : null };
