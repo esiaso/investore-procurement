@@ -31,6 +31,13 @@ describe('approval routing (unit)', () => {
     expect(selectWorkflow(bands, { documentType: 'PO', amount: 1e12 })?.code).toBe('PO-3');
   });
 
+  it('matches a currency-specific workflow only for that currency, and prefers it', () => {
+    const fx = [...bands, wf({ code: 'PO-USD', currency: 'USD' })];
+    expect(selectWorkflow(fx, { documentType: 'PO', amount: 10, currency: 'USD' })?.code).toBe('PO-USD');
+    expect(selectWorkflow(fx, { documentType: 'PO', amount: 10, currency: 'KES' })?.code).toBe('PO-1');
+    expect(selectWorkflow(fx, { documentType: 'PO', amount: 10 })?.code).toBe('PO-1');
+  });
+
   it('only matches the document type', () => {
     expect(selectWorkflow(bands, { documentType: 'PR', amount: 50 })?.code).toBe('PR-1');
     expect(selectWorkflow(bands, { documentType: 'PR', amount: 100_000 })).toBeNull();

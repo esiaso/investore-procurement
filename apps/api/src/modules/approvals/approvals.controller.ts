@@ -1,18 +1,22 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { ApprovalActionType, Permissions, SessionUser } from '@sil/shared';
-import { CurrentUser, RequirePermissions } from '../../common/decorators';
-import { ApprovalDecisionDto, ChainQueryDto, CreateDelegationDto, MarkReadDto, PreferencesDto, SaveWorkflowDto } from './approvals.dto';
-import { ApprovalsService } from './approvals.service';
+import { CurrentUser, Public, RequirePermissions } from '../../common/decorators';
+import { ApprovalDecisionDto, ChainQueryDto, CreateDelegationDto, LinkDecisionDto, MarkReadDto, PreferencesDto, SaveWorkflowDto } from './approvals.dto';
+import { ActionContext, ApprovalsService } from './approvals.service';
 import { DocumentLinksService } from './document-links.service';
 import { NotificationsService } from './notifications.service';
+
+/** IP and device of the approver (kept on the approval action). */
+const context = (req: Request): ActionContext => ({ ip: req.ip ?? null, userAgent: req.get('user-agent') ?? null });
 
 @ApiTags('approvals')
 @Controller('approvals')
 export class ApprovalsController {
   constructor(private readonly approvals: ApprovalsService) {}
 
-  /** Documents waiting for the current user (including as a delegate). */
+  /** Documents waiting for the current user (including as a delegate or by escalation). */
   @Get('inbox')
   inbox(@CurrentUser() user: SessionUser) {
     return this.approvals.inbox(user);
@@ -24,18 +28,18 @@ export class ApprovalsController {
   }
 
   @Post(':id/approve') @HttpCode(200)
-  approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApprovalDecisionDto, @CurrentUser() user: SessionUser) {
-    return this.approvals.act(id, user, ApprovalActionType.APPROVE, dto.comment);
+  approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApprovalDecisionDto, @CurrentUser() user: SessionUser, @Req() req: Request) {
+    return this.approvals.act(id, user, ApprovalActionType.APPROVE, dto.comment, context(req));
   }
 
   @Post(':id/reject') @HttpCode(200)
-  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApprovalDecisionDto, @CurrentUser() user: SessionUser) {
-    return this.approvals.act(id, user, ApprovalActionType.REJECT, dto.comment);
+  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApprovalDecisionDto, @CurrentUser() user: SessionUser, @Req() req: Request) {
+    return this.approvals.act(id, user, ApprovalActionType.REJECT, dto.comment, context(req));
   }
 
   @Post(':id/return') @HttpCode(200)
-  returnForAmendment(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApprovalDecisionDto, @CurrentUser() user: SessionUser) {
-    return this.approvals.act(id, user, ApprovalActionType.RETURN, dto.comment);
+  returnForAmendment(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApprovalDecisionDto, @CurrentUser() user: SessionUser, @Req() req: Request) {
+    return this.approvals.act(id, user, ApprovalActionType.RETURN, dto.comment, context(req));
   }
 
   @Get('workflows') @RequirePermissions(Permissions.APPROVALS_MANAGE)
@@ -66,6 +70,28 @@ export class ApprovalsController {
   @Post('delegations/:id/end') @HttpCode(200)
   endDelegation(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {
     return this.approvals.endDelegation(user, id, user.permissions.includes(Permissions.APPROVALS_MANAGE));
+  }
+}
+
+/**
+ * Approve / reject / return from the link in an approval email or SMS.
+ * Public: the single-use, expiring token stands for the approver it was sent
+ * to (CSRF does not apply: the token in the path is the secret).
+ */
+@ApiTags('approvals')
+@Controller('approval-links')
+export class ApprovalLinksController {
+  constructor(private readonly approvals: ApprovalsService) {}
+
+  @Public() @Get(':token')
+  info(@Param('token') token: string) {
+    return this.approvals.linkInfo(token);
+  }
+
+  @Public() @Post(':token') @HttpCode(200)
+  async act(@Param('token') token: string, @Body() dto: LinkDecisionDto, @Req() req: Request) {
+    const r = await this.approvals.actByLink(token, dto.action, dto.comment, context(req));
+    return { documentNo: r.documentNo, status: r.status, currentStep: r.currentStep };
   }
 }
 

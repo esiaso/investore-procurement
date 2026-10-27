@@ -6,16 +6,21 @@ export interface WorkflowCandidate {
   maxAmount: number | null;
   departmentId: string | null;
   itemCategoryId: string | null;
+  /** Only documents in this currency (null = any). */
+  currency?: string | null;
   priority: number;
   isActive: boolean;
 }
 
 export interface MatchInput {
   documentType: string;
+  /** In the base currency (documents in another currency are converted first). */
   amount: number;
   departmentId?: string | null;
   /** Item categories on the document (any match counts). */
   itemCategoryIds?: string[];
+  /** Document currency (default: base currency). */
+  currency?: string | null;
 }
 
 /** Amount band is [min, max): min inclusive, max exclusive. */
@@ -24,9 +29,10 @@ export function inBand(amount: number, min: number | null, max: number | null): 
 }
 
 /**
- * Picks the workflow for a document: same type, amount in band, department and
- * category filters satisfied; most specific first (department and category
- * each add one), then highest priority, then code for determinism.
+ * Picks the workflow for a document: same type, amount in band, department,
+ * category and currency filters satisfied; most specific first (department,
+ * category and currency each add one), then highest priority, then code for
+ * determinism.
  */
 export function selectWorkflow<T extends WorkflowCandidate>(workflows: T[], input: MatchInput): T | null {
   const categories = new Set(input.itemCategoryIds ?? []);
@@ -36,9 +42,10 @@ export function selectWorkflow<T extends WorkflowCandidate>(workflows: T[], inpu
       w.documentType === input.documentType &&
       inBand(input.amount, w.minAmount, w.maxAmount) &&
       (w.departmentId === null || w.departmentId === input.departmentId) &&
-      (w.itemCategoryId === null || categories.has(w.itemCategoryId)),
+      (w.itemCategoryId === null || categories.has(w.itemCategoryId)) &&
+      (!w.currency || w.currency === input.currency),
   );
-  const specificity = (w: T) => (w.departmentId ? 1 : 0) + (w.itemCategoryId ? 1 : 0);
+  const specificity = (w: T) => (w.departmentId ? 1 : 0) + (w.itemCategoryId ? 1 : 0) + (w.currency ? 1 : 0);
   matches.sort((a, b) => specificity(b) - specificity(a) || b.priority - a.priority || a.code.localeCompare(b.code));
   return matches[0] ?? null;
 }

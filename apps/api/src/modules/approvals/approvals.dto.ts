@@ -1,13 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
-import { ApproverType, NotificationCategory } from '@sil/shared';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ApprovalActionType, ApproverType, NotificationCategory } from '@sil/shared';
 
 export class ApprovalStepDto {
   @ApiProperty() @IsString() @MaxLength(200) name: string;
   @ApiProperty({ enum: ApproverType }) @IsEnum(ApproverType) approverType: ApproverType;
   @ApiPropertyOptional() @IsOptional() @IsUUID() roleId?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() userId?: string;
+  @ApiPropertyOptional({ description: 'Parallel level: approvals needed from different people (default 1)' }) @IsOptional() @IsInt() @Min(1) @Max(20) minApprovals?: number;
+  @ApiPropertyOptional({ description: 'Remind approvers after this many hours' }) @IsOptional() @IsInt() @Min(1) @Max(8760) remindAfterHours?: number | null;
+  @ApiPropertyOptional({ description: 'Escalate after this many hours…' }) @IsOptional() @IsInt() @Min(1) @Max(8760) escalateAfterHours?: number | null;
+  @ApiPropertyOptional({ description: '…to members of this role (who may then act on the step too)' }) @IsOptional() @IsUUID() escalateToRoleId?: string | null;
 }
 
 export class SaveWorkflowDto {
@@ -18,6 +22,7 @@ export class SaveWorkflowDto {
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsNumber() @Min(0) maxAmount?: number | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsUUID() departmentId?: string | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsUUID() itemCategoryId?: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'Only documents in this currency (amount bands stay in the base currency)' }) @IsOptional() @Matches(/^[A-Z]{3}$/) currency?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsInt() priority?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
   @ApiProperty({ type: [ApprovalStepDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => ApprovalStepDto)
@@ -25,6 +30,13 @@ export class SaveWorkflowDto {
 }
 
 export class ApprovalDecisionDto {
+  @ApiPropertyOptional({ description: 'Required to reject or return' }) @IsOptional() @IsString() @MaxLength(1000) comment?: string;
+}
+
+export class LinkDecisionDto {
+  @ApiProperty({ enum: [ApprovalActionType.APPROVE, ApprovalActionType.REJECT, ApprovalActionType.RETURN] })
+  @IsIn([ApprovalActionType.APPROVE, ApprovalActionType.REJECT, ApprovalActionType.RETURN])
+  action: ApprovalActionType;
   @ApiPropertyOptional({ description: 'Required to reject or return' }) @IsOptional() @IsString() @MaxLength(1000) comment?: string;
 }
 

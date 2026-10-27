@@ -2,8 +2,11 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-/** Third-party callbacks (Safaricom Daraja): no cookie, authenticated by a secret in the path. */
-const CALLBACKS = /^\/api\/v\d+\/callbacks\//;
+/**
+ * Third-party callbacks (Safaricom Daraja) and approval links: authenticated
+ * by a secret in the path, not by the cookie, so cross-site forgery does not apply.
+ */
+const CALLBACKS = /^\/api\/v\d+\/(callbacks|approval-links)\//;
 export const CSRF_HEADER = 'x-csrf-token';
 
 /** Synchronizer-token CSRF protection: token lives in the server-side session. */
