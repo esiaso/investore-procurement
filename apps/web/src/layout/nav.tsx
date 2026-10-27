@@ -70,6 +70,8 @@ import PriceCheckIcon from '@mui/icons-material/PriceCheck';
 import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import SummarizeIcon from '@mui/icons-material/Summarize';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import type { ReactNode } from 'react';
 import { PermissionCode, Permissions } from '@sil/shared';
 
@@ -92,6 +94,9 @@ export const STORES_SEE: PermissionCode[] = [P.INVENTORY_REQUISITION, P.INVENTOR
 
 /** A user linked to a supplier uses the supplier portal only. */
 export const isPortalUser = (user: { supplierId?: string | null } | null | undefined) => !!user?.supplierId;
+
+/** Anyone who can run at least one report. */
+const REPORT_PERMISSIONS = [P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.PHARMACY_READ, P.PURCHASING_READ, P.BILLING_READ, P.POS_REPORTS, P.PROCUREMENT_KPIS];
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: <DashboardIcon />, permissions: [], section: '' },
@@ -120,6 +125,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Billing setup', path: '/billing/setup', icon: <PriceChangeIcon />, permissions: [P.BILLING_READ], section: 'Pharmacy & billing' },
   { label: 'KRA eTIMS', path: '/etims', icon: <VerifiedIcon />, permissions: [P.ETIMS_READ], section: 'Pharmacy & billing' },
   { label: 'HMIS integration', path: '/hmis', icon: <HubIcon />, permissions: [P.HMIS_READ], section: 'Pharmacy & billing' },
+  { label: 'Reports', path: '/reports', icon: <SummarizeIcon />, permissions: [], anyOf: REPORT_PERMISSIONS, section: 'Reports & documents' },
+  { label: 'Documents', path: '/documents', icon: <FolderOpenIcon />, permissions: [P.DOCUMENTS_READ], section: 'Reports & documents' },
   { label: 'QuickBooks', path: '/accounting/quickbooks', icon: <AccountBalanceWalletIcon />, permissions: [], anyOf: [P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST], section: 'Pharmacy & billing' },
   { label: 'Till', path: '/pos', icon: <ShoppingBasketIcon />, permissions: [P.POS_SELL], section: 'Point of sale' },
   { label: 'Shifts & cash-up', path: '/pos/shifts', icon: <PriceCheckIcon />, permissions: [], anyOf: [P.POS_REPORTS, P.POS_APPROVE_VARIANCE], section: 'Point of sale' },

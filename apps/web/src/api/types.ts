@@ -5,6 +5,7 @@ import type {
   ServicePoint,
   StoreType,
   TaxTreatment,
+  VedClass,
 } from '@sil/shared';
 
 export interface Base {
@@ -116,6 +117,7 @@ export interface Generic extends Base {
   pregnancyContraindicated?: boolean;
   minAgeYears?: number | null;
   maxQtyPerSale?: number | null;
+  vedClass?: VedClass | null;
   isActive: boolean;
   items?: Item[];
 }

@@ -48,6 +48,7 @@ export function GenericDialog({ generic, onClose }: { generic: Generic | 'new'; 
           pregnancyContraindicated: generic.pregnancyContraindicated ?? false,
           minAgeYears: generic.minAgeYears ?? null,
           maxQtyPerSale: generic.maxQtyPerSale ?? null,
+          vedClass: generic.vedClass ?? null,
           isActive: generic.isActive,
         },
   });
@@ -84,6 +85,7 @@ export function GenericDialog({ generic, onClose }: { generic: Generic | 'new'; 
         label="Controlled schedule"
         options={enumOptions(ControlledSchedule, humanise)}
       />
+      <RHFSelect control={control} name="vedClass" label="VED class (ABC-VED analysis)" allowEmpty="Not classified" options={[{ value: 'V', label: 'V — vital' }, { value: 'E', label: 'E — essential' }, { value: 'D', label: 'D — desirable' }]} />
       <RHFText control={control} name="storageRequirements" label="Storage requirements" />
       <RHFText control={control} name="pregnancyNotes" label="Pregnancy notes" multiline minRows={2} />
       <RHFText control={control} name="lactationNotes" label="Lactation notes" multiline minRows={2} />
