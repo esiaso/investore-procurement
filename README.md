@@ -1898,6 +1898,121 @@ demand.
   current BillPayment posting covers the voucher's invoices at their net amounts.
 * The rate limit is per API process (in memory).
 
+## Non-stock procurement — phase 5: petty cash
+
+### Floats (*Payments → Petty cash floats*, `pettycash.manage`)
+
+Each float (per branch or department) has:
+* a **custodian**;
+* a **float limit** (the imprest);
+* a **per-transaction limit**;
+* a **replenishment threshold**;
+* a cash GL account;
+* optionally, payment by **M-PESA**, plus a reference shortcode.
+
+**The cash book.** The balance moves only through the cash book (`petty_cash_transaction`):
+opening, replenishment, disbursement, refund, top-up and reversal, each with the balance
+after it.
+
+**Sample.** `PC-ADMIN` (Administration), held by the accountant, with 50,000 in hand.
+
+### Requests and advances (*Payments → Petty cash*, `pettycash.request` — all staff)
+
+**What a request holds.**
+* A **payment** to a staff member or a vendor, or an **advance / imprest** (always to the
+  requester).
+* Purpose, expense account (GL), cost centre, optional project, amount and attachments
+  (receipts, quotes).
+* Payment method: **cash**, **M-PESA to a phone** (B2C), **PayBill + account** or **Till**
+  (B2B).
+
+**Checks before approval:**
+* Amount ≤ the float's per-transaction limit (`OVER_LIMIT`).
+* Amount ≤ what the float has **available**: balance minus requests pending, approved or
+  processing (`INSUFFICIENT_FLOAT`).
+* **Duplicates.** The same payee (phone, PayBill + account, staff user or name) and the
+  same amount within `pettyCash.duplicateWindowDays` (7) is refused with
+  `POSSIBLE_DUPLICATE`. With a justification it goes ahead, and approvers see
+  "possible duplicate of …".
+* **No new advance while one is unretired** (`ADVANCE_OUTSTANDING`).
+* M-PESA only on floats that pay by M-PESA, in whole shillings; payees are validated.
+
+**Approval chain** (approval matrix, `PCV`):
+
+| Amount | Approvers |
+|---|---|
+| Up to 10,000 | Supervisor / HOD of the cost centre → Finance (coding and documents) |
+| 10,000 – 50,000 | + Finance manager |
+| Over 50,000 | + CEO / Medical director |
+
+The engine supplies delegation, escalation, reminders, approve-by-email links, and IP and
+device on every action. The requester and the **custodian never approve**.
+
+### Disbursement
+
+Payment is **technically blocked** until every level is approved. Only the **custodian of
+the float** pays, and never a request they raised or approved. Each blocked attempt is
+audited (`PETTY_CASH_RELEASE_BLOCKED`).
+
+**Paying out:**
+* **Cash.** The custodian records who collected it, and the cash book is updated. The payee
+  confirms receipt in the app (*I received it*).
+* **M-PESA.** It goes through the phase 4 payout engine. It is sent once only, with the same
+  status checks, retries, review queue and reversal. The float moves only when M-PESA
+  confirms.
+
+### Advances: retirement
+
+* An advance must be retired within `pettyCash.retirementDays` (7).
+* The holder lists the receipts. The **custodian checks** them (never their own), then
+  either accepts or returns them.
+* **Accepting** puts the unspent balance back into the float (REFUND), or pays out an
+  overspend (TOP_UP).
+* The `pettyCash.retirementReminders` job (07:00 daily) chases overdue advances.
+
+### Replenishment and reconciliation
+
+**Automatic replenishment.** When a disbursement takes the float below its threshold, a
+**replenishment** for the amount up to the limit goes for approval automatically. It can
+also be raised by hand. Approval is `PCRP` (Finance manager), and the custodian never
+approves it. The custodian then **receives** the cash, with its reference.
+
+**Cash counts.** A count records the counted cash against the cash book. Any **variance** is
+kept and the petty cash managers are told.
+
+**Cash book / statement.** For a float and period, it shows:
+* opening + replenishments + refunds − disbursements − top-ups (± reversals) = closing;
+* every movement, with links to the vouchers;
+* the counts and their variances.
+
+The **petty cash voucher PDF** prints the approvals, who paid and who received. Advances
+add their receipts.
+
+### Shared M-PESA engine
+
+The phase 4 payouts service now pays any document through a `PayoutOwner` interface
+(`apps/api/src/modules/payments/payout-owner.ts`). Supplier vouchers (`PV`) and petty cash
+(`PCV`) share the same idempotent attempts table. An attempt belongs to exactly one
+document (check constraint), with one live attempt per document (unique indexes). M-PESA
+reconciliation covers both.
+
+### Configuration added
+
+| | |
+|---|---|
+| Settings | `pettyCash.duplicateWindowDays` (7), `pettyCash.retirementDays` (7) |
+| Permissions | `pettycash.request` (every staff role that raises requisitions), `pettycash.disburse` and `pettycash.manage` (Finance / Accounts, Finance manager) |
+| Workflows | `PCV-1` (≤ 10,000), `PCV-2` (10,000–50,000), `PCV-3` (> 50,000), `PCRP-1` |
+| Numbering | PCV `{PREFIX}-{FY}-{SEQ}`, PCRP |
+| Jobs | `pettyCash.retirementReminders` (`0 7 * * *`) |
+| Notification category | PETTY_CASH |
+| API | `/petty-cash/floats` (+ `/:id/statement?from&to`, `/:id/counts`), `/petty-cash/requests` (list `?scope=mine\|custodian\|all&status&floatId&kind&review`, create/update, `/:id/submit`, `/:id/disburse`, `/:id/acknowledge`, `/:id/retirement`, `/:id/retirement/verify`, `/:id/resolve`, `/:id/reverse`, `/:id/cancel`, `/:id/pdf`), `/petty-cash/replenishments` (+ `/:id/submit`, `/:id/receive`, `/:id/cancel`) |
+| Migration | `1762600000000-NonStockPhase5` |
+
+**Not yet covered.** QuickBooks posting (petty cash expenses as Purchase / Expense,
+replenishments as Transfer) is phase 6. The petty cash reports (spend by category,
+department and user; outstanding advances; replenishment history) are phase 7.
+
 ## Known limitations / next slices
 
 * Reports run on the live database (no reporting replica or pre-aggregation); very
