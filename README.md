@@ -1616,6 +1616,122 @@ acceptance certificate).
 | API | `POST /rfqs/:id/send` {fewerSuppliersJustification}, `GET /rfqs/:id/pdf`, `POST /rfqs/:id/close`, `PUT /rfqs/:id/evaluation`, `POST /rfqs/:id/scores`, `POST /rfqs/:id/evaluate`; quotation `currency`, `paymentTermsDays`, `notes`; award `deliveryAddress`; PO `currency`, `deliveryAddress`, `terms`, `expiresOn`, line `taxCategoryId`, `whtRatePercent` |
 | Migration | `1762300000000-NonStockPhase2` |
 
+## Non-stock procurement — phase 3: acceptance, invoices, delivery to the final user
+
+### Receiving non-stock goods and services (*Logistics → Service certificates*)
+
+Non-stock lines are never received into a store; GRNs refuse them. Instead the delivery is
+recorded on an **acceptance certificate**. It extends the slice-8 service completion
+certificate and is printed as:
+* a **Service acceptance certificate** when every line is a service;
+* a **Goods received note (non-stock)** otherwise.
+
+**Recording the delivery.** A storekeeper, or anyone with `services.certify` /
+`purchasing.receive`, records it with *Record delivery / completed work*.
+* For each line, enter the **accepted** quantity, plus any **rejected** quantity with its
+  reason. A partial delivery is fine.
+* Add inspection notes and attachments (signed note, job card, photos).
+* The buyer who raised the order, or anyone who approved it, cannot record it.
+
+**Sign-off when the order was bought for staff requisitions.**
+* The draft waits for the **requester**, or a member of the requesting department with
+  `services.certify` (e.g. the ward in-charge), to **Accept delivery** or **Reject** it
+  (with a reason).
+* The requester is notified, and *My requisitions* shows it under *Waiting for you*.
+* The officer's *Post* is refused with `ACCEPTANCE_REQUIRED`.
+* For other orders, the certifying officer posts it as before.
+
+**Accepting:**
+* The accepted quantities count as received on the order: PARTIALLY_RECEIVED, then
+  RECEIVED. This is what the 3-way match uses. **Stock levels never change.**
+* The requisition lines record the **received** quantity.
+* A **service** accepted by the requester themself counts as **delivered** to them.
+* Goods wait to be handed over, and the requester is told they have been received.
+
+### Supplier invoices
+
+* Non-stock lines can be invoiced.
+* The invoice uses the order's **currency**, at the exchange rate on the invoice date, and
+  stores a **base total** (KES).
+* **Withholding tax** is worked out from the order lines' rates. The invoice shows the WHT
+  total and the **net payable** (deducted at payment in phase 4).
+
+**Price tolerance in the 3-way match.** A price difference must be within
+`purchasing.matchPriceTolerancePct` (2 %) **and**, when `purchasing.matchPriceToleranceAbs`
+is above 0, within that amount per line (|invoice − order price| × quantity, in the
+order currency). The quantity checks are as before.
+
+**Approval:**
+* With `purchasing.autoApproveMatchedInvoices` on, an invoice that matches within
+  tolerance is approved when submitted, with no workflow; a comment records this.
+* Exceptions (any variance) always go through the approval workflow. The amount is in KES
+  and the currency is recorded.
+* Approval books the **actual** against the budget in KES and releases the commitment.
+
+**Order status.** When the order is fully received and every line is covered by approved
+invoices, it becomes **INVOICED**.
+
+**Invoice statuses.** Captured → Pending approval → Approved → (Scheduled → Partially paid
+→) Paid, plus Rejected, Returned and Cancelled. The match status (Matched / Variance) is
+shown alongside. Scheduled and Partially paid are used from phase 4.
+
+### Delivery to the final user (hand-over)
+
+**Handing over.** On the requisition page, *Delivery to the requester* shows each non-stock
+line as ordered, received, delivered and waiting. Procurement or stores
+(`purchasing.handover`) use *Hand over*:
+* to the requester, or an active colleague in the requesting department;
+* only what has been received and not yet handed over (`NOT_RECEIVED`);
+* with the condition, notes and attachments.
+
+The receiver is told the items are **ready for collection**.
+
+**Confirming.** The hand-over is confirmed in one of two ways:
+* **in the app:** the receiver opens the hand-over and clicks *I have received these*;
+* **at the counter:** the officer clicks *Send code to the receiver*, and the receiver gets
+  a 6-digit one-time code.
+  * Only its SHA-256 is stored.
+  * It is valid for `requisitions.handoverOtpMinutes` (15).
+  * After `requisitions.handoverOtpMaxAttempts` (5) wrong codes it is void (410) and a new
+    code must be sent.
+
+The channel, time and IP are recorded.
+
+**Delivered lines and closing.**
+* Confirmed quantities count as delivered.
+* **Stock lines** count as delivered when their store requisition line is fully issued.
+* The requisition **closes automatically** when every line is delivered (or cancelled),
+  and the requester is told.
+
+### Milestone notifications to the requester
+
+Requisitions category (in app / email per preference):
+* the purchase request is approved;
+* the LPO / LSO is issued (first send only);
+* a delivery is waiting for their acceptance;
+* goods are received from the supplier;
+* goods are ready for collection, plus the one-time code;
+* the requisition is delivered and closed.
+
+### Document chain
+
+REQ → PR → (RFQ) → PO → SCC (acceptance) → INV → HOV (hand-over); stock lines
+REQ → SR → ISS.
+
+### Configuration added
+
+| | |
+|---|---|
+| Settings | `purchasing.matchPriceToleranceAbs` (0), `purchasing.autoApproveMatchedInvoices` (false), `requisitions.handoverOtpMinutes` (15), `requisitions.handoverOtpMaxAttempts` (5) |
+| Permission | `purchasing.handover` (procurement officer / manager, SCM, storekeeper) |
+| Numbering | HOV `{PREFIX}-{FY}-{SEQ}` |
+| Statuses | Certificate: REJECTED; invoice: SCHEDULED, PARTIALLY_PAID (phase 4); PO: INVOICED; hand-over: PENDING / ACKNOWLEDGED / CANCELLED |
+| API | `POST /service-certificates/:id/accept`, `/:id/reject` {reason}, `GET /service-certificates/awaiting-me`; certificate lines `rejectedQty`, `rejectionReason`; `/handovers` (list `?requisitionId=&mine=true&status=`, create, `/:id/acknowledge`, `/:id/otp`, `/:id/otp/verify` {code}, `/:id/cancel`); invoice `currency`, `exchangeRate`, `baseTotal`, `whtTotal`; requisition `deliverable` |
+| Migration | `1762400000000-NonStockPhase3`. Existing invoices take their order's currency and rate; already-posted certificates set the received quantities on requisition lines. |
+
+GL posting of accepted non-stock lines (expense / asset accounts) goes to QuickBooks with
+the bill in phase 6. Received-not-invoiced accruals are in the phase 7 reports.
+
 ## Known limitations / next slices
 
 * Reports run on the live database (no reporting replica or pre-aggregation); very
