@@ -71,6 +71,8 @@ import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import SummarizeIcon from '@mui/icons-material/Summarize';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import type { ReactNode } from 'react';
 import { PermissionCode, Permissions } from '@sil/shared';
@@ -103,6 +105,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Approvals', path: '/approvals', icon: <TaskAltIcon />, permissions: [], section: '' },
   { label: 'Requisitions', path: '/requisitions', icon: <PlaylistAddIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
   { label: 'RFQs', path: '/rfqs', icon: <RequestQuoteIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
+  { label: 'My requisitions', path: '/staff-requisitions', icon: <RequestQuoteIcon />, permissions: [], anyOf: [P.STAFF_REQUISITION_CREATE, P.STAFF_REQUISITION_READ_ALL], section: 'Procurement' },
+  { label: 'Procurement queue', path: '/procurement-queue', icon: <PlaylistAddCheckIcon />, permissions: [P.STAFF_REQUISITION_READ_ALL], section: 'Procurement' },
   { label: 'Purchase orders', path: '/purchase-orders', icon: <ShoppingCartIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
   { label: 'Goods received', path: '/grns', icon: <LocalShippingIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
   { label: 'Invoices', path: '/invoices', icon: <ReceiptLongIcon />, permissions: [Permissions.PURCHASING_READ], section: 'Procurement' },
@@ -127,6 +131,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'HMIS integration', path: '/hmis', icon: <HubIcon />, permissions: [P.HMIS_READ], section: 'Pharmacy & billing' },
   { label: 'Reports', path: '/reports', icon: <SummarizeIcon />, permissions: [], anyOf: REPORT_PERMISSIONS, section: 'Reports & documents' },
   { label: 'Documents', path: '/documents', icon: <FolderOpenIcon />, permissions: [P.DOCUMENTS_READ], section: 'Reports & documents' },
+  { label: 'Accounts & currencies', path: '/finance/setup', icon: <AccountTreeIcon />, permissions: [], anyOf: [P.GL_MANAGE, P.PROJECTS_MANAGE, P.FX_MANAGE], section: 'Pharmacy & billing' },
   { label: 'QuickBooks', path: '/accounting/quickbooks', icon: <AccountBalanceWalletIcon />, permissions: [], anyOf: [P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST], section: 'Pharmacy & billing' },
   { label: 'Till', path: '/pos', icon: <ShoppingBasketIcon />, permissions: [P.POS_SELL], section: 'Point of sale' },
   { label: 'Shifts & cash-up', path: '/pos/shifts', icon: <PriceCheckIcon />, permissions: [], anyOf: [P.POS_REPORTS, P.POS_APPROVE_VARIANCE], section: 'Point of sale' },

@@ -5,9 +5,9 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Permissions } from '@sil/shared';
-import { useApiMutation, useList } from '../api/hooks';
+import { useAll, useApiMutation, useList } from '../api/hooks';
 import type { ApprovalInboxRow, Workflow } from '../api/purchasing-types';
-import type { ItemCategory, Role } from '../api/types';
+import type { Department, ItemCategory, Role } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
@@ -33,7 +33,7 @@ function Inbox() {
     { field: 'documentType', headerName: 'Type', width: 140, valueFormatter: (v: string) => DOC_LABELS[v] ?? v },
     { field: 'documentNo', headerName: 'Document', width: 190 },
     { field: 'amount', headerName: 'Amount', width: 140, type: 'number', valueFormatter: (v: number) => money(v) },
-    { field: 'stepName', headerName: 'Your step', width: 180 },
+    { field: 'stepName', headerName: 'Your step', width: 200, valueGetter: (_v, r) => `${r.stepName}${(r.minApprovals ?? 1) > 1 ? ` (${r.approvalsAtStep ?? 0} of ${r.minApprovals})` : ''}${r.escalated ? ' · escalated' : ''}` },
     { field: 'summary', headerName: 'Summary', flex: 1, minWidth: 200 },
     { field: 'requestedByName', headerName: 'Requested by', width: 170 },
     { field: 'createdAt', headerName: 'Submitted', width: 120, valueFormatter: (v: string) => date(v) },
@@ -111,15 +111,19 @@ function Delegations() {
 }
 
 const DOC_TYPES = [
+  ['REQ', 'Staff requisition'],
   ['PR', 'Purchase requisition'],
   ['PO', 'Purchase order'],
   ['INV', 'Supplier invoice'],
   ['SR', 'Internal requisition'],
 ] as const;
 
+const blankStep = (name: string) => ({ name, roleId: '', approverType: 'ROLE', minApprovals: '1', remindAfterHours: '', escalateAfterHours: '', escalateToRoleId: '' });
+
 function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onClose(): void }) {
   const roles = useList<Role>('/roles');
   const categories = useList<ItemCategory>('/item-categories');
+  const departments = useAll<Department>('/departments');
   const isNew = workflow === 'new';
   const [form, setForm] = useState({
     code: isNew ? '' : workflow.code,
@@ -128,11 +132,23 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
     minAmount: isNew ? '' : String(workflow.minAmount ?? ''),
     maxAmount: isNew ? '' : String(workflow.maxAmount ?? ''),
     itemCategoryId: isNew ? '' : (workflow.itemCategoryId ?? ''),
+    departmentId: isNew ? '' : (workflow.departmentId ?? ''),
+    currency: isNew ? '' : (workflow.currency ?? ''),
     priority: isNew ? 0 : workflow.priority,
     isActive: isNew ? true : workflow.isActive,
     steps: isNew
-      ? [{ name: 'Approval', roleId: '', approverType: 'ROLE' }]
-      : (workflow.steps ?? []).sort((a, b) => a.sequence - b.sequence).map((s) => ({ name: s.name, roleId: s.roleId ?? '', approverType: s.approverType === 'DEPARTMENT_ROLE' ? 'DEPARTMENT_ROLE' : 'ROLE' })),
+      ? [blankStep('Approval')]
+      : (workflow.steps ?? [])
+          .sort((a, b) => a.sequence - b.sequence)
+          .map((s) => ({
+            name: s.name,
+            roleId: s.roleId ?? '',
+            approverType: s.approverType === 'DEPARTMENT_ROLE' ? 'DEPARTMENT_ROLE' : 'ROLE',
+            minApprovals: String(s.minApprovals ?? 1),
+            remindAfterHours: String(s.remindAfterHours ?? ''),
+            escalateAfterHours: String(s.escalateAfterHours ?? ''),
+            escalateToRoleId: s.escalateToRoleId ?? '',
+          })),
   });
   const save = useApiMutation<void>(
     () => [
@@ -144,7 +160,17 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
           minAmount: form.minAmount === '' ? null : Number(form.minAmount),
           maxAmount: form.maxAmount === '' ? null : Number(form.maxAmount),
           itemCategoryId: form.itemCategoryId || null,
-          steps: form.steps.map((s) => ({ name: s.name, approverType: s.approverType, roleId: s.roleId })),
+          departmentId: form.departmentId || null,
+          currency: form.currency || null,
+          steps: form.steps.map((s) => ({
+            name: s.name,
+            approverType: s.approverType,
+            roleId: s.roleId,
+            minApprovals: Number(s.minApprovals || 1),
+            remindAfterHours: s.remindAfterHours ? Number(s.remindAfterHours) : null,
+            escalateAfterHours: s.escalateAfterHours ? Number(s.escalateAfterHours) : null,
+            escalateToRoleId: s.escalateToRoleId || null,
+          })),
         },
       },
     ],
@@ -167,6 +193,14 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
           {(categories.data ?? []).map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
         </TextField>
       </Stack>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField select label="Only for department" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} sx={{ minWidth: 220 }}>
+          <MenuItem value="">Any</MenuItem>
+          {(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
+        </TextField>
+        <TextField label="Only for currency" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase().slice(0, 3) })} helperText="Blank = any; bands stay in the base currency" sx={{ width: 200 }} />
+        <TextField label="Priority" type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} sx={{ width: 120 }} />
+      </Stack>
       <Typography variant="subtitle2">Steps (in order)</Typography>
       {form.steps.map((s, i) => (
         <Stack key={i} direction="row" spacing={1} alignItems="center">
@@ -179,13 +213,20 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
             <MenuItem value="ROLE">Anyone with the role</MenuItem>
             <MenuItem value="DEPARTMENT_ROLE">Role holder in the document's department</MenuItem>
           </TextField>
+          <TextField label="Approvals needed" type="number" value={s.minApprovals} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, minApprovals: e.target.value } : x)) })} sx={{ width: 110 }} helperText="N of the role" />
+          <TextField label="Remind after h" type="number" value={s.remindAfterHours} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, remindAfterHours: e.target.value } : x)) })} sx={{ width: 110 }} />
+          <TextField label="Escalate after h" type="number" value={s.escalateAfterHours} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, escalateAfterHours: e.target.value } : x)) })} sx={{ width: 110 }} />
+          <TextField select label="Escalate to" value={s.escalateToRoleId} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, escalateToRoleId: e.target.value } : x)) })} sx={{ minWidth: 160 }}>
+            <MenuItem value="">—</MenuItem>
+            {(roles.data ?? []).map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+          </TextField>
           <IconButton aria-label={`Remove step ${i + 1}`} disabled={form.steps.length === 1} onClick={() => setForm({ ...form, steps: form.steps.filter((_, j) => j !== i) })}>
             <DeleteIcon />
           </IconButton>
         </Stack>
       ))}
       <Box>
-        <Button startIcon={<AddIcon />} onClick={() => setForm({ ...form, steps: [...form.steps, { name: `Step ${form.steps.length + 1}`, roleId: '', approverType: 'ROLE' }] })}>
+        <Button startIcon={<AddIcon />} onClick={() => setForm({ ...form, steps: [...form.steps, blankStep(`Step ${form.steps.length + 1}`)] })}>
           Add step
         </Button>
       </Box>
@@ -202,7 +243,7 @@ function Workflows() {
     { field: 'name', headerName: 'Name', flex: 1, minWidth: 220 },
     { field: 'documentType', headerName: 'Document', width: 100 },
     { field: 'band', headerName: 'Amount band', width: 220, valueGetter: (_v, r) => `${money(r.minAmount ?? 0)} – ${r.maxAmount == null ? '∞' : money(r.maxAmount)}` },
-    { field: 'steps', headerName: 'Steps', flex: 1, minWidth: 260, valueGetter: (_v, r) => (r.steps ?? []).sort((a, b) => a.sequence - b.sequence).map((s) => `${s.role?.name ?? s.name}${s.approverType === 'DEPARTMENT_ROLE' ? ' (own department)' : ''}`).join(' → ') },
+    { field: 'steps', headerName: 'Steps', flex: 1, minWidth: 260, valueGetter: (_v, r) => (r.steps ?? []).sort((a, b) => a.sequence - b.sequence).map((s) => `${s.role?.name ?? s.name}${s.approverType === 'DEPARTMENT_ROLE' ? ' (own department)' : ''}${(s.minApprovals ?? 1) > 1 ? ` ×${s.minApprovals}` : ''}`).join(' → ') },
     { field: 'isActive', headerName: 'Active', type: 'boolean', width: 80 },
   ];
   return (

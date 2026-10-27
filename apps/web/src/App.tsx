@@ -11,6 +11,9 @@ import { EncounterDetailPage, EncountersPage, HmisConsolePage, WardSupplyPage } 
 import { PosReportsPage, PosSetupPage, PosShiftsPage } from './pos/PosPages';
 import { TillPage } from './pos/TillPage';
 import { QuickBooksPage } from './accounting/QuickBooksPage';
+import { ApproveLinkPage } from './nonstock/ApproveLinkPage';
+import { FinanceSetupPage } from './nonstock/FinanceSetupPage';
+import { ProcurementQueuePage, StaffRequisitionDetailPage, StaffRequisitionFormPage, StaffRequisitionsPage } from './nonstock/StaffRequisitionPages';
 import { DocumentsPage } from './reports/DocumentsPage';
 import { ReportsPage } from './reports/ReportsPage';
 import { InteractionsPage, PatientsPage, PharmacyWorklistPage, PrescriptionDetailPage, PrescriptionFormPage } from './pharmacy/PharmacyPages';
@@ -88,6 +91,9 @@ const guardedAny = (permissions: PermissionCode[], element: ReactNode) => (
 
 export function App() {
   const { user, loading } = useAuth();
+  // Approve / reject from an email link works without signing in.
+  const link = /^\/approve\/([\w-]+)$/.exec(window.location.pathname);
+  if (link) return <ApproveLinkPage token={link[1]} />;
 
   if (loading) {
     return (
@@ -123,6 +129,12 @@ export function App() {
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="staff-requisitions" element={<StaffRequisitionsPage />} />
+        <Route path="staff-requisitions/new" element={guarded([Permissions.STAFF_REQUISITION_CREATE], <StaffRequisitionFormPage />)} />
+        <Route path="staff-requisitions/:id/edit" element={guarded([Permissions.STAFF_REQUISITION_CREATE], <StaffRequisitionFormPage />)} />
+        <Route path="staff-requisitions/:id" element={<StaffRequisitionDetailPage />} />
+        <Route path="procurement-queue" element={guarded([Permissions.STAFF_REQUISITION_READ_ALL], <ProcurementQueuePage />)} />
+        <Route path="finance/setup" element={<FinanceSetupPage />} />
         <Route path="requisitions" element={guarded([Permissions.PURCHASING_READ], <RequisitionsPage />)} />
         <Route path="requisitions/new" element={guarded([Permissions.PURCHASING_REQUISITION], <RequisitionFormPage />)} />
         <Route path="requisitions/:id/edit" element={guarded([Permissions.PURCHASING_REQUISITION], <RequisitionFormPage />)} />

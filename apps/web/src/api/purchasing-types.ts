@@ -62,6 +62,11 @@ export interface ApprovalInboxRow {
   stepName: string;
   requestedByName: string;
   workflowName: string;
+  currency?: string | null;
+  waitingSince?: string;
+  minApprovals?: number;
+  approvalsAtStep?: number;
+  escalated?: boolean;
 }
 
 export interface ApprovalHistory {
@@ -82,9 +87,22 @@ export interface Workflow extends Base {
   maxAmount: number | null;
   departmentId: string | null;
   itemCategoryId: string | null;
+  currency?: string | null;
   priority: number;
   isActive: boolean;
-  steps?: { id: string; sequence: number; name: string; approverType: string; roleId: string | null; userId: string | null; role?: { name: string } | null }[];
+  steps?: {
+    id: string;
+    sequence: number;
+    name: string;
+    approverType: string;
+    roleId: string | null;
+    userId: string | null;
+    role?: { name: string } | null;
+    minApprovals?: number;
+    remindAfterHours?: number | null;
+    escalateAfterHours?: number | null;
+    escalateToRoleId?: string | null;
+  }[];
 }
 
 export interface Requisition extends Base {
@@ -103,7 +121,21 @@ export interface Requisition extends Base {
   lastComment: string | null;
   sourcingMethod?: string | null;
   sourcingJustification?: string | null;
-  lines?: (Base & { itemId: string; item?: Item; quantity: number; estimatedUnitPrice: number; orderedQty: number; notes: string | null })[];
+  suggestedSupplierIds?: string[];
+  lines?: (Base & {
+    itemId: string | null;
+    item?: Item | null;
+    /** STOCK, or NON_STOCK_GOODS / SERVICE / CAPEX_EXPENSED (from staff requisitions). */
+    lineType?: string;
+    description?: string | null;
+    uom?: { code: string } | null;
+    glAccountId?: string | null;
+    sourceRequisitionLineId?: string | null;
+    quantity: number;
+    estimatedUnitPrice: number;
+    orderedQty: number;
+    notes: string | null;
+  })[];
 }
 
 export interface Rfq extends Base {

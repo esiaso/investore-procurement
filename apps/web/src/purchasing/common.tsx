@@ -31,7 +31,8 @@ export const DOC_ROUTES: Partial<Record<string, (id: string) => string>> = {
 };
 
 export const DOC_LABELS: Record<string, string> = {
-  PR: 'Requisition',
+  REQ: 'Staff requisition',
+  PR: 'Purchase requisition',
   RFQ: 'RFQ',
   PO: 'Purchase order',
   GRN: 'Goods received',
@@ -53,7 +54,7 @@ export const DOC_LABELS: Record<string, string> = {
   DRN: 'Delivery run',
 };
 
-const ORDER = ['APP', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'SHP', 'GRN', 'SCC', 'RTS', 'INV', 'PV', 'SR', 'ISS', 'DRT', 'DRN', 'RCL', 'DSL'];
+const ORDER = ['APP', 'REQ', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'SHP', 'GRN', 'SCC', 'RTS', 'INV', 'PV', 'SR', 'ISS', 'DRT', 'DRN', 'RCL', 'DSL'];
 
 export function useMoney() {
   const { currency } = useSettings();

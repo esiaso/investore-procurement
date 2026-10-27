@@ -248,6 +248,8 @@ export function RequisitionDetailPage() {
   if (!pr) return null;
   const mine = pr.requestedBy === user?.id;
   const editable = mine && [RequisitionStatus.DRAFT, RequisitionStatus.RETURNED].includes(pr.status as RequisitionStatus);
+  /** Consolidated from staff requisitions (goods / services not held in stock). */
+  const nonStock = (pr.lines ?? []).some((l) => l.lineType && l.lineType !== 'STOCK');
   return (
     <>
       <PageHeader title={`Requisition ${pr.number}`} />
@@ -275,8 +277,15 @@ export function RequisitionDetailPage() {
                 <TableBody>
                   {(pr.lines ?? []).map((l) => (
                     <TableRow key={l.id}>
-                      <TableCell>{l.item?.name}</TableCell>
-                      <TableCell align="right">{l.quantity} {l.item?.baseUom?.code}</TableCell>
+                      <TableCell>
+                        {l.item?.name ?? l.description}
+                        {l.lineType && l.lineType !== 'STOCK' && (
+                          <Typography variant="caption" display="block" color="text.secondary">
+                            {humanise(l.lineType)}{l.notes ? ` · ${l.notes}` : ''}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell align="right">{l.quantity} {l.item?.baseUom?.code ?? l.uom?.code}</TableCell>
                       <TableCell align="right">{l.orderedQty}</TableCell>
                       <TableCell align="right">{money(l.estimatedUnitPrice)}</TableCell>
                       <TableCell align="right">{money(l.quantity * l.estimatedUnitPrice)}</TableCell>
@@ -286,15 +295,16 @@ export function RequisitionDetailPage() {
               </Table>
             </Paper>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              {editable && <Button variant="outlined" onClick={() => navigate(`/requisitions/${pr.id}/edit`)}>Edit</Button>}
+              {editable && !nonStock && <Button variant="outlined" onClick={() => navigate(`/requisitions/${pr.id}/edit`)}>Edit</Button>}
               {editable && (
                 <Button variant="contained" disabled={submit.isPending} onClick={() => submit.mutate(undefined, { onSuccess: (r) => r.budgetWarning && notify.info(r.budgetWarning) })}>
                   Submit for approval
                 </Button>
               )}
               {mine && ['DRAFT', 'RETURNED', 'PENDING_APPROVAL'].includes(pr.status) && <Button color="error" onClick={() => cancel.mutate()}>Cancel</Button>}
-              {pr.status === 'APPROVED' && can(Permissions.PURCHASING_RFQ) && <Button variant="contained" onClick={() => setDialog('rfq')}>Request quotations</Button>}
-              {pr.status === 'APPROVED' && can(Permissions.PURCHASING_PO) && <Button variant="outlined" onClick={() => setDialog('po')}>Order directly</Button>}
+              {pr.status === 'APPROVED' && !nonStock && can(Permissions.PURCHASING_RFQ) && <Button variant="contained" onClick={() => setDialog('rfq')}>Request quotations</Button>}
+              {pr.status === 'APPROVED' && !nonStock && can(Permissions.PURCHASING_PO) && <Button variant="outlined" onClick={() => setDialog('po')}>Order directly</Button>}
+              {nonStock && pr.status === 'APPROVED' && <Alert severity="info">Non-stock lines are quoted and ordered through the non-stock LPO cycle.</Alert>}
             </Stack>
           </>
         }
