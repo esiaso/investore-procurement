@@ -31,6 +31,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ItemPicker, StatusChip } from '../inventory/components';
 import { formatMoney, humanise } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
+import { SyncChip } from '../accounting/SyncChip';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate, useMoney } from './common';
 import { useSupplierOptions } from './RequisitionsPages';
 
@@ -124,6 +125,7 @@ export function PurchaseOrderDetailPage() {
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                 <StatusChip status={po.status} />
                 {po.version > 1 && <Chip size="small" variant="outlined" label={`Version ${po.version}`} />}
+                <SyncChip id={po.id} />
                 <Typography>{po.supplier?.name}</Typography>
                 <Typography color="text.secondary">→ {po.store?.name} · {po.department?.name} · {humanise(po.source)}</Typography>
               </Stack>

@@ -17,6 +17,7 @@ import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
 import { StatusChip } from '../inventory/components';
 import { formatMoney, humanise } from '../lib/format';
+import { SyncChip } from '../accounting/SyncChip';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate, useMoney } from '../purchasing/common';
 
 const P = Permissions;
@@ -286,6 +287,7 @@ export function PettyRequestDetailPage() {
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                 <StatusChip status={s} />
                 {r.overdue && <Chip size="small" color="error" label={`Retirement overdue (due ${date(r.retirementDueOn)})`} />}
+                {['DISBURSED', 'RETIREMENT_SUBMITTED', 'RETIRED'].includes(s) && <SyncChip id={r.id} />}
                 <Typography>{r.payeeName} · {money(r.amount)} · {PETTY_METHODS.find((m) => m.value === r.method)?.label}</Typography>
               </Stack>
               {r.lastComment && <Alert severity="info" sx={{ mb: 2 }}>{r.lastComment}</Alert>}

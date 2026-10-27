@@ -18,7 +18,7 @@ export interface AccountingConnection {
   connected: boolean;
 }
 
-export type AccountMappingKind = 'CATEGORY_INVENTORY' | 'CATEGORY_COGS' | 'CATEGORY_INCOME' | 'CATEGORY_CONSUMPTION' | 'STORE_CLASS' | 'DEPARTMENT_CLASS' | 'TAX_CODE' | 'PAYMENT_ACCOUNT' | 'SYSTEM';
+export type AccountMappingKind = 'CATEGORY_INVENTORY' | 'CATEGORY_COGS' | 'CATEGORY_INCOME' | 'CATEGORY_CONSUMPTION' | 'STORE_CLASS' | 'DEPARTMENT_CLASS' | 'TAX_CODE' | 'PAYMENT_ACCOUNT' | 'SYSTEM' | 'GL_ACCOUNT';
 
 export interface AccountMapping {
   id: string;

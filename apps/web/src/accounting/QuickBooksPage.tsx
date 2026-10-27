@@ -48,7 +48,8 @@ export function PostingChip({ status }: { status: string }) {
 }
 
 const MAPPING_KINDS: { kind: AccountMappingKind; label: string; list: keyof QboLists; help: string }[] = [
-  { kind: 'SYSTEM', label: 'Control accounts', list: 'accounts', help: 'Payables, receivables, GRNI clearing, VAT, stock in transit, write-offs, adjustments, opening balances, default bank' },
+  { kind: 'SYSTEM', label: 'Control accounts', list: 'accounts', help: 'Payables, receivables, GRNI clearing, VAT, stock in transit, write-offs, adjustments, opening balances, default bank, M-PESA paying account, WHT payable, bank charges, staff advances' },
+  { kind: 'GL_ACCOUNT', label: 'GL accounts', list: 'accounts', help: 'QuickBooks account for each GL account used on non-stock lines and petty cash that was not imported from QuickBooks' },
   { kind: 'CATEGORY_INVENTORY', label: 'Inventory', list: 'accounts', help: 'Stock asset account per item category (a sub-category uses its parent’s when not mapped)' },
   { kind: 'CATEGORY_COGS', label: 'Cost of sales', list: 'accounts', help: 'Cost of goods dispensed / sold, per category' },
   { kind: 'CATEGORY_INCOME', label: 'Sales income', list: 'accounts', help: 'Income account per category (QuickBooks products are created per category)' },
@@ -56,7 +57,7 @@ const MAPPING_KINDS: { kind: AccountMappingKind; label: string; list: keyof QboL
   { kind: 'PAYMENT_ACCOUNT', label: 'Payment modes', list: 'accounts', help: 'Bank / clearing account per payment mode (sales) and per supplier payment method' },
   { kind: 'TAX_CODE', label: 'Tax codes', list: 'taxCodes', help: 'QuickBooks tax code per tax category' },
   { kind: 'STORE_CLASS', label: 'Store classes', list: 'classes', help: 'QuickBooks class per store / outlet (optional)' },
-  { kind: 'DEPARTMENT_CLASS', label: 'Department classes', list: 'classes', help: 'QuickBooks class per department for consumption (optional)' },
+  { kind: 'DEPARTMENT_CLASS', label: 'Department classes', list: 'classes', help: 'QuickBooks class per department / cost centre: consumption, non-stock purchases and petty cash (optional)' },
 ];
 const OPTIONAL_KINDS: AccountMappingKind[] = ['STORE_CLASS', 'DEPARTMENT_CLASS'];
 
@@ -108,11 +109,11 @@ function BatchesTab() {
   const { can } = useAuth();
   const conn = useConnection();
   const date = useDate();
-  const [f, setF] = useState({ from: monthStart(), to: monthEnd(), PURCHASES: true, SALES: true, INVENTORY: true });
+  const [f, setF] = useState({ from: monthStart(), to: monthEnd(), PURCHASES: true, SALES: true, INVENTORY: true, PETTY_CASH: true });
   const [open, setOpen] = useState<string | null>(null);
   const list = useQuery({ queryKey: ['/accounting/batches'], queryFn: () => api<AccountingBatch[]>('/accounting/batches') });
   const preview = useApiMutation<void, BatchDetail>(
-    () => ['/accounting/batches', { method: 'POST', body: { from: f.from, to: f.to, kinds: (['PURCHASES', 'SALES', 'INVENTORY'] as const).filter((k) => f[k]) } }],
+    () => ['/accounting/batches', { method: 'POST', body: { from: f.from, to: f.to, kinds: (['PURCHASES', 'SALES', 'INVENTORY', 'PETTY_CASH'] as const).filter((k) => f[k]) } }],
     { invalidate: ['/accounting'] },
   );
   const c = conn.data;
@@ -126,7 +127,7 @@ function BatchesTab() {
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
             <TextField type="date" label="From" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} InputLabelProps={{ shrink: true }} />
             <TextField type="date" label="To" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} InputLabelProps={{ shrink: true }} />
-            {(['PURCHASES', 'SALES', 'INVENTORY'] as const).map((k) => (
+            {(['PURCHASES', 'SALES', 'INVENTORY', 'PETTY_CASH'] as const).map((k) => (
               <FormControlLabel key={k} control={<Checkbox checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />} label={k === 'INVENTORY' ? 'Inventory journals' : humanise(k)} />
             ))}
             <Button variant="contained" disabled={preview.isPending || !f.from || !f.to} onClick={() => preview.mutate(undefined, { onSuccess: (b) => setOpen(b.id) })}>
@@ -134,10 +135,11 @@ function BatchesTab() {
             </Button>
           </Stack>
           <Typography variant="caption" color="text.secondary">
-            Bills, bill payments and supplier credits; sales receipts / invoices, payments, refunds and settlements; inventory journals for whole periods already ended. Documents already in QuickBooks are left out.
+            Purchases: purchase orders, bills, supplier credits, bill payments (with withholding tax) and M-PESA charges. Petty cash: expenses, advances and their retirement, replenishments. Sales receipts / invoices, payments, refunds and settlements; inventory journals for whole periods already ended. Documents already in QuickBooks are left out (amended purchase orders are updated).
           </Typography>
         </Paper>
       )}
+      {can(P.ACCOUNTING_POST) && <SyncTools />}
       <Paper>
         <Table size="small">
           <TableHead><TableRow><TableCell>Batch</TableCell><TableCell>Period</TableCell><TableCell>Kinds</TableCell><TableCell>Status</TableCell><TableCell>Posted</TableCell></TableRow></TableHead>
@@ -157,6 +159,30 @@ function BatchesTab() {
       </Paper>
       {open && <BatchDialog id={open} onClose={() => setOpen(null)} canPost={can(P.ACCOUNTING_POST) && !!c?.connected} />}
     </Stack>
+  );
+}
+
+/** Automatic sync now, and vendors ↔ suppliers. */
+function SyncTools() {
+  const { can } = useAuth();
+  const auto = useApiMutation<void, { skipped?: string; posted?: number; failed?: number; retry?: number; blocked?: number }>(() => ['/accounting/auto-sync', { method: 'POST' }], { invalidate: ['/accounting'] });
+  const vendors = useApiMutation<'PULL' | 'PUSH', { linked?: number; unmatched?: number; pushed?: number }>((direction) => ['/accounting/vendors/sync', { method: 'POST', body: { direction } }], { invalidate: ['/accounting'] });
+  const a = auto.data;
+  const v = vendors.data;
+  return (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="subtitle1" sx={{ mb: 1 }}>Sync</Typography>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+        <Button variant="outlined" disabled={auto.isPending} onClick={() => auto.mutate()}>Run automatic sync now</Button>
+        {can(P.ACCOUNTING_MANAGE) && <Button disabled={vendors.isPending} onClick={() => vendors.mutate('PULL')}>Link QuickBooks vendors</Button>}
+        {can(P.ACCOUNTING_MANAGE) && <Button disabled={vendors.isPending} onClick={() => vendors.mutate('PUSH')}>Create missing vendors</Button>}
+      </Stack>
+      {a && <Typography variant="body2" sx={{ mt: 1 }}>{a.skipped ?? `Posted ${a.posted}, failed ${a.failed}, retrying ${a.retry}, blocked ${a.blocked}`}</Typography>}
+      {v && <Typography variant="body2" sx={{ mt: 1 }}>{v.pushed !== undefined ? `${v.pushed} vendor(s) created in QuickBooks` : `${v.linked} supplier(s) linked, ${v.unmatched} not found in QuickBooks`}</Typography>}
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+        With the setting accounting.autoSync on, the job accounting.autoSync queues and posts new purchasing, payment and petty cash documents every 15 minutes; failures are retried with back-off and listed under Errors.
+      </Typography>
+    </Paper>
   );
 }
 

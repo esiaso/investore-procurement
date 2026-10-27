@@ -13,6 +13,7 @@ import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
 import { StatusChip } from '../inventory/components';
 import { formatMoney, humanise } from '../lib/format';
+import { SyncChip } from '../accounting/SyncChip';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate } from '../purchasing/common';
 
 const P = Permissions;
@@ -247,6 +248,7 @@ export function PaymentVoucherDetailPage() {
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                 <StatusChip status={s} />
                 <Typography>{v.payeeName ?? v.supplier?.name} · {methodLabel(v.method)}</Typography>
+                {s === 'PAID' && <SyncChip id={v.id} />}
               </Stack>
               {v.lastComment && <Alert severity={['FAILED', 'REVIEW', 'REJECTED', 'RETURNED'].includes(s) ? 'warning' : 'info'} sx={{ mb: 2 }}>{v.lastComment}</Alert>}
               {s === 'PROCESSING' && <Alert severity="info" sx={{ mb: 2 }}>Sent to M-PESA; waiting for the result.</Alert>}

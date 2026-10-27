@@ -11,6 +11,7 @@ import { useAuth } from '../auth/AuthContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusChip } from '../inventory/components';
 import { formatMoney, humanise } from '../lib/format';
+import { SyncChip } from '../accounting/SyncChip';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate, useMoney } from './common';
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -155,6 +156,7 @@ export function InvoiceDetailPage() {
             <Paper sx={{ p: 2 }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                 <StatusChip status={inv.status} />
+                {['APPROVED', 'SCHEDULED', 'PARTIALLY_PAID', 'PAID'].includes(inv.status) && <SyncChip id={inv.id} />}
                 <Chip size="small" variant="outlined" label={`eTIMS: ${humanise(inv.etimsStatus)}`} />
                 <Typography>{inv.supplier?.name} · invoice {inv.supplierInvoiceNo} · PO {inv.purchaseOrder?.number}</Typography>
               </Stack>

@@ -79,7 +79,7 @@ describe('QuickBooks console', () => {
     fireEvent.click(await screen.findByLabelText('Inventory journals'));
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     const dlg = await screen.findByRole('dialog');
-    expect(previewBody).toMatchObject({ kinds: ['PURCHASES', 'SALES'] });
+    expect(previewBody).toMatchObject({ kinds: ['PURCHASES', 'SALES', 'PETTY_CASH'] });
     expect(await within(dlg).findByText('Map: payment account for payment mode CARD')).toBeTruthy();
     fireEvent.click(within(dlg).getByRole('button', { name: 'Post 1 to QuickBooks' }));
     expect(await within(dlg).findByText(/Posted 1; 0 waiting to retry; 0 failed/)).toBeTruthy();
@@ -109,7 +109,7 @@ describe('QuickBooks console', () => {
     auth.permissions = [Permissions.ACCOUNTING_READ, Permissions.ACCOUNTING_MANAGE];
     const m: MappingsResponse = {
       mappings: [{ id: 'm1', kind: 'SYSTEM', localKey: 'AR', externalId: '10', externalName: 'Accounts Receivable' }],
-      keys: { SYSTEM: [{ code: 'AR', name: 'Accounts receivable' }, { code: 'AP', name: 'Accounts payable' }], CATEGORY_INVENTORY: [], CATEGORY_COGS: [], CATEGORY_INCOME: [], CATEGORY_CONSUMPTION: [], STORE_CLASS: [{ code: 'MS', name: 'Main store' }], DEPARTMENT_CLASS: [], TAX_CODE: [], PAYMENT_ACCOUNT: [] },
+      keys: { SYSTEM: [{ code: 'AR', name: 'Accounts receivable' }, { code: 'AP', name: 'Accounts payable' }], CATEGORY_INVENTORY: [], CATEGORY_COGS: [], CATEGORY_INCOME: [], CATEGORY_CONSUMPTION: [], STORE_CLASS: [{ code: 'MS', name: 'Main store' }], DEPARTMENT_CLASS: [], TAX_CODE: [], PAYMENT_ACCOUNT: [], GL_ACCOUNT: [] },
     };
     let saved: unknown;
     route([
