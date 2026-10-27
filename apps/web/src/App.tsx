@@ -13,6 +13,7 @@ import { TillPage } from './pos/TillPage';
 import { QuickBooksPage } from './accounting/QuickBooksPage';
 import { ApproveLinkPage } from './nonstock/ApproveLinkPage';
 import { FinanceSetupPage } from './nonstock/FinanceSetupPage';
+import { HandoverDetailPage } from './nonstock/HandoverPages';
 import { ProcurementQueuePage, StaffRequisitionDetailPage, StaffRequisitionFormPage, StaffRequisitionsPage } from './nonstock/StaffRequisitionPages';
 import { DocumentsPage } from './reports/DocumentsPage';
 import { ReportsPage } from './reports/ReportsPage';
@@ -133,6 +134,7 @@ export function App() {
         <Route path="staff-requisitions/new" element={guarded([Permissions.STAFF_REQUISITION_CREATE], <StaffRequisitionFormPage />)} />
         <Route path="staff-requisitions/:id/edit" element={guarded([Permissions.STAFF_REQUISITION_CREATE], <StaffRequisitionFormPage />)} />
         <Route path="staff-requisitions/:id" element={<StaffRequisitionDetailPage />} />
+        <Route path="handovers/:id" element={<HandoverDetailPage />} />
         <Route path="procurement-queue" element={guarded([Permissions.STAFF_REQUISITION_READ_ALL], <ProcurementQueuePage />)} />
         <Route path="finance/setup" element={<FinanceSetupPage />} />
         <Route path="requisitions" element={guarded([Permissions.PURCHASING_READ], <RequisitionsPage />)} />
@@ -177,7 +179,7 @@ export function App() {
         <Route path="distribution/:id" element={guardedAny([Permissions.DISTRIBUTION_MANAGE, Permissions.INVENTORY_READ], <RunDetailPage />)} />
         <Route path="shipments" element={guarded([Permissions.PURCHASING_READ], <ShipmentsPage />)} />
         <Route path="service-certificates" element={guarded([Permissions.PURCHASING_READ], <ServiceCertificatesPage />)} />
-        <Route path="service-certificates/:id" element={guarded([Permissions.PURCHASING_READ], <ServiceCertificateDetailPage />)} />
+        <Route path="service-certificates/:id" element={<ServiceCertificateDetailPage />} />
         <Route path="assets" element={guarded([Permissions.ASSETS_READ], <AssetsPage />)} />
         <Route path="assets/:id" element={guarded([Permissions.ASSETS_READ], <AssetDetailPage />)} />
         <Route path="labels" element={guarded([Permissions.INVENTORY_READ], <LabelsPage />)} />

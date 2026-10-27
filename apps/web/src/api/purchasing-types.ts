@@ -304,6 +304,10 @@ export interface Invoice extends Base {
   subtotal: number;
   taxTotal: number;
   total: number;
+  currency?: string;
+  exchangeRate?: number;
+  baseTotal?: number;
+  whtTotal?: number;
   capturedBy: string;
   lastComment: string | null;
 }

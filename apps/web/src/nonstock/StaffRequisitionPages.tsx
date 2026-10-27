@@ -40,6 +40,7 @@ import { ItemPicker, StatusChip, StoreSelect } from '../inventory/components';
 import { humanise } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate, useMoney } from '../purchasing/common';
+import { AwaitingMePanel, DeliveryPanel } from './HandoverPages';
 
 const P = Permissions;
 const PRIORITIES = ['ROUTINE', 'URGENT', 'EMERGENCY'];
@@ -83,6 +84,7 @@ export function StaffRequisitionsPage() {
           </TextField>
         }
       />
+      <AwaitingMePanel />
       <Tabs value={scope} onChange={(_, v) => setScope(v)} sx={{ mb: 2 }}>
         <Tab value="mine" label="Mine" />
         {user?.departmentId && <Tab value="department" label="My department" />}
@@ -317,6 +319,7 @@ export function StaffRequisitionDetailPage() {
                       <TableCell>{l.glAccount ? `${l.glAccount.code} ${l.glAccount.name}` : '—'}</TableCell>
                       <TableCell>
                         <StatusChip status={l.status} />
+                        {l.lineType !== 'STOCK' && !!l.receivedQty && l.status !== 'DELIVERED' && <Typography variant="caption" sx={{ ml: 1 }}>received {l.receivedQty}, delivered {l.deliveredQty ?? 0}</Typography>}
                         {l.purchaseRequisition && <Link component={RouterLink} to={`/requisitions/${l.purchaseRequisition.id}`} sx={{ ml: 1 }}>{l.purchaseRequisition.number}</Link>}
                         {l.storeRequisition && <Link component={RouterLink} to={`/store-requisitions/${l.storeRequisition.id}`} sx={{ ml: 1 }}>{l.storeRequisition.number}</Link>}
                       </TableCell>
@@ -325,6 +328,7 @@ export function StaffRequisitionDetailPage() {
                 </TableBody>
               </Table>
             </Paper>
+            <DeliveryPanel requisition={r} />
             <AttachmentsPanel ownerType="STAFF_REQUISITION" ownerId={r.id} categories={['QUOTE', 'SPECIFICATION', 'PHOTO', 'GENERAL']} canUpload={mine && EDITABLE.includes(r.status)} />
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {mine && EDITABLE.includes(r.status) && <Button variant="outlined" onClick={() => navigate(`/staff-requisitions/${r.id}/edit`)}>Edit</Button>}

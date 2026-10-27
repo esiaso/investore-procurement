@@ -444,35 +444,49 @@ interface Certificate {
   certifiedBy: string;
   certifiedByName?: string;
   postedAt: string | null;
-  lines?: { id: string; poLineId: string; lineNo?: number; item?: string; ordered?: number; quantity: number; uom?: string; value?: number | null; remarks: string | null }[];
+  kind?: string;
+  acceptedByName?: string | null;
+  rejectionReason?: string | null;
+  /** Staff requisitions it was bought for: their requester / department signs it off. */
+  requisitions?: { id: string; number: string }[];
+  canSign?: boolean;
+  lines?: { id: string; poLineId: string; lineNo?: number; item?: string; lineType?: string; ordered?: number; quantity: number; rejectedQty?: number; rejectionReason?: string | null; uom?: string; value?: number | null; remarks: string | null }[];
 }
+
+type CertLine = { quantity?: number; rejectedQty?: number; rejectionReason?: string };
 
 function CertificateDialog({ onClose }: { onClose(): void }) {
   const orders = useList<{ id: string; number: string; supplier: string }>('/service-certificates/open-orders');
   const [poId, setPoId] = useState('');
-  const po = useQuery({ queryKey: ['/purchase-orders', poId], queryFn: () => api<{ lines: { id: string; lineNo: number; item?: { name: string }; quantity: number; receivedBaseQty: number; conversionFactor: number }[] }>(`/purchase-orders/${poId}`), enabled: !!poId });
+  const po = useQuery({ queryKey: ['/purchase-orders', poId], queryFn: () => api<{ lines: { id: string; lineNo: number; item?: { name: string } | null; description?: string | null; lineType?: string; quantity: number; receivedBaseQty: number; conversionFactor: number }[] }>(`/purchase-orders/${poId}`), enabled: !!poId });
   const [form, setForm] = useState({ periodFrom: '', periodTo: today(), workDone: '', qualityRating: 4 as number | null });
-  const [qty, setQty] = useState<Record<string, number>>({});
+  const [qty, setQty] = useState<Record<string, CertLine>>({});
+  const set = (id: string, patch: CertLine) => setQty({ ...qty, [id]: { ...qty[id], ...patch } });
+  const lines = Object.entries(qty)
+    .filter(([, l]) => (l.quantity ?? 0) > 0 || (l.rejectedQty ?? 0) > 0)
+    .map(([poLineId, l]) => ({ poLineId, quantity: l.quantity ?? 0, rejectedQty: l.rejectedQty || undefined, rejectionReason: l.rejectionReason || undefined }));
   const save = useApiMutation<void>(
-    () => ['/service-certificates', { method: 'POST', body: { purchaseOrderId: poId, periodFrom: form.periodFrom || undefined, periodTo: form.periodTo, workDone: form.workDone, qualityRating: form.qualityRating ?? undefined, lines: Object.entries(qty).filter(([, q]) => q > 0).map(([poLineId, quantity]) => ({ poLineId, quantity })) } }],
-    { invalidate: ['/service-certificates'], success: 'Certificate drafted; post it to count as received' },
+    () => ['/service-certificates', { method: 'POST', body: { purchaseOrderId: poId, periodFrom: form.periodFrom || undefined, periodTo: form.periodTo, workDone: form.workDone, qualityRating: form.qualityRating ?? undefined, lines } }],
+    { invalidate: ['/service-certificates'], success: 'Recorded: waiting for sign-off' },
   );
   return (
-    <FormDialog open maxWidth="md" title="Service / works completion certificate" submitLabel="Save draft" onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
+    <FormDialog open maxWidth="md" title="Record a delivery / completed work" submitLabel="Save draft" onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <TextField select label="Service order" value={poId} onChange={(e) => { setPoId(e.target.value); setQty({}); }} required>
         {(orders.data ?? []).map((o) => <MenuItem key={o.id} value={o.id}>{o.number} · {o.supplier}</MenuItem>)}
       </TextField>
       {(po.data?.lines ?? []).map((l) => (
-        <Stack key={l.id} direction="row" spacing={2} alignItems="center">
-          <Typography sx={{ flex: 1 }}>{l.lineNo}. {l.item?.name} (ordered {l.quantity}, certified {l.receivedBaseQty / l.conversionFactor})</Typography>
-          <TextField size="small" type="number" label="Completed" value={qty[l.id] ?? ''} onChange={(e) => setQty({ ...qty, [l.id]: Number(e.target.value) })} sx={{ width: 120 }} />
+        <Stack key={l.id} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+          <Typography sx={{ flex: 1 }}>{l.lineNo}. {l.item?.name ?? l.description} (ordered {l.quantity}, received {l.receivedBaseQty / l.conversionFactor})</Typography>
+          <TextField size="small" type="number" label="Accepted" value={qty[l.id]?.quantity ?? ''} onChange={(e) => set(l.id, { quantity: Number(e.target.value) })} sx={{ width: 110 }} slotProps={{ htmlInput: { 'aria-label': `Accepted quantity for line ${l.lineNo}` } }} />
+          <TextField size="small" type="number" label="Rejected" value={qty[l.id]?.rejectedQty ?? ''} onChange={(e) => set(l.id, { rejectedQty: Number(e.target.value) })} sx={{ width: 110 }} />
+          {(qty[l.id]?.rejectedQty ?? 0) > 0 && <TextField size="small" label="Reason rejected" value={qty[l.id]?.rejectionReason ?? ''} onChange={(e) => set(l.id, { rejectionReason: e.target.value })} required />}
         </Stack>
       ))}
       <Stack direction="row" spacing={2}>
         <TextField label="Period from" type="date" value={form.periodFrom} onChange={(e) => setForm({ ...form, periodFrom: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="Period to" type="date" value={form.periodTo} onChange={(e) => setForm({ ...form, periodTo: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
       </Stack>
-      <TextField label="Work done" value={form.workDone} onChange={(e) => setForm({ ...form, workDone: e.target.value })} multiline minRows={3} required />
+      <TextField label="Work done / inspection notes" value={form.workDone} onChange={(e) => setForm({ ...form, workDone: e.target.value })} multiline minRows={3} required />
       <Stack direction="row" spacing={1} alignItems="center"><Typography>Quality of the work</Typography><Rating value={form.qualityRating} onChange={(_, v) => setForm({ ...form, qualityRating: v })} /></Stack>
     </FormDialog>
   );
@@ -486,7 +500,7 @@ export function ServiceCertificatesPage() {
   const { data, isFetching } = useList<Certificate>('/service-certificates');
   return (
     <>
-      <PageHeader title="Service completion certificates" onNew={can(Permissions.SERVICES_CERTIFY) ? () => setDialog(true) : undefined} newLabel="Certify completed work" />
+      <PageHeader title="Service completion certificates" onNew={can(Permissions.SERVICES_CERTIFY) || can(Permissions.PURCHASING_RECEIVE) ? () => setDialog(true) : undefined} newLabel="Record delivery / completed work" />
       <Paper>
         <DataGrid
           autoHeight
@@ -519,28 +533,46 @@ export function ServiceCertificateDetailPage() {
   const { data: c } = useQuery({ queryKey: ['/service-certificates', id], queryFn: () => api<Certificate>(`/service-certificates/${id}`) });
   const post = useApiMutation<void>(() => [`/service-certificates/${id}/post`, { method: 'POST' }], { invalidate: ['/service-certificates', '/purchase-orders'], success: 'Posted: counts as received' });
   const cancel = useApiMutation<void>(() => [`/service-certificates/${id}/cancel`, { method: 'POST' }], { invalidate: ['/service-certificates'], success: 'Cancelled' });
+  const accept = useApiMutation<void>(() => [`/service-certificates/${id}/accept`, { method: 'POST' }], { invalidate: ['/service-certificates', '/purchase-orders', '/staff-requisitions'], success: 'Accepted: counts as received' });
+  const [rejecting, setRejecting] = useState(false);
   if (!c) return null;
   const mine = c.certifiedBy === user?.id && c.status === 'DRAFT';
+  const forRequisitions = (c.requisitions ?? []).length > 0;
+  const rejected = (c.lines ?? []).some((l) => (l.rejectedQty ?? 0) > 0);
   return (
     <>
-      <PageHeader title={`${c.number} · ${c.supplier?.name}`} />
+      <PageHeader title={`${c.kind ?? 'Certificate'} ${c.number} · ${c.supplier?.name}`} />
       <DetailLayout
         main={
           <Paper sx={{ p: 2 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}><StatusChip status={c.status} /><Typography>PO <Link component={RouterLink} to={`/purchase-orders/${c.purchaseOrderId}`}>{c.purchaseOrder?.number}</Link></Typography></Stack>
             <Stack direction="row" spacing={3} sx={{ mb: 2 }}>
               <Field label="Period">{date(c.periodFrom) || '—'} – {date(c.periodTo)}</Field>
-              <Field label="Certified by">{c.certifiedByName}</Field>
+              <Field label="Recorded by">{c.certifiedByName}</Field>
+              {forRequisitions && <Field label="Requisition">{(c.requisitions ?? []).map((r) => r.number).join(', ')}</Field>}
+              {c.acceptedByName && <Field label={c.status === 'REJECTED' ? 'Rejected by' : 'Accepted by'}>{c.acceptedByName}</Field>}
               <Field label="Rating">{c.qualityRating ? `${c.qualityRating}/5` : '—'}</Field>
             </Stack>
             <Typography sx={{ mb: 2 }}>{c.workDone}</Typography>
+            {c.rejectionReason && <Alert severity="warning" sx={{ mb: 2 }}>Rejected: {c.rejectionReason}</Alert>}
+            {c.canSign && <Alert severity="info" sx={{ mb: 2 }}>Please confirm what was delivered. Accepting counts the accepted quantities as received from the supplier.</Alert>}
             <Table size="small" aria-label="Certified lines">
-              <TableHead><TableRow><TableCell>Line</TableCell><TableCell>Service</TableCell><TableCell align="right">Ordered</TableCell><TableCell align="right">Certified</TableCell><TableCell align="right">Value</TableCell></TableRow></TableHead>
-              <TableBody>{(c.lines ?? []).map((l) => <TableRow key={l.id}><TableCell>{l.lineNo}</TableCell><TableCell>{l.item}</TableCell><TableCell align="right">{l.ordered}</TableCell><TableCell align="right">{l.quantity} {l.uom}</TableCell><TableCell align="right">{l.value == null ? '' : money(l.value)}</TableCell></TableRow>)}</TableBody>
+              <TableHead><TableRow><TableCell>Line</TableCell><TableCell>Goods / service</TableCell><TableCell align="right">Ordered</TableCell><TableCell align="right">Accepted</TableCell>{rejected && <TableCell>Rejected</TableCell>}<TableCell align="right">Value</TableCell></TableRow></TableHead>
+              <TableBody>
+                {(c.lines ?? []).map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell>{l.lineNo}</TableCell><TableCell>{l.item}</TableCell><TableCell align="right">{l.ordered}</TableCell><TableCell align="right">{l.quantity} {l.uom}</TableCell>
+                    {rejected && <TableCell>{l.rejectedQty ? `${l.rejectedQty}: ${l.rejectionReason ?? ''}` : ''}</TableCell>}
+                    <TableCell align="right">{l.value == null ? '' : money(l.value)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
             <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
               <Button href={buildUrl(`/service-certificates/${c.id}/pdf`)} target="_blank">Printable certificate</Button>
-              {mine && <Button variant="contained" disabled={post.isPending} onClick={() => post.mutate()}>Post certificate</Button>}
+              {mine && !forRequisitions && <Button variant="contained" disabled={post.isPending} onClick={() => post.mutate()}>Post certificate</Button>}
+              {c.canSign && <Button variant="contained" disabled={accept.isPending} onClick={() => accept.mutate()}>Accept delivery</Button>}
+              {c.canSign && <Button color="error" onClick={() => setRejecting(true)}>Reject</Button>}
               {mine && <Button color="error" onClick={() => cancel.mutate()}>Cancel</Button>}
             </Stack>
           </Paper>
@@ -552,6 +584,17 @@ export function ServiceCertificateDetailPage() {
           </>
         }
       />
+      {rejecting && <RejectCertificateDialog id={c.id} onClose={() => setRejecting(false)} />}
     </>
+  );
+}
+
+function RejectCertificateDialog({ id, onClose }: { id: string; onClose(): void }) {
+  const [reason, setReason] = useState('');
+  const reject = useApiMutation<void>(() => [`/service-certificates/${id}/reject`, { method: 'POST', body: { reason } }], { invalidate: ['/service-certificates'], success: 'Rejected; the recording officer is told' });
+  return (
+    <FormDialog open title="Reject the delivery" submitLabel="Reject" onClose={onClose} submitting={reject.isPending} onSubmit={(e) => { e.preventDefault(); reject.mutate(undefined, { onSuccess: onClose }); }}>
+      <TextField label="Why" value={reason} onChange={(e) => setReason(e.target.value)} multiline minRows={2} required slotProps={{ htmlInput: { minLength: 5 } }} />
+    </FormDialog>
   );
 }

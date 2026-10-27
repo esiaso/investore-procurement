@@ -27,11 +27,13 @@ export const DOC_ROUTES: Partial<Record<string, (id: string) => string>> = {
   DSL: (id) => `/disposals/${id}`,
   RCL: (id) => `/recalls/${id}`,
   SCC: (id) => `/service-certificates/${id}`,
+  HOV: (id) => `/handovers/${id}`,
   DRN: (id) => `/distribution/${id}`,
 };
 
 export const DOC_LABELS: Record<string, string> = {
   REQ: 'Staff requisition',
+  HOV: 'Hand-over',
   PR: 'Purchase requisition',
   RFQ: 'RFQ',
   PO: 'Purchase order',
@@ -49,12 +51,12 @@ export const DOC_LABELS: Record<string, string> = {
   SSN: 'Supplier sanction',
   DSL: 'Disposal',
   RCL: 'Recall',
-  SCC: 'Service certificate',
+  SCC: 'Acceptance / completion certificate',
   SHP: 'Inbound shipment',
   DRN: 'Delivery run',
 };
 
-const ORDER = ['APP', 'REQ', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'SHP', 'GRN', 'SCC', 'RTS', 'INV', 'PV', 'SR', 'ISS', 'DRT', 'DRN', 'RCL', 'DSL'];
+const ORDER = ['APP', 'REQ', 'PR', 'TND', 'CTR', 'CV', 'RFQ', 'PO', 'SHP', 'GRN', 'SCC', 'RTS', 'INV', 'PV', 'HOV', 'SR', 'ISS', 'DRT', 'DRN', 'RCL', 'DSL'];
 
 export function useMoney() {
   const { currency } = useSettings();

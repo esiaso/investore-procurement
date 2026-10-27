@@ -67,6 +67,43 @@ export interface StaffRequisitionLine {
   notes: string | null;
   purchaseRequisition?: { id: string; number: string; status: string } | null;
   storeRequisition?: { id: string; number: string } | null;
+  receivedQty?: number;
+  deliveredQty?: number;
+}
+
+/** Per non-stock line: received from the supplier, delivered, and what can be handed over. */
+export interface Deliverable {
+  requisitionLineId: string;
+  lineNo: number;
+  lineType: LineType;
+  description: string;
+  uom: string | null;
+  quantity: number;
+  receivedQty: number;
+  deliveredQty: number;
+  pendingQty: number;
+  available: number;
+  status: string;
+}
+
+export interface Handover {
+  id: string;
+  number: string;
+  requisitionId: string;
+  requisition?: { number: string; requestedBy?: string } | null;
+  status: 'PENDING' | 'ACKNOWLEDGED' | 'CANCELLED';
+  preparedBy: string;
+  preparedByName?: string | null;
+  receivedBy: string;
+  receivedByName?: string | null;
+  condition: string;
+  notes: string | null;
+  ackChannel: 'IN_APP' | 'OTP' | null;
+  acknowledgedAt: string | null;
+  ackComment: string | null;
+  otpPending?: boolean;
+  createdAt: string;
+  lines?: { id: string; requisitionLineId: string; quantity: number; remarks: string | null; requisitionLine?: { lineNo: number; description: string; uom?: { code: string } | null } }[];
 }
 
 export interface StaffRequisition {
@@ -93,6 +130,7 @@ export interface StaffRequisition {
   createdAt: string;
   lines?: StaffRequisitionLine[];
   budgetWarning?: string | null;
+  deliverable?: Deliverable[];
 }
 
 export interface QueueLine {

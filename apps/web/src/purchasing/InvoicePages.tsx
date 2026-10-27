@@ -10,7 +10,7 @@ import type { Invoice, MatchView, PurchaseOrder } from '../api/purchasing-types'
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusChip } from '../inventory/components';
-import { humanise } from '../lib/format';
+import { formatMoney, humanise } from '../lib/format';
 import { ApprovalPanel, DetailLayout, DocumentChain, Field, useDate, useMoney } from './common';
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -27,7 +27,7 @@ export function InvoiceFormPage() {
     () =>
       (po?.lines ?? []).map((l) => {
         const received = Math.round((l.receivedBaseQty / l.conversionFactor) * 10_000) / 10_000;
-        return { id: l.id, label: `${l.lineNo}. ${l.item?.name}`, uom: l.uom?.code, poPrice: l.unitPrice, received, quantity: edits[l.id]?.quantity ?? String(received), unitPrice: edits[l.id]?.unitPrice ?? String(l.unitPrice), rate: l.taxRatePercent };
+        return { id: l.id, label: `${l.lineNo}. ${l.item?.name ?? l.description ?? ''}`, uom: l.uom?.code, poPrice: l.unitPrice, received, quantity: edits[l.id]?.quantity ?? String(received), unitPrice: edits[l.id]?.unitPrice ?? String(l.unitPrice), rate: l.taxRatePercent };
       }),
     [po, edits],
   );
@@ -143,6 +143,9 @@ export function InvoiceDetailPage() {
   const pay = useApiMutation<void>(() => act('pay', payment), { invalidate: ['/invoices', '/documents'], success: 'Payment recorded' });
   if (!view) return null;
   const inv = view.invoice;
+  const foreign = !!inv.currency && !!inv.exchangeRate && inv.exchangeRate !== 1;
+  // Invoice amounts are in the order currency.
+  const cur = (v: number | null | undefined) => (foreign ? formatMoney(v ?? 0, inv.currency!) : money(v));
   const editable = [InvoiceStatus.CAPTURED, InvoiceStatus.RETURNED].includes(inv.status as InvoiceStatus);
   return (
     <>
@@ -160,9 +163,12 @@ export function InvoiceDetailPage() {
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
                 <Field label="Invoice date">{date(inv.invoiceDate)}</Field>
                 <Field label="Due">{date(inv.dueDate) || '—'}</Field>
-                <Field label="Subtotal">{money(inv.subtotal)}</Field>
-                <Field label="VAT">{money(inv.taxTotal)}</Field>
-                <Field label="Total">{money(inv.total)}</Field>
+                <Field label="Subtotal">{cur(inv.subtotal)}</Field>
+                <Field label="VAT">{cur(inv.taxTotal)}</Field>
+                <Field label="Total">{cur(inv.total)}</Field>
+                {foreign && <Field label={`Base value (rate ${inv.exchangeRate})`}>{money(inv.baseTotal)}</Field>}
+                {!!inv.whtTotal && <Field label="Withholding tax">{cur(inv.whtTotal)}</Field>}
+                {!!inv.whtTotal && <Field label="Net payable">{cur(inv.total - inv.whtTotal)}</Field>}
               </Stack>
             </Paper>
             <ThreeWayMatch view={view} />
