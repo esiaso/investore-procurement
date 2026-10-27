@@ -1732,6 +1732,172 @@ REQ → SR → ISS.
 GL posting of accepted non-stock lines (expense / asset accounts) goes to QuickBooks with
 the bill in phase 6. Received-not-invoiced accruals are in the phase 7 reports.
 
+## Non-stock procurement — phase 4: payments and M-PESA payouts
+
+### Payment vouchers (*Payments → Payables / Payment vouchers*)
+
+**Payables** lists the approved invoices that are still owed:
+* outstanding amount, and what is not yet on a voucher;
+* due date and **ageing** (current, 1–30, 31–60, 61–90, 90+ days).
+
+**Preparing a voucher** (`payments.prepare`). Select one supplier's invoices in one currency.
+* Each invoice can be paid in full or in part.
+* **Withholding tax** is deducted in proportion to the part paid. The voucher shows the
+  amount settled, the WHT and the cash paid to the supplier.
+* Methods:
+  * Bank transfer (EFT), cheque, cash;
+  * **M-PESA PayBill** (B2B, PayBill + account);
+  * **M-PESA Till** (B2B buy goods);
+  * **M-PESA B2C** (phone).
+* M-PESA payees are validated. Phones are normalised to 2547… / 2541…. M-PESA pays KES
+  in whole shillings only.
+* Invoices on a voucher are **Scheduled**. An invoice cannot be put on more vouchers than
+  it has left to pay.
+
+**Approval.** The voucher goes through the approval matrix (`PV`):
+* `PV-1`: up to 1,000,000, approved by the Finance manager.
+* `PV-2`: above that, by the Finance manager, then Hospital management.
+
+The preparer can never approve their own voucher.
+
+**Releasing the payment** (`payments.release`). Release is technically blocked until
+**every** approval level is complete. The releaser is **neither the preparer nor an
+approver**. Every blocked attempt is written to the audit log
+(`PAYMENT_RELEASE_BLOCKED`) with its reason.
+* Bank, cheque and cash payments need the bank reference or cheque number.
+* M-PESA payments are dispatched.
+
+**When it is paid:**
+* Each invoice's **paid amount** goes up and the invoice becomes **Partially paid** or
+  **Paid**.
+* When every invoice of an Invoiced order is paid, the order is **Paid**.
+* The voucher PDF prints the invoices, WHT, net amount and the approval signatures.
+
+**Statuses.** Draft → Pending approval → Approved → Processing (M-PESA) → Paid. Also:
+* Failed or Review (the review queue);
+* Reversed;
+* Returned, Rejected, Cancelled.
+
+The old one-step *Record payment* on an invoice is gone; it is refused with
+`USE_PAYMENT_VOUCHER`. Older vouchers were migrated as paid, each with one line for its
+invoice.
+
+### M-PESA payouts (Daraja B2C / B2B)
+
+Payouts go through a `PaymentGateway` interface (`apps/api/src/modules/payments/gateway.ts`).
+Bank APIs can be added behind it later. There are two implementations:
+* **Daraja:** B2C `BusinessPayment`, B2B `BusinessPayBill` / `BusinessBuyGoods`,
+  Transaction Status and Reversal.
+  * The OAuth token is cached until a minute before it expires.
+  * Sandbox or production is chosen by `MPESA_PAYOUT_MODE`.
+* **Simulator** (`mock`, the default for development and tests).
+
+**Credentials** are environment variables only, never in code or the database. The
+security credential is never stored. Raw requests are kept for audit with it redacted.
+
+**Never paid twice:**
+* Releasing locks the voucher.
+* The attempt is recorded before anything is sent, with a fresh
+  `OriginatorConversationID`.
+* A unique index allows only **one live or successful attempt per voucher**.
+* Double clicks and concurrent releases get 409 `ALREADY_DISPATCHED` / `NOT_APPROVED`, and
+  nothing more is sent.
+
+**Outcomes:**
+
+| Daraja answer | What happens |
+|---|---|
+| Accepted | Wait for the result callback. After `payments.mpesaFollowUpMinutes` (10) without one, M-PESA is asked with **Transaction Status**. |
+| Refused (4xx) | The attempt failed, nothing was sent. The voucher goes to the review queue (*Failed*) and can be released again as a new attempt. |
+| Timeout / network / 5xx | Outcome **unknown**. It is **never re-sent** before M-PESA has been asked what happened to it. |
+| Status: found | Applied like the callback (paid, or failed). |
+| Status: not processed | Re-sent with backoff (2, 4, … minutes) up to `payments.mpesaMaxAttempts` (3), then *Failed*. |
+| Status: no answer | After `payments.mpesaMaxStatusChecks` (6) checks the voucher goes to **Review**. Its attempt stays live, so nothing is sent until someone resolves it. |
+
+**Callbacks.** `/api/v1/callbacks/mpesa-payouts/{result|timeout}/:token`, and
+`…/status/:token/:id` and `…/reversal/:token/:id`.
+* They are public. The secret token in the path is checked in constant time. An optional
+  allow-list of source IPs applies (`MPESA_PAYOUT_CALLBACK_ALLOWED_IPS`).
+* All `/api/v1/callbacks/*` endpoints are **rate-limited** per IP
+  (`CALLBACK_RATE_LIMIT_PER_MINUTE`, 120).
+* The raw callback is stored, and it is applied **idempotently**: a repeated callback
+  changes nothing.
+* The result records the M-PESA **receipt**, the recipient name, the **charges** (B2B
+  DebitPartyCharges) and the completion time.
+* A late "paid" result for an attempt recorded as failed sends the voucher to review and
+  is audited (`MPESA_RESULT_CONFLICT`).
+
+**Review queue** (*Payment vouchers → Review queue*, `payments.reconcile`). After checking
+the statement, *Resolve* the voucher as:
+* **paid**, with the receipt; or
+* **not paid**, which frees it for a fresh attempt.
+
+Each resolution is audited (`PAYMENT_RESOLVED`). Reconcilers and the preparer are notified
+of failures (notification category PAYMENTS).
+
+**Reversal.** *Reverse on M-PESA* sends a Reversal request. When the result arrives, the
+voucher is Reversed and the invoices are owed again.
+
+**Simulator outcomes,** chosen by the last three digits of the phone, PayBill or Till:
+
+| Ending | Outcome |
+|---|---|
+| …333 | Refused |
+| …000 | Fails (insufficient funds) |
+| …222 | No callback (found by the status query) |
+| …444 | Timeout, but paid |
+| …555 | Timeout, never processed |
+| …666 | Queue timeout |
+| Anything else | Paid |
+
+In mock mode the callback token is `mock-callback-token` unless one is set.
+
+### Reconciliation (*Payments → M-PESA reconciliation*)
+
+**Importing the statement.** Upload or paste the organisation statement CSV exported from
+the M-PESA portal (Receipt No., Completion Time, Details, Paid In, Withdrawn). Lines are
+upserted by receipt.
+
+**Matching.** *Reconcile* a day or range, or let the `payments.mpesaReconcile` job do the
+previous day at 06:00. Successful and reversed payouts are matched by receipt and amount.
+
+**Exceptions:**
+* `NOT_ON_STATEMENT`
+* `AMOUNT_MISMATCH`
+* `NOT_IN_SYSTEM`
+* `STATUS_MISMATCH`: on the statement while the attempt is failed or unknown.
+* `PENDING`: no result yet.
+
+Charge lines are totalled separately. The run records the account balance where the
+gateway gives it, and reconcilers are notified of exceptions.
+
+`payments.mpesaFollowUp` runs every 5 minutes. *Check pending payments now* runs it on
+demand.
+
+### Configuration added
+
+| | |
+|---|---|
+| Environment | `MPESA_PAYOUT_MODE` (mock / sandbox / production), `MPESA_PAYOUT_BASE_URL`, `MPESA_PAYOUT_CONSUMER_KEY`, `MPESA_PAYOUT_CONSUMER_SECRET`, `MPESA_PAYOUT_SHORTCODE`, `MPESA_PAYOUT_INITIATOR_NAME`, `MPESA_PAYOUT_SECURITY_CREDENTIAL`, `MPESA_PAYOUT_CALLBACK_BASE_URL`, `MPESA_PAYOUT_CALLBACK_TOKEN`, `MPESA_PAYOUT_CALLBACK_ALLOWED_IPS`, `MPESA_PAYOUT_TIMEOUT_MS`, `CALLBACK_RATE_LIMIT_PER_MINUTE` |
+| Settings | `payments.mpesaFollowUpMinutes` (10), `payments.mpesaMaxAttempts` (3), `payments.mpesaMaxStatusChecks` (6) |
+| Permissions | `payments.prepare`, `payments.release`, `payments.reconcile` (Finance / Accounts and Finance manager) |
+| Workflows | `PV-1` (≤ 1,000,000: Finance manager), `PV-2` (> 1,000,000: + Hospital management) |
+| Jobs | `payments.mpesaFollowUp` (`*/5 * * * *`), `payments.mpesaReconcile` (`0 6 * * *`) |
+| Notification category | PAYMENTS |
+| API | `GET /payments/payables`; `/payment-vouchers` (list `?status=&review=true&supplierId=&method=`, create, `/:id/submit`, `/:id/release`, `/:id/resolve`, `/:id/reverse`, `/:id/cancel`, `/:id/pdf`); `POST /payments/mpesa/follow-up`; `POST /payments/mpesa/statements` {csv}; `/payments/reconciliations`; callbacks above |
+| Migration | `1762500000000-NonStockPhase4` |
+
+**Before production:**
+* Run against the Daraja sandbox with the hospital's B2C/B2B shortcode, initiator and
+  security credential.
+* Register the callback base URL (HTTPS).
+* Set Safaricom's callback IPs in `MPESA_PAYOUT_CALLBACK_ALLOWED_IPS`.
+
+**Not yet covered:**
+* Posting to QuickBooks (BillPayment with WHT, and charges to bank charges) is phase 6. The
+  current BillPayment posting covers the voucher's invoices at their net amounts.
+* The rate limit is per API process (in memory).
+
 ## Known limitations / next slices
 
 * Reports run on the live database (no reporting replica or pre-aggregation); very
