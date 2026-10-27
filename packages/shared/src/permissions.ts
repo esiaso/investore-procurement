@@ -176,6 +176,12 @@ export const Permissions = {
   PAYMENTS_RELEASE: 'payments.release',
   /** M-PESA statements, reconciliation and the payment review queue. */
   PAYMENTS_RECONCILE: 'payments.reconcile',
+  /** Raise petty cash payment requests and advances (all staff). */
+  PETTY_CASH_REQUEST: 'pettycash.request',
+  /** Custodian work: disburse approved requests, check retirements, receive replenishments, count the float. */
+  PETTY_CASH_DISBURSE: 'pettycash.disburse',
+  /** Floats (limits, custodians), replenishment requests and petty cash reports. */
+  PETTY_CASH_MANAGE: 'pettycash.manage',
   /** Chart of accounts (GL accounts used on non-stock lines). */
   GL_MANAGE: 'finance.gl_manage',
   PROJECTS_MANAGE: 'projects.manage',
@@ -302,6 +308,9 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'payments.prepare': 'Prepare payment vouchers from approved supplier invoices',
   'payments.release': 'Release approved payments (bank, cheque or M-PESA)',
   'payments.reconcile': 'Reconcile M-PESA payments and work the payment review queue',
+  'pettycash.request': 'Raise petty cash payment requests and advances',
+  'pettycash.disburse': 'Disburse petty cash, check retirements and count the float (custodian)',
+  'pettycash.manage': 'Set up petty cash floats and request replenishments',
   'finance.gl_manage': 'Maintain the chart of accounts (GL accounts)',
   'projects.manage': 'Maintain projects',
   'finance.exchange_rates': 'Maintain currencies and exchange rates',

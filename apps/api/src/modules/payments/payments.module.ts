@@ -68,8 +68,9 @@ export class PaymentVouchersController {
 
   /** M-PESA Reversal of a paid voucher (result by callback). */
   @Post(':id/reverse') @HttpCode(200) @RequirePermissions(P.PAYMENTS_RELEASE)
-  reverse(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReasonDto, @CurrentUser() u: SessionUser) {
-    return this.payouts.reverse(id, dto.reason, u);
+  async reverse(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReasonDto, @CurrentUser() u: SessionUser) {
+    await this.payouts.reverse('PV', id, dto.reason, u);
+    return this.payments.get(id);
   }
 
   @Post(':id/cancel') @HttpCode(200) @RequirePermissions(P.PAYMENTS_PREPARE)

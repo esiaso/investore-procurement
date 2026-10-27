@@ -24,6 +24,7 @@ import { PdfService } from '../mail/pdf.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { PaymentVoucher, PaymentVoucherLine, PurchaseOrder, SupplierInvoice } from '../purchasing/purchasing.entities';
 import { SettingsService } from '../settings/settings.service';
+import { PayoutDoc, PayoutOwner } from './payout-owner';
 import { normalisePayee } from './payout-rules';
 import { CreateVoucherDto, PayablesQueryDto, ReleaseDto, ResolveDto, VoucherQueryDto } from './payments.dto';
 
@@ -47,7 +48,9 @@ const PAYABLE_INVOICE = [InvoiceStatus.APPROVED, InvoiceStatus.SCHEDULED, Invoic
  * reference or through M-PESA, and the invoice balances that follow.
  */
 @Injectable()
-export class PaymentsService implements OnModuleInit, ApprovalHandler {
+export class PaymentsService implements OnModuleInit, ApprovalHandler, PayoutOwner {
+  readonly type = 'PV' as const;
+
   /** M-PESA dispatch (set by the payouts service to avoid a dependency cycle). */
   private dispatcher: ((voucherId: string, actor: SessionUser) => Promise<void>) | null = null;
 
@@ -396,6 +399,49 @@ export class PaymentsService implements OnModuleInit, ApprovalHandler {
       await this.releaseInvoices(m, id);
     });
     return this.get(id);
+  }
+
+  // ------------------------------------------------------------------ M-PESA payout owner
+
+  async claim(m: EntityManager, id: string, mode: 'release' | 'retry'): Promise<PayoutDoc | null> {
+    const v = await this.lock(m, id);
+    if (mode === 'retry') {
+      if (v.status !== PaymentVoucherStatus.PROCESSING) return null;
+    } else {
+      if (![PaymentVoucherStatus.APPROVED, PaymentVoucherStatus.FAILED].includes(v.status)) throw new ConflictException({ code: 'NOT_APPROVED', message: `Voucher is ${v.status}` });
+      if (!(await this.approvals.isApproved(m, DocumentType.PAYMENT_VOUCHER, id))) throw new ConflictException({ code: 'NOT_APPROVED', message: 'Every approval level must be complete' });
+    }
+    return { id: v.id, number: v.number, method: v.method as PaymentMethod, amount: v.amount, payeePhone: v.payeePhone, payeeShortcode: v.payeeShortcode, payeeAccountRef: v.payeeAccountRef, payeeName: v.payeeName };
+  }
+
+  async dispatched(m: EntityManager, id: string, releasedBy: string | null): Promise<void> {
+    const v = await this.lock(m, id);
+    v.status = PaymentVoucherStatus.PROCESSING;
+    if (releasedBy) {
+      v.releasedBy = releasedBy;
+      v.releasedAt = new Date();
+    }
+    await m.save(v);
+  }
+
+  async paid(m: EntityManager, id: string, receipt: string, paidOn: string): Promise<void> {
+    const v = await this.lock(m, id);
+    if ([PaymentVoucherStatus.PROCESSING, PaymentVoucherStatus.REVIEW].includes(v.status)) await this.markPaid(m, v, receipt, paidOn);
+  }
+
+  async failed(m: EntityManager, id: string, status: 'FAILED' | 'REVIEW', note: string, onlyIfProcessing: boolean): Promise<void> {
+    const v = await this.lock(m, id);
+    if (onlyIfProcessing && v.status !== PaymentVoucherStatus.PROCESSING) return;
+    await this.toReview(m, v, status === 'FAILED' ? PaymentVoucherStatus.FAILED : PaymentVoucherStatus.REVIEW, note);
+  }
+
+  async assertReversible(m: EntityManager, id: string): Promise<void> {
+    const v = await this.lock(m, id);
+    if (v.status !== PaymentVoucherStatus.PAID) throw new ConflictException(`Voucher is ${v.status}`);
+  }
+
+  async reversed(m: EntityManager, id: string, note: string): Promise<void> {
+    await this.markReversed(m, await this.lock(m, id), note);
   }
 
   async lock(m: EntityManager, id: string): Promise<PaymentVoucher> {

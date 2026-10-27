@@ -38,6 +38,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { StaffRequisitionsModule } from './modules/staff-requisitions/staff-requisitions.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { PettyCashModule } from './modules/petty-cash/petty-cash.module';
 import { LabelsModule } from './modules/labels/labels.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { QualityModule } from './modules/quality/quality.module';
@@ -84,6 +85,7 @@ import { UsersModule } from './modules/users/users.module';
     FinanceModule,
     StaffRequisitionsModule,
     PaymentsModule,
+    PettyCashModule,
   ],
   controllers: [HealthController],
   providers: [

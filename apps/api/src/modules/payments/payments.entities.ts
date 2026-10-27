@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { PayoutAttemptStatus, ReconciliationStatus } from '@sil/shared';
 import { MONEY } from '../../common/entities/transformers';
 import { PaymentVoucher } from '../purchasing/purchasing.entities';
@@ -12,6 +12,8 @@ import { PaymentVoucher } from '../purchasing/purchasing.entities';
  */
 @Entity('mpesa_payout')
 @Index('uq_mpesa_payout_live_voucher', ['voucherId'], { unique: true, where: `status IN ('PENDING', 'UNKNOWN', 'SUCCESS')` })
+@Index('uq_mpesa_payout_live_petty_cash', ['pettyCashId'], { unique: true, where: `status IN ('PENDING', 'UNKNOWN', 'SUCCESS')` })
+@Check('ck_mpesa_payout_one_owner', `(voucher_id IS NULL) <> (petty_cash_id IS NULL)`)
 @Index(['status', 'nextCheckAt'])
 export class MpesaPayout {
   @PrimaryGeneratedColumn('uuid')
@@ -23,12 +25,17 @@ export class MpesaPayout {
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
-  @Column({ type: 'uuid' })
-  voucherId: string;
+  /** The supplier payment voucher paid (or the petty cash voucher). */
+  @Column({ type: 'uuid', nullable: true })
+  voucherId: string | null;
 
-  @ManyToOne(() => PaymentVoucher, { onDelete: 'RESTRICT' })
+  @ManyToOne(() => PaymentVoucher, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'voucher_id' })
-  voucher?: PaymentVoucher;
+  voucher?: PaymentVoucher | null;
+
+  /** Petty cash request (voucher) paid. */
+  @Column({ type: 'uuid', nullable: true })
+  pettyCashId: string | null;
 
   @Column({ type: 'int' })
   attempt: number;

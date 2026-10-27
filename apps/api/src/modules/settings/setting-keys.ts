@@ -167,6 +167,8 @@ export interface SettingTypes {
   'requisitions.handoverOtpMinutes': number;
   'requisitions.handoverOtpMaxAttempts': number;
   'payments.mpesaFollowUpMinutes': number;
+  'pettyCash.duplicateWindowDays': number;
+  'pettyCash.retirementDays': number;
   'payments.mpesaMaxAttempts': number;
   'payments.mpesaMaxStatusChecks': number;
   /** RFQs are sent to at least this many suppliers (fewer needs a justification). */

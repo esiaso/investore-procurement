@@ -103,6 +103,7 @@ import { ReportRun, ReportSchedule } from '../modules/reports/reports.entities';
 import { Currency, ExchangeRate, GlAccount, Project } from '../modules/finance/finance.entities';
 import { Handover, HandoverLine, StaffRequisition, StaffRequisitionLine } from '../modules/staff-requisitions/staff-requisitions.entities';
 import { MpesaPayout, MpesaStatementLine, PaymentReconciliation } from '../modules/payments/payments.entities';
+import { PettyCashCount, PettyCashFloat, PettyCashReplenishment, PettyCashRequest, PettyCashRetirementLine, PettyCashTransaction } from '../modules/petty-cash/petty-cash.entities';
 import { AccountingBatch, AccountingConnection, AccountingPosting, AccountMapping, ExternalRef, PayerSettlement } from '../modules/accounting/accounting.entities';
 import { Customer, CustomerLedger, MpesaConfig, MpesaTransaction, PosEvent, PosPromotion, PosSale, PosShift, PosTerminal } from '../modules/pos/pos.entities';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
@@ -256,6 +257,12 @@ export const ENTITIES = [
   MpesaPayout,
   MpesaStatementLine,
   PaymentReconciliation,
+  PettyCashFloat,
+  PettyCashRequest,
+  PettyCashRetirementLine,
+  PettyCashTransaction,
+  PettyCashReplenishment,
+  PettyCashCount,
 ];
 
 export function typeOrmOptions(overrides: Partial<DataSourceOptions> = {}): DataSourceOptions {

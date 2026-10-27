@@ -49,6 +49,7 @@ export const REPORT_SCHEDULES: Record<string, string> = {
   'purchasing.expireOrders': '30 1 * * *',
   'payments.mpesaFollowUp': '*/5 * * * *',
   'payments.mpesaReconcile': '0 6 * * *',
+  'pettyCash.retirementReminders': '0 7 * * *',
 };
 
 /** Slice 9 HMIS jobs (also merged into existing installations by a migration). */
@@ -234,6 +235,8 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'purchasing.matchPriceToleranceAbs', value: 0, description: 'Three-way match: largest price difference tolerated per line (amount, order currency); 0 = percentage only', isPublic: false },
   { key: 'purchasing.autoApproveMatchedInvoices', value: false, description: 'Invoices that match the order and the receipts within tolerance are approved without the approval workflow (exceptions still go through it)', isPublic: false },
   { key: 'requisitions.handoverOtpMinutes', value: 15, description: 'How long a hand-over one-time code is valid (minutes)', isPublic: false },
+  { key: 'pettyCash.duplicateWindowDays', value: 7, description: 'Petty cash: a request to the same payee for the same amount within this many days needs a justification', isPublic: true },
+  { key: 'pettyCash.retirementDays', value: 7, description: 'Petty cash: days to retire an advance after it is paid (no new advance until then)', isPublic: true },
   { key: 'payments.mpesaFollowUpMinutes', value: 10, description: 'M-PESA payouts: minutes to wait for the result callback before asking M-PESA (Transaction Status)', isPublic: false },
   { key: 'payments.mpesaMaxAttempts', value: 3, description: 'M-PESA payouts: attempts per voucher when M-PESA confirms a request was never processed (then the review queue)', isPublic: false },
   { key: 'payments.mpesaMaxStatusChecks', value: 6, description: 'M-PESA payouts: unanswered status checks before the voucher goes to the review queue', isPublic: false },
@@ -335,6 +338,8 @@ export const DEFAULT_NUMBERING: {
   // REQ-2026-00001 (REQ-2026/27-00001 when the financial year does not start in January).
   { documentType: DocumentType.STAFF_REQUISITION, prefix: 'REQ', format: '{PREFIX}-{FY}-{SEQ}', padding: 5, resetEachYear: true },
   { documentType: DocumentType.HANDOVER, prefix: 'HOV', format: '{PREFIX}-{FY}-{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.PETTY_CASH_VOUCHER, prefix: 'PCV', format: '{PREFIX}-{FY}-{SEQ}', padding: 5, resetEachYear: true },
+  { documentType: DocumentType.PETTY_CASH_REPLENISHMENT, prefix: 'PCRP', format: '{PREFIX}-{FY}-{SEQ}', padding: 4, resetEachYear: true },
 ];
 
 /** Currencies documents may be in (KES is the base, locale.currency). */
@@ -431,13 +436,13 @@ const READ_ALL: PermissionCode[] = [
   P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ, P.POS_REPORTS, P.ACCOUNTING_READ, P.DOCUMENTS_READ, P.STAFF_REQUISITION_READ_ALL,
 ];
 /** Procurement desk for non-stock requisitions: see them all and consolidate approved lines into PRs. */
-const NON_STOCK_DESK: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.STAFF_REQUISITION_READ_ALL, P.PURCHASING_CONSOLIDATE, P.PURCHASING_HANDOVER];
+const NON_STOCK_DESK: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST, P.STAFF_REQUISITION_READ_ALL, P.PURCHASING_CONSOLIDATE, P.PURCHASING_HANDOVER];
 /** Finance master data for non-stock procurement and payments. */
-const FINANCE_MASTER: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.STAFF_REQUISITION_READ_ALL, P.GL_MANAGE, P.PROJECTS_MANAGE, P.FX_MANAGE];
+const FINANCE_MASTER: PermissionCode[] = [P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST, P.STAFF_REQUISITION_READ_ALL, P.GL_MANAGE, P.PROJECTS_MANAGE, P.FX_MANAGE];
 const FINANCE_PERMISSIONS: PermissionCode[] = [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.TAX_READ, P.TAX_MANAGE, P.AUDIT_READ, P.NUMBERING_READ,
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_PERIOD_LOCK, P.INVENTORY_RECONCILE,
   P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
-  P.PAYMENTS_PREPARE, P.PAYMENTS_RELEASE, P.PAYMENTS_RECONCILE,
+  P.PAYMENTS_PREPARE, P.PAYMENTS_RELEASE, P.PAYMENTS_RECONCILE, P.PETTY_CASH_DISBURSE, P.PETTY_CASH_MANAGE,
   P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE, P.HMIS_READ,
   P.POS_REPORTS, P.POS_APPROVE_VARIANCE, P.POS_MANAGE, P.POS_REFUND,
   P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST, P.REPORTS_SCHEDULE, P.DOCUMENTS_READ, ...FINANCE_MASTER,
@@ -477,7 +482,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [
       P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, ...STORE_OPS, P.INVENTORY_HANDLE_COLD_CHAIN, P.SUPPLIERS_READ, P.PURCHASING_READ,
       P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_HANDOVER, P.PURCHASING_EMERGENCY_RECEIPT, P.FORECASTING_READ,
-      P.DISTRIBUTION_MANAGE, P.QUALITY_READ, P.FILES_UPLOAD, P.ASSETS_READ, P.DOCUMENTS_READ, P.STAFF_REQUISITION_CREATE,
+      P.DISTRIBUTION_MANAGE, P.QUALITY_READ, P.FILES_UPLOAD, P.ASSETS_READ, P.DOCUMENTS_READ, P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST,
     ],
   },
   {
@@ -495,7 +500,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.QUALITY_READ, P.QUALITY_MANAGE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.DISTRIBUTION_MANAGE, P.FILES_UPLOAD,
       P.HMIS_READ, P.PATIENTS_CHARGE,
       P.POS_SELL, P.POS_APPROVE_POM, P.POS_OVERRIDE, P.POS_VOID, P.POS_REFUND, P.POS_APPROVE_VARIANCE, P.POS_REPORTS, P.REPORTS_SCHEDULE,
-      P.STAFF_REQUISITION_CREATE,
+      P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST,
     ],
   },
   {
@@ -507,10 +512,10 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_STOCKTAKE, P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.PURCHASING_READ,
       P.INVENTORY_ISSUE, P.INVENTORY_DEPT_RETURN, P.INVENTORY_ALERTS,
       P.PATIENTS_READ, P.PATIENTS_MANAGE, P.PHARMACY_READ, P.PHARMACY_PRESCRIPTION, P.PHARMACY_DISPENSE, P.BILLING_READ, P.BILLING_INVOICE,
-      P.HMIS_READ, P.POS_SELL, P.STAFF_REQUISITION_CREATE,
+      P.HMIS_READ, P.POS_SELL, P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST,
     ],
   },
-  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ, P.PATIENTS_READ, P.BILLING_READ, P.BILLING_INVOICE, P.POS_SELL, P.STAFF_REQUISITION_CREATE] },
+  { code: RoleCodes.POS_CASHIER, name: 'POS Cashier', description: 'Point-of-sale operations', permissions: [P.CATALOG_READ, P.INVENTORY_READ, P.PATIENTS_READ, P.BILLING_READ, P.BILLING_INVOICE, P.POS_SELL, P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST] },
   {
     code: RoleCodes.QUALITY_OFFICER,
     name: 'Cold-chain / Quality Officer',
@@ -519,7 +524,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_BATCH_HOLD,
       P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.SUPPLIERS_READ, P.PURCHASING_READ, P.PURCHASING_INSPECT,
       P.QUALITY_READ, P.QUALITY_MANAGE, P.QUALITY_RELEASE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.FILES_UPLOAD, P.DOCUMENTS_READ,
-      P.STAFF_REQUISITION_CREATE,
+      P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST,
     ],
   },
   {
@@ -527,13 +532,13 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     name: 'Department / Ward In-charge',
     description: 'Requests stock for a department or ward and approves its internal requisitions',
     permissions: [P.ORG_READ, P.CATALOG_READ, P.PURCHASING_READ, P.PURCHASING_REQUISITION, P.INVENTORY_REQUISITION, P.INVENTORY_CONSUMPTION, P.PLANS_READ, P.PLANS_MANAGE, P.SERVICES_CERTIFY, P.ASSETS_READ,
-      P.PATIENTS_READ, P.HMIS_READ, P.PATIENTS_CHARGE, P.STAFF_REQUISITION_CREATE],
+      P.PATIENTS_READ, P.HMIS_READ, P.PATIENTS_CHARGE, P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST],
   },
   {
     code: RoleCodes.WARD_STAFF,
     name: 'Department / Ward Staff',
     description: 'Raises internal requisitions and returns for their department',
-    permissions: [P.ORG_READ, P.CATALOG_READ, P.INVENTORY_REQUISITION, P.PATIENTS_READ, P.HMIS_READ, P.PATIENTS_CHARGE, P.STAFF_REQUISITION_CREATE],
+    permissions: [P.ORG_READ, P.CATALOG_READ, P.INVENTORY_REQUISITION, P.PATIENTS_READ, P.HMIS_READ, P.PATIENTS_CHARGE, P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST],
   },
   {
     code: RoleCodes.FINANCE,
@@ -551,7 +556,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     code: RoleCodes.TENDER_COMMITTEE,
     name: 'Tender / Evaluation Committee Member',
     description: 'Evaluates tenders and quotations',
-    permissions: [P.CATALOG_READ, P.SUPPLIERS_READ, P.PURCHASING_READ, P.PURCHASING_INSPECT, P.TENDERS_READ, P.TENDERS_EVALUATE, P.STAFF_REQUISITION_CREATE],
+    permissions: [P.CATALOG_READ, P.SUPPLIERS_READ, P.PURCHASING_READ, P.PURCHASING_INSPECT, P.TENDERS_READ, P.TENDERS_EVALUATE, P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST],
   },
   {
     code: RoleCodes.SUPPLY_CHAIN_MANAGER,
@@ -571,7 +576,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
   },
   { code: RoleCodes.SUPPLIER, name: 'Supplier (portal)', description: 'External supplier portal user', permissions: [P.PORTAL_ACCESS] },
   { code: RoleCodes.AUDITOR, name: 'Auditor (read-only)', description: 'Read-only access to all records', permissions: READ_ALL },
-  { code: RoleCodes.HOSPITAL_MANAGEMENT, name: 'Hospital Management', description: 'Read-only oversight', permissions: [...READ_ALL, P.REPORTS_SCHEDULE, P.STAFF_REQUISITION_CREATE] },
+  { code: RoleCodes.HOSPITAL_MANAGEMENT, name: 'Hospital Management', description: 'Read-only oversight', permissions: [...READ_ALL, P.REPORTS_SCHEDULE, P.STAFF_REQUISITION_CREATE, P.PETTY_CASH_REQUEST] },
 ];
 
 /**
@@ -606,6 +611,10 @@ export const DEFAULT_WORKFLOWS: {
   { code: 'DSL-2', name: 'Disposals over 100,000', documentType: DocumentType.DISPOSAL, minAmount: 100_000, maxAmount: null, steps: [['Supply chain approval', RoleCodes.SUPPLY_CHAIN_MANAGER], ['Finance approval', RoleCodes.FINANCE], ['Management approval', RoleCodes.HOSPITAL_MANAGEMENT]] },
   // Staff requisitions: the head of department; larger ones also Finance. Bands are edited under Approvals → Workflows.
   { code: 'REQ-1', name: 'Staff requisitions up to 500,000', documentType: DocumentType.STAFF_REQUISITION, minAmount: null, maxAmount: 500_000, steps: [['Head of department', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE]] },
+  { code: 'PCV-1', name: 'Petty cash up to 10,000', documentType: DocumentType.PETTY_CASH_VOUCHER, minAmount: null, maxAmount: 10_000, steps: [['Supervisor / HOD', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE], ['Finance (coding and documents)', RoleCodes.FINANCE]] },
+  { code: 'PCV-2', name: 'Petty cash 10,000 to 50,000', documentType: DocumentType.PETTY_CASH_VOUCHER, minAmount: 10_000, maxAmount: 50_000, steps: [['Supervisor / HOD', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE], ['Finance (coding and documents)', RoleCodes.FINANCE], ['Finance manager', RoleCodes.FINANCE_MANAGER]] },
+  { code: 'PCV-3', name: 'Petty cash over 50,000', documentType: DocumentType.PETTY_CASH_VOUCHER, minAmount: 50_000, maxAmount: null, steps: [['Supervisor / HOD', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE], ['Finance (coding and documents)', RoleCodes.FINANCE], ['Finance manager', RoleCodes.FINANCE_MANAGER], ['CEO / Medical director', RoleCodes.HOSPITAL_MANAGEMENT]] },
+  { code: 'PCRP-1', name: 'Petty cash replenishment', documentType: DocumentType.PETTY_CASH_REPLENISHMENT, minAmount: null, maxAmount: null, steps: [['Finance manager', RoleCodes.FINANCE_MANAGER]] },
   { code: 'PV-1', name: 'Payments up to 1,000,000', documentType: DocumentType.PAYMENT_VOUCHER, minAmount: null, maxAmount: 1_000_000, steps: [['Finance manager', RoleCodes.FINANCE_MANAGER]] },
   { code: 'PV-2', name: 'Payments over 1,000,000', documentType: DocumentType.PAYMENT_VOUCHER, minAmount: 1_000_000, maxAmount: null, steps: [['Finance manager', RoleCodes.FINANCE_MANAGER], ['Hospital management', RoleCodes.HOSPITAL_MANAGEMENT]] },
   { code: 'REQ-2', name: 'Staff requisitions over 500,000', documentType: DocumentType.STAFF_REQUISITION, minAmount: 500_000, maxAmount: null, steps: [['Head of department', RoleCodes.WARD_IN_CHARGE, ApproverType.DEPARTMENT_ROLE], ['Finance manager', RoleCodes.FINANCE_MANAGER]] },

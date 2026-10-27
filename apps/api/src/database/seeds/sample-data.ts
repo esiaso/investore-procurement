@@ -90,6 +90,7 @@ export const SAMPLE_GL_ACCOUNTS: [code: string, name: string, type: GlAccountTyp
   ['5610', 'Staff training and conferences', GlAccountType.EXPENSE],
   ['5700', 'Small equipment expensed (below capitalisation threshold)', GlAccountType.EXPENSE],
   ['5800', 'Bank and M-Pesa charges', GlAccountType.EXPENSE],
+  ['1020', 'Petty cash - administration', GlAccountType.BANK],
   ['1600', 'Furniture and fittings', GlAccountType.ASSET],
   ['1610', 'Computers and IT equipment', GlAccountType.ASSET],
 ];

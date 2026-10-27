@@ -103,6 +103,9 @@ export enum DocumentType {
   STAFF_REQUISITION = 'REQ',
   /** Hand-over of received goods / services to the requester (final user). */
   HANDOVER = 'HOV',
+  /** Petty cash payment / advance (petty cash voucher). */
+  PETTY_CASH_VOUCHER = 'PCV',
+  PETTY_CASH_REPLENISHMENT = 'PCRP',
 }
 
 // ------------------------------------------------------------------ approvals
@@ -457,6 +460,8 @@ export enum NotificationCategory {
   REQUISITIONS = 'REQUISITIONS',
   /** Payments made, failed or waiting for review. */
   PAYMENTS = 'PAYMENTS',
+  /** Petty cash: my requests, cash to disburse, retirements due, low floats. */
+  PETTY_CASH = 'PETTY_CASH',
 }
 
 export enum JobRunStatus {
@@ -834,6 +839,7 @@ export enum AttachmentOwner {
   /** Quotes, specifications, photos attached to a staff requisition. */
   STAFF_REQUISITION = 'STAFF_REQUISITION',
   HANDOVER = 'HANDOVER',
+  PETTY_CASH = 'PETTY_CASH',
 }
 
 // ------------------------------------------------------------------ slice 9: HMIS integration
@@ -1197,4 +1203,53 @@ export enum PayoutAttemptStatus {
 export enum ReconciliationStatus {
   MATCHED = 'MATCHED',
   EXCEPTIONS = 'EXCEPTIONS',
+}
+
+// ------------------------------------------------------------------ non-stock phase 5: petty cash
+
+export enum PettyCashKind {
+  /** Pays a staff member or vendor for an expense. */
+  PAYMENT = 'PAYMENT',
+  /** Advance / imprest: must be retired with receipts (and the balance refunded). */
+  ADVANCE = 'ADVANCE',
+}
+
+export enum PettyCashStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  APPROVED = 'APPROVED',
+  RETURNED = 'RETURNED',
+  REJECTED = 'REJECTED',
+  /** Sent through M-PESA; result awaited. */
+  PROCESSING = 'PROCESSING',
+  DISBURSED = 'DISBURSED',
+  FAILED = 'FAILED',
+  REVIEW = 'REVIEW',
+  /** Advance: receipts submitted, waiting for the custodian's check. */
+  RETIREMENT_SUBMITTED = 'RETIREMENT_SUBMITTED',
+  RETIRED = 'RETIRED',
+  REVERSED = 'REVERSED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum PettyCashTxnType {
+  OPENING = 'OPENING',
+  REPLENISHMENT = 'REPLENISHMENT',
+  DISBURSEMENT = 'DISBURSEMENT',
+  /** Unspent advance returned to the float. */
+  REFUND = 'REFUND',
+  /** Spent more than the advance: the difference paid out at retirement. */
+  TOP_UP = 'TOP_UP',
+  REVERSAL = 'REVERSAL',
+}
+
+export enum ReplenishmentStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  APPROVED = 'APPROVED',
+  RETURNED = 'RETURNED',
+  REJECTED = 'REJECTED',
+  /** Cash received into the float by the custodian. */
+  RECEIVED = 'RECEIVED',
+  CANCELLED = 'CANCELLED',
 }

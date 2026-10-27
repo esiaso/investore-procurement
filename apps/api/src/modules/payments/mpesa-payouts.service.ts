@@ -2,51 +2,67 @@ import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundExce
 import { InjectDataSource } from '@nestjs/typeorm';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { DataSource, EntityManager, In, LessThanOrEqual } from 'typeorm';
-import { DocumentType, PaymentMethod, PaymentVoucherStatus, PayoutAttemptStatus, SessionUser } from '@sil/shared';
+import { PaymentMethod, PayoutAttemptStatus, SessionUser } from '@sil/shared';
 import { loadEnv } from '../../config/env';
-import { ApprovalsService } from '../approvals/approvals.service';
 import { AuditService } from '../audit/audit.service';
 import { JobsService } from '../jobs/jobs.service';
-import { PaymentVoucher } from '../purchasing/purchasing.entities';
 import { SettingsService } from '../settings/settings.service';
 import { GatewayConfigError, PaymentGateway, PayoutResult } from './gateway';
 import { DarajaPayoutGateway, parsePayoutResult, sharedMockPayouts, statusFromResult } from './mpesa-payouts';
+import { PayoutDoc, PayoutOwner, PayoutOwnerType } from './payout-owner';
 import { MpesaPayout } from './payments.entities';
 import { PaymentsService } from './payments.service';
 import { commandFor, maskPhone } from './payout-rules';
 
 const minutes = (n: number) => new Date(Date.now() + n * 60_000);
 const nairobiDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+const LIVE = [PayoutAttemptStatus.PENDING, PayoutAttemptStatus.UNKNOWN, PayoutAttemptStatus.SUCCESS];
+
+/** The document an attempt pays. */
+const ownerOf = (p: MpesaPayout): [PayoutOwnerType, string] => (p.voucherId ? ['PV', p.voucherId] : ['PCV', p.pettyCashId!]);
+const ownerColumn = (type: PayoutOwnerType) => (type === 'PV' ? 'voucherId' : 'pettyCashId');
 
 /**
- * Sends approved vouchers through M-PESA (Part C). A voucher is never paid
- * twice: one attempt at a time (row lock + a unique index on live / successful
- * attempts), a fresh OriginatorConversationID per attempt, and a request
- * whose outcome is unknown is never sent again before M-PESA has been asked
- * what became of it. Callbacks are idempotent.
+ * Pays approved documents (supplier payment vouchers, petty cash vouchers)
+ * through M-PESA (Part C). A document is never paid twice: one attempt at a
+ * time (row lock + a unique index on live / successful attempts), a fresh
+ * OriginatorConversationID per attempt, and a request whose outcome is
+ * unknown is never sent again before M-PESA has been asked what became of it.
+ * Callbacks are idempotent.
  */
 @Injectable()
 export class MpesaPayoutsService implements OnModuleInit {
   private readonly log = new Logger('M-PESA payouts');
   private gatewayInstance: PaymentGateway | null = null;
+  private readonly owners = new Map<PayoutOwnerType, PayoutOwner>();
 
   constructor(
     @InjectDataSource() private readonly ds: DataSource,
     private readonly payments: PaymentsService,
-    private readonly approvals: ApprovalsService,
     private readonly settings: SettingsService,
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
   ) {}
 
   onModuleInit() {
-    this.payments.useDispatcher((id, actor) => this.dispatch(id, actor));
+    this.registerOwner(this.payments);
+    this.payments.useDispatcher((id, actor) => this.dispatch('PV', id, actor));
     // The simulator delivers its callbacks in process.
     sharedMockPayouts.deliver = async (kind, id, body) => {
       if (kind === 'reversal') await this.reversalResult(id, body);
       else await this.applyCallback(kind, body);
     };
     this.jobs.register('payments.mpesaFollowUp', 'Ask M-PESA about payouts with no result yet; retry those never processed, else send them to review', () => this.followUp());
+  }
+
+  registerOwner(owner: PayoutOwner) {
+    this.owners.set(owner.type, owner);
+  }
+
+  private owner(type: PayoutOwnerType): PayoutOwner {
+    const o = this.owners.get(type);
+    if (!o) throw new Error(`No payout owner for ${type}`);
+    return o;
   }
 
   /** The configured gateway (mock unless MPESA_PAYOUT_MODE is sandbox / production). */
@@ -67,8 +83,8 @@ export class MpesaPayoutsService implements OnModuleInit {
 
   // ------------------------------------------------------------------ dispatch
 
-  /** Called by PaymentsService.release once approvals and segregation of duties are checked. */
-  async dispatch(voucherId: string, actor: SessionUser): Promise<void> {
+  /** Sends a document once its owner has checked approvals and segregation of duties. */
+  async dispatch(type: PayoutOwnerType, id: string, actor: SessionUser): Promise<void> {
     let gateway: PaymentGateway;
     try {
       gateway = this.gateway();
@@ -76,29 +92,27 @@ export class MpesaPayoutsService implements OnModuleInit {
       if (e instanceof GatewayConfigError) throw new ServiceUnavailableException(e.message);
       throw e;
     }
-    const payout = await this.ds.transaction(async (m) => {
-      const v = await this.payments.lock(m, voucherId);
-      if (![PaymentVoucherStatus.APPROVED, PaymentVoucherStatus.FAILED].includes(v.status)) throw new ConflictException({ code: 'NOT_APPROVED', message: `Voucher is ${v.status}` });
-      if (!(await this.approvals.isApproved(m, DocumentType.PAYMENT_VOUCHER, voucherId))) throw new ConflictException({ code: 'NOT_APPROVED', message: 'Every approval level must be complete' });
-      return this.newAttempt(m, v, actor.id);
+    const sent = await this.ds.transaction(async (m) => {
+      const doc = (await this.owner(type).claim(m, id, 'release'))!;
+      return { doc, payout: await this.newAttempt(m, type, doc, actor.id) };
     });
-    await this.send(gateway, payout);
+    await this.send(gateway, sent.payout, sent.doc);
   }
 
-  /** Records the attempt before anything is sent (the voucher row is locked by the caller). */
-  private async newAttempt(m: EntityManager, v: PaymentVoucher, releasedBy: string | null): Promise<MpesaPayout> {
-    const live = await m.findOne(MpesaPayout, { where: { voucherId: v.id, status: In([PayoutAttemptStatus.PENDING, PayoutAttemptStatus.UNKNOWN, PayoutAttemptStatus.SUCCESS]) } });
-    if (live) throw new ConflictException({ code: 'ALREADY_DISPATCHED', message: `${v.number} has already been sent to M-PESA (${live.status})` });
-    const [{ n }] = await m.query(`SELECT COUNT(*)::int AS n FROM mpesa_payout WHERE voucher_id = $1`, [v.id]);
-    const method = v.method as PaymentMethod;
+  /** Records the attempt before anything is sent (the document row is locked by the owner's claim). */
+  private async newAttempt(m: EntityManager, type: PayoutOwnerType, doc: PayoutDoc, releasedBy: string | null): Promise<MpesaPayout> {
+    const col = ownerColumn(type);
+    const live = await m.findOne(MpesaPayout, { where: { [col]: doc.id, status: In(LIVE) } });
+    if (live) throw new ConflictException({ code: 'ALREADY_DISPATCHED', message: `${doc.number} has already been sent to M-PESA (${live.status})` });
+    const n = await m.count(MpesaPayout, { where: { [col]: doc.id } });
     const p = m.create(MpesaPayout, {
-      voucherId: v.id,
+      [col]: doc.id,
       attempt: n + 1,
-      commandId: commandFor(method),
-      originatorConversationId: `${v.number.replace(/[^A-Za-z0-9]/g, '')}-${n + 1}-${randomBytes(6).toString('hex')}`,
-      partyB: method === PaymentMethod.MPESA_B2C ? v.payeePhone! : v.payeeShortcode!,
-      accountRef: v.payeeAccountRef,
-      amount: v.amount,
+      commandId: commandFor(doc.method),
+      originatorConversationId: `${doc.number.replace(/[^A-Za-z0-9]/g, '')}-${n + 1}-${randomBytes(6).toString('hex')}`,
+      partyB: doc.method === PaymentMethod.MPESA_B2C ? doc.payeePhone! : doc.payeeShortcode!,
+      accountRef: doc.payeeAccountRef,
+      amount: doc.amount,
       status: PayoutAttemptStatus.PENDING,
       releasedBy,
     });
@@ -106,28 +120,23 @@ export class MpesaPayoutsService implements OnModuleInit {
       await m.save(p);
     } catch (e) {
       // The unique index on live attempts: someone else dispatched it a moment ago.
-      if ((e as { code?: string }).code === '23505') throw new ConflictException({ code: 'ALREADY_DISPATCHED', message: `${v.number} has already been sent to M-PESA` });
+      if ((e as { code?: string }).code === '23505') throw new ConflictException({ code: 'ALREADY_DISPATCHED', message: `${doc.number} has already been sent to M-PESA` });
       throw e;
     }
-    v.status = PaymentVoucherStatus.PROCESSING;
-    if (releasedBy) {
-      v.releasedBy = releasedBy;
-      v.releasedAt = new Date();
-    }
-    await m.save(v);
+    await this.owner(type).dispatched(m, doc.id, releasedBy);
     return p;
   }
 
-  private async send(gateway: PaymentGateway, p: MpesaPayout): Promise<void> {
-    const v = await this.ds.getRepository(PaymentVoucher).findOneByOrFail({ id: p.voucherId });
+  private async send(gateway: PaymentGateway, p: MpesaPayout, doc: PayoutDoc): Promise<void> {
+    const [type] = ownerOf(p);
     const answer = await gateway.dispatch({
       originatorConversationId: p.originatorConversationId,
-      method: v.method as PaymentMethod,
+      method: doc.method,
       commandId: p.commandId,
       amount: p.amount,
       partyB: p.partyB,
       accountRef: p.accountRef,
-      remarks: `${v.number} ${v.payeeName ?? ''}`.trim(),
+      remarks: `${doc.number} ${doc.payeeName ?? ''}`.trim(),
     });
     const followUp = await this.settings.get('payments.mpesaFollowUpMinutes');
     await this.ds.transaction(async (m) => {
@@ -142,18 +151,17 @@ export class MpesaPayoutsService implements OnModuleInit {
         return;
       }
       if (answer.outcome === 'REJECTED') {
-        // Definitely not processed: the voucher can be fixed and released again.
+        // Definitely not processed: the document can be fixed and released again.
         Object.assign(row, { status: PayoutAttemptStatus.FAILED, resultCode: answer.code, resultDesc: answer.message, responseBody: answer.response, nextCheckAt: null });
         await m.save(row);
-        const voucher = await this.payments.lock(m, v.id);
-        await this.payments.toReview(m, voucher, PaymentVoucherStatus.FAILED, `M-PESA refused the request: ${answer.message}`);
+        await this.owner(type).failed(m, doc.id, 'FAILED', `M-PESA refused the request: ${answer.message}`, false);
         return;
       }
       // Timeout / network: the outcome is unknown; ask M-PESA before anything else.
       Object.assign(row, { status: PayoutAttemptStatus.UNKNOWN, resultDesc: answer.message, nextCheckAt: minutes(1) });
       await m.save(row);
     });
-    this.log.log(`${v.number} attempt ${p.attempt} to ${maskPhone(p.partyB) ?? p.partyB}: ${answer.outcome}`);
+    this.log.log(`${doc.number} attempt ${p.attempt} to ${maskPhone(p.partyB) ?? p.partyB}: ${answer.outcome}`);
   }
 
   // ------------------------------------------------------------------ callbacks
@@ -204,12 +212,13 @@ export class MpesaPayoutsService implements OnModuleInit {
     await this.ds.transaction(async (m) => {
       const row = await m.findOne(MpesaPayout, { where: { id: payoutId }, lock: { mode: 'pessimistic_write' } });
       if (!row) return;
+      const [type, docId] = ownerOf(row);
+      const owner = this.owner(type);
       if ([PayoutAttemptStatus.SUCCESS, PayoutAttemptStatus.FAILED, PayoutAttemptStatus.REVERSED].includes(row.status)) {
         // Already final (repeated callback, or status answer after the callback).
         if (row.status === PayoutAttemptStatus.FAILED && result.resultCode === '0') {
           await this.audit.record({ action: 'MPESA_RESULT_CONFLICT', entityType: 'mpesa_payout', entityId: row.id, after: { status: row.status, lateResult: result.resultCode, receipt: result.receiptNo } }, m);
-          const v = await this.payments.lock(m, row.voucherId);
-          await this.payments.toReview(m, v, PaymentVoucherStatus.REVIEW, `M-PESA reports ${result.receiptNo} paid for an attempt recorded as failed: check the statement`);
+          await owner.failed(m, docId, 'REVIEW', `M-PESA reports ${result.receiptNo} paid for an attempt recorded as failed: check the statement`, false);
         }
         return;
       }
@@ -217,22 +226,19 @@ export class MpesaPayoutsService implements OnModuleInit {
       row.resultCode = result.resultCode;
       row.resultDesc = result.resultDesc;
       row.nextCheckAt = null;
-      const v = await this.payments.lock(m, row.voucherId);
       if (result.resultCode === '0') {
         Object.assign(row, { status: PayoutAttemptStatus.SUCCESS, receiptNo: result.receiptNo, charges: result.charges, recipientName: result.recipientName, completedAt: result.completedAt ?? new Date() });
         await m.save(row);
         if (result.amount !== null && Math.abs(result.amount - row.amount) > 0.5) {
-          await this.payments.toReview(m, v, PaymentVoucherStatus.REVIEW, `M-PESA paid ${result.amount}, the voucher is for ${row.amount} (receipt ${result.receiptNo})`);
+          await owner.failed(m, docId, 'REVIEW', `M-PESA paid ${result.amount}, the document is for ${row.amount} (receipt ${result.receiptNo})`, false);
           return;
         }
-        if ([PaymentVoucherStatus.PROCESSING, PaymentVoucherStatus.REVIEW].includes(v.status)) {
-          await this.payments.markPaid(m, v, result.receiptNo ?? row.originatorConversationId, nairobiDate(row.completedAt!));
-        }
+        await owner.paid(m, docId, result.receiptNo ?? row.originatorConversationId, nairobiDate(row.completedAt!));
         return;
       }
       row.status = PayoutAttemptStatus.FAILED;
       await m.save(row);
-      if (v.status === PaymentVoucherStatus.PROCESSING) await this.payments.toReview(m, v, PaymentVoucherStatus.FAILED, `M-PESA: ${result.resultDesc} (${result.resultCode})`);
+      await owner.failed(m, docId, 'FAILED', `M-PESA: ${result.resultDesc} (${result.resultCode})`, true);
     });
   }
 
@@ -247,8 +253,8 @@ export class MpesaPayoutsService implements OnModuleInit {
       Object.assign(row, { status: PayoutAttemptStatus.FAILED, resultCode: 'NOT_PROCESSED', resultDesc: 'M-PESA has no record of the request', nextCheckAt: retry ? minutes(2 ** row.attempt) : null });
       await m.save(row);
       if (!retry) {
-        const v = await this.payments.lock(m, row.voucherId);
-        await this.payments.toReview(m, v, PaymentVoucherStatus.FAILED, `Not processed by M-PESA after ${row.attempt} attempt(s)`);
+        const [type, docId] = ownerOf(row);
+        await this.owner(type).failed(m, docId, 'FAILED', `Not processed by M-PESA after ${row.attempt} attempt(s)`, false);
       }
     });
   }
@@ -259,7 +265,7 @@ export class MpesaPayoutsService implements OnModuleInit {
    * Job payments.mpesaFollowUp: attempts with no result are queried (backing
    * off); those M-PESA never processed are sent again (new attempt) up to
    * payments.mpesaMaxAttempts; after payments.mpesaMaxStatusChecks unanswered
-   * queries the voucher goes to review (its attempt stays live, so nothing
+   * queries the document goes to review (its attempt stays live, so nothing
    * more is sent until someone resolves it).
    */
   async followUp() {
@@ -268,6 +274,7 @@ export class MpesaPayoutsService implements OnModuleInit {
     const due = await this.ds.getRepository(MpesaPayout).find({ where: { nextCheckAt: LessThanOrEqual(new Date()) }, order: { nextCheckAt: 'ASC' }, take: 200 });
     const out = { queried: 0, resolved: 0, retried: 0, review: 0 };
     for (const p of due) {
+      const [type, docId] = ownerOf(p);
       if (p.status === PayoutAttemptStatus.FAILED) {
         // Scheduled retry of a request M-PESA never processed.
         const next = await this.ds.transaction(async (m) => {
@@ -275,13 +282,11 @@ export class MpesaPayoutsService implements OnModuleInit {
           if (!row?.nextCheckAt) return null;
           row.nextCheckAt = null;
           await m.save(row);
-          const v = await this.payments.lock(m, row.voucherId);
-          if (v.status !== PaymentVoucherStatus.PROCESSING) return null;
-          v.status = PaymentVoucherStatus.APPROVED; // newAttempt moves it back to PROCESSING
-          return this.newAttempt(m, v, null);
+          const doc = await this.owner(type).claim(m, docId, 'retry');
+          return doc ? { doc, payout: await this.newAttempt(m, type, doc, null) } : null;
         });
         if (next) {
-          await this.send(gateway, next);
+          await this.send(gateway, next.payout, next.doc);
           out.retried++;
         }
         continue;
@@ -302,8 +307,7 @@ export class MpesaPayoutsService implements OnModuleInit {
           if (row.statusChecks >= maxChecks) {
             row.nextCheckAt = null;
             await m.save(row);
-            const v = await this.payments.lock(m, row.voucherId);
-            await this.payments.toReview(m, v, PaymentVoucherStatus.REVIEW, `No result from M-PESA after ${row.statusChecks} status checks: check the statement before doing anything else`);
+            await this.owner(type).failed(m, docId, 'REVIEW', `No result from M-PESA after ${row.statusChecks} status checks: check the statement before doing anything else`, false);
             out.review++;
           } else {
             row.nextCheckAt = minutes(Math.min(60, 2 ** row.statusChecks));
@@ -315,26 +319,52 @@ export class MpesaPayoutsService implements OnModuleInit {
     return out;
   }
 
+  // ------------------------------------------------------------------ manual resolution
+
+  /** Review queue, paid by hand: the live attempts are marked successful with the receipt. */
+  async resolveAttempts(m: EntityManager, type: PayoutOwnerType, id: string, outcome: 'PAID' | 'FAILED', reference: string | null, note: string): Promise<void> {
+    const live = await m.find(MpesaPayout, { where: { [ownerColumn(type)]: id, status: In(LIVE) }, lock: { mode: 'pessimistic_write' } });
+    if (outcome === 'PAID') {
+      for (const p of live) Object.assign(p, { status: PayoutAttemptStatus.SUCCESS, receiptNo: p.receiptNo ?? reference, resultDesc: `Resolved by hand: ${note}`, nextCheckAt: null });
+    } else {
+      if (live.some((p) => p.status === PayoutAttemptStatus.SUCCESS)) throw new ConflictException('M-PESA reported this payment as successful; reverse it instead');
+      // Confirmed not paid: the attempts are closed so a new one can be made.
+      for (const p of live) Object.assign(p, { status: PayoutAttemptStatus.FAILED, resultDesc: `Resolved by hand as not paid: ${note}`, nextCheckAt: null });
+    }
+    await m.save(live);
+  }
+
+  async hasLiveAttempt(m: EntityManager, type: PayoutOwnerType, id: string): Promise<boolean> {
+    return (await m.count(MpesaPayout, { where: { [ownerColumn(type)]: id, status: In(LIVE) } })) > 0;
+  }
+
+  attempts(type: PayoutOwnerType, id: string) {
+    return this.ds.query(
+      `SELECT id, attempt, command_id AS "commandId", status, result_code AS "resultCode", result_desc AS "resultDesc", receipt_no AS "receiptNo", charges::float AS charges,
+              recipient_name AS "recipientName", completed_at AS "completedAt", created_at AS "createdAt", status_checks AS "statusChecks", reversed_at AS "reversedAt"
+         FROM mpesa_payout WHERE ${type === 'PV' ? 'voucher_id' : 'petty_cash_id'} = $1 ORDER BY attempt`,
+      [id],
+    );
+  }
+
   // ------------------------------------------------------------------ reversal
 
-  /** Asks M-PESA to reverse a paid voucher; the result comes by callback. */
-  async reverse(voucherId: string, reason: string, actor: SessionUser) {
+  /** Asks M-PESA to reverse a paid document; the result comes by callback. */
+  async reverse(type: PayoutOwnerType, id: string, reason: string, actor: SessionUser): Promise<void> {
     const gateway = this.gateway();
     const p = await this.ds.transaction(async (m) => {
-      const v = await this.payments.lock(m, voucherId);
-      if (v.status !== PaymentVoucherStatus.PAID) throw new ConflictException(`Voucher is ${v.status}`);
-      const row = await m.findOne(MpesaPayout, { where: { voucherId, status: PayoutAttemptStatus.SUCCESS }, lock: { mode: 'pessimistic_write' } });
+      await this.owner(type).assertReversible(m, id);
+      const row = await m.findOne(MpesaPayout, { where: { [ownerColumn(type)]: id, status: PayoutAttemptStatus.SUCCESS }, lock: { mode: 'pessimistic_write' } });
       if (!row?.receiptNo) throw new ConflictException('Only M-PESA payments can be reversed here');
       if (row.reversalBody) throw new ConflictException('A reversal has already been requested');
       row.reversalBody = { requestedBy: actor.id, reason, requestedAt: new Date().toISOString() };
       await m.save(row);
-      await this.audit.record({ action: 'PAYMENT_REVERSAL_REQUESTED', entityType: 'payment_voucher', entityId: voucherId, after: { receipt: row.receiptNo, reason } }, m);
+      await this.audit.record({ action: 'PAYMENT_REVERSAL_REQUESTED', entityType: type === 'PV' ? 'payment_voucher' : 'petty_cash_request', entityId: id, after: { receipt: row.receiptNo, reason } }, m);
       return row;
     });
     const answer = await gateway.reverse({ payoutId: p.id, originatorConversationId: `${p.originatorConversationId}-R`, receiptNo: p.receiptNo!, amount: p.amount, remarks: reason });
     await this.ds.query(`UPDATE mpesa_payout SET reversal_body = reversal_body || $2::jsonb WHERE id = $1`, [p.id, JSON.stringify({ outcome: answer.outcome, message: answer.message })]);
     if (answer.outcome === 'REJECTED') throw new ConflictException(`M-PESA refused the reversal: ${answer.message}`);
-    return this.payments.get(voucherId);
   }
 
   async reversalResult(payoutId: string, body: Record<string, unknown>): Promise<void> {
@@ -346,8 +376,8 @@ export class MpesaPayoutsService implements OnModuleInit {
       await m.query(`UPDATE mpesa_payout SET reversal_body = COALESCE(reversal_body, '{}'::jsonb) || $2::jsonb WHERE id = $1`, [row.id, JSON.stringify({ result: body })]);
       if (result.resultCode !== '0') return;
       await m.query(`UPDATE mpesa_payout SET status = 'REVERSED', reversed_at = now() WHERE id = $1`, [row.id]);
-      const v = await this.payments.lock(m, row.voucherId);
-      await this.payments.markReversed(m, v, `Reversed on M-PESA (${result.receiptNo ?? 'reversal'})`);
+      const [type, docId] = ownerOf(row);
+      await this.owner(type).reversed(m, docId, `Reversed on M-PESA (${result.receiptNo ?? 'reversal'})`);
     });
   }
 }

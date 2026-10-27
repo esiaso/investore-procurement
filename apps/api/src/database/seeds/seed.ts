@@ -1,6 +1,6 @@
 import * as argon2 from 'argon2';
 import { DataSource, EntityManager, IsNull } from 'typeorm';
-import { DocumentType, PERMISSION_DESCRIPTIONS, type PermissionCode } from '@sil/shared';
+import { DocumentType, GlAccountType, PERMISSION_DESCRIPTIONS, PettyCashTxnType, type PermissionCode } from '@sil/shared';
 import { RequestContext } from '../../common/request-context';
 import { Generic, Item, ItemCategory, UnitConversion, UnitOfMeasure } from '../../modules/catalog/catalog.entities';
 import { formatDocumentNumber } from '../../modules/numbering/financial-year';
@@ -18,6 +18,7 @@ import { EtimsCodeMapping } from '../../modules/etims/etims.entities';
 import { orderPair } from '../../modules/pharmacy/interactions';
 import { DrugInteraction } from '../../modules/pharmacy/pharmacy.entities';
 import { Currency, ExchangeRate, GlAccount, Project } from '../../modules/finance/finance.entities';
+import { PettyCashFloat, PettyCashTransaction } from '../../modules/petty-cash/petty-cash.entities';
 import { DEFAULT_ETIMS_MAPPINGS, DEFAULT_PAYMENT_MODES, DEFAULT_PRICE_LISTS, DEMO_INTERACTIONS } from './reference-billing';
 import { seedSampleStock } from './sample-stock';
 import { seedSampleSuppliers } from './sample-suppliers';
@@ -95,6 +96,7 @@ export async function seedDatabase(dataSource: DataSource, options: SeedOptions)
         );
         // Non-stock procurement: chart of accounts, projects and exchange rates (added once).
         if (sample > 0 && !(await m.exists(GlAccount))) await seedSampleFinance(m, log);
+        if (sample > 0 && !(await m.exists(PettyCashFloat))) await seedSamplePettyCash(m, log);
       }
     }),
   );
@@ -109,6 +111,23 @@ async function seedSampleFinance(m: EntityManager, log: (msg: string) => void): 
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
   for (const [currencyCode, rate] of SAMPLE_EXCHANGE_RATES) await m.save(m.create(ExchangeRate, { currencyCode, rate, rateDate: today, source: 'Sample (CBK indicative)' }));
   log(`sample finance: ${SAMPLE_GL_ACCOUNTS.length} GL accounts, ${SAMPLE_PROJECTS.length} projects, ${SAMPLE_EXCHANGE_RATES.length} exchange rates`);
+}
+
+/** A sample petty cash float for administration, held by the accountant, with its opening cash. */
+async function seedSamplePettyCash(m: EntityManager, log: (msg: string) => void): Promise<void> {
+  const [custodian] = await m.query(`SELECT id FROM app_user WHERE username = 'accountant'`);
+  const [dept] = await m.query(`SELECT id FROM department WHERE code = 'ADMIN'`);
+  if (!custodian || !dept) return;
+  let gl = await m.findOneBy(GlAccount, { code: '1020' });
+  if (!gl) gl = await m.save(m.create(GlAccount, { code: '1020', name: 'Petty cash - administration', type: GlAccountType.BANK, isActive: true }));
+  const opening = 50_000;
+  const f = await m.save(
+    m.create(PettyCashFloat, { code: 'PC-ADMIN', name: 'Administration petty cash', departmentId: dept.id, location: 'Main hospital', custodianId: custodian.id, floatLimit: opening, perTransactionLimit: 20_000, replenishThreshold: 10_000, glAccountId: gl.id, mpesaEnabled: true, balance: opening, isActive: true }),
+  );
+  const [{ value: tz }] = await m.query(`SELECT value FROM system_setting WHERE key = 'locale.timezone'`);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+  await m.save(m.create(PettyCashTransaction, { floatId: f.id, txnDate: today, type: PettyCashTxnType.OPENING, amount: opening, balanceAfter: opening, note: 'Opening balance' }));
+  log('sample petty cash: PC-ADMIN (custodian accountant, 50,000)');
 }
 
 async function seedReference(m: EntityManager, log: (msg: string) => void): Promise<void> {

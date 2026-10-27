@@ -10,6 +10,9 @@ import { parseDarajaDate } from './mpesa-payouts';
 import { MpesaStatementLine, PaymentReconciliation } from './payments.entities';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+/** The document an M-PESA payout paid: a payment voucher or a petty cash voucher. */
+const DOC_JOIN = `LEFT JOIN payment_voucher v ON v.id = p.voucher_id LEFT JOIN petty_cash_request pc ON pc.id = p.petty_cash_id`;
+const DOC_NO = `COALESCE(v.number, pc.number)`;
 
 /** Minimal CSV (quoted fields, commas inside quotes, CRLF). */
 export function parseCsv(text: string): string[][] {
@@ -119,8 +122,8 @@ export class PaymentReconciliationService implements OnModuleInit {
   async reconcile(from: string, to: string, actor: SessionUser | null): Promise<PaymentReconciliation> {
     const range = [`${from}T00:00:00+03:00`, `${to}T23:59:59.999+03:00`];
     const system: { receipt_no: string | null; amount: number; status: string; number: string; originator: string }[] = await this.ds.query(
-      `SELECT p.receipt_no, p.amount::float AS amount, p.status, v.number, p.originator_conversation_id AS originator
-         FROM mpesa_payout p JOIN payment_voucher v ON v.id = p.voucher_id
+      `SELECT p.receipt_no, p.amount::float AS amount, p.status, ${DOC_NO} AS number, p.originator_conversation_id AS originator
+         FROM mpesa_payout p ${DOC_JOIN}
         WHERE p.status IN ('SUCCESS', 'REVERSED') AND p.completed_at BETWEEN $1 AND $2`,
       range,
     );
@@ -141,7 +144,7 @@ export class PaymentReconciliationService implements OnModuleInit {
     }
     // Paid out on M-PESA but not recorded as paid here (e.g. an attempt stuck as unknown or failed).
     const known: { receipt_no: string; status: string; number: string }[] = paid.length
-      ? await this.ds.query(`SELECT p.receipt_no, p.status, v.number FROM mpesa_payout p JOIN payment_voucher v ON v.id = p.voucher_id WHERE p.receipt_no = ANY($1::text[])`, [paid.map((x) => x.receipt_no)])
+      ? await this.ds.query(`SELECT p.receipt_no, p.status, ${DOC_NO} AS number FROM mpesa_payout p ${DOC_JOIN} WHERE p.receipt_no = ANY($1::text[])`, [paid.map((x) => x.receipt_no)])
       : [];
     for (const line of paid) {
       if (system.some((s) => s.receipt_no === line.receipt_no)) continue;
@@ -153,7 +156,7 @@ export class PaymentReconciliationService implements OnModuleInit {
       );
     }
     const pending: { number: string; status: string }[] = await this.ds.query(
-      `SELECT v.number, p.status FROM mpesa_payout p JOIN payment_voucher v ON v.id = p.voucher_id WHERE p.status IN ('PENDING', 'UNKNOWN') AND p.created_at <= $1`,
+      `SELECT ${DOC_NO} AS number, p.status FROM mpesa_payout p ${DOC_JOIN} WHERE p.status IN ('PENDING', 'UNKNOWN') AND p.created_at <= $1`,
       [range[1]],
     );
     for (const p of pending) exceptions.push({ kind: 'PENDING', receiptNo: null, voucherNo: p.number, note: `${p.number} has no M-PESA result yet (${p.status})` });
