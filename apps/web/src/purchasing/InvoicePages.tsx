@@ -131,16 +131,15 @@ export function ThreeWayMatch({ view }: { view: MatchView }) {
 
 export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { can } = useAuth();
+  const navigate = useNavigate();
+  const { can, canAny } = useAuth();
   const money = useMoney();
   const date = useDate();
-  const [payment, setPayment] = useState({ paidOn: today(), paymentReference: '', method: 'EFT' });
   const { data: view } = useQuery({ queryKey: ['/invoices', id, 'match'], queryFn: () => api<MatchView>(`/invoices/${id}/match`) });
   const act = (path: string, body?: object) => [`/invoices/${id}/${path}`, { method: 'POST' as const, body }] as [string, { method: 'POST'; body?: object }];
   const submit = useApiMutation<void>(() => act('submit'), { invalidate: ['/invoices', '/approvals'], success: 'Submitted for approval' });
   const rematch = useApiMutation<void>(() => act('rematch'), { invalidate: ['/invoices'], success: 'Re-matched' });
   const cancel = useApiMutation<void>(() => act('cancel'), { invalidate: ['/invoices', '/approvals'], success: 'Cancelled' });
-  const pay = useApiMutation<void>(() => act('pay', payment), { invalidate: ['/invoices', '/documents'], success: 'Payment recorded' });
   if (!view) return null;
   const inv = view.invoice;
   const foreign = !!inv.currency && !!inv.exchangeRate && inv.exchangeRate !== 1;
@@ -179,18 +178,11 @@ export function InvoiceDetailPage() {
                 <Button color="error" onClick={() => cancel.mutate()}>Cancel</Button>
               </Stack>
             )}
-            {can(Permissions.PURCHASING_PAYMENT) && inv.status === InvoiceStatus.APPROVED && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Record payment</Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                  <TextField label="Paid on" type="date" value={payment.paidOn} onChange={(e) => setPayment({ ...payment, paidOn: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-                  <TextField select label="Method" value={payment.method} onChange={(e) => setPayment({ ...payment, method: e.target.value })} sx={{ minWidth: 140 }}>
-                    {['EFT', 'RTGS', 'CHEQUE', 'MPESA'].map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-                  </TextField>
-                  <TextField label="Reference" value={payment.paymentReference} onChange={(e) => setPayment({ ...payment, paymentReference: e.target.value })} />
-                  <Button variant="contained" disabled={!payment.paymentReference} onClick={() => pay.mutate()}>Record payment</Button>
-                </Stack>
-              </Paper>
+            {(inv.paidAmount ?? 0) > 0 && <Alert severity="info">Paid so far: {cur(inv.paidAmount)} of {cur(inv.total)}</Alert>}
+            {canAny(Permissions.PAYMENTS_PREPARE) && ['APPROVED', 'SCHEDULED', 'PARTIALLY_PAID'].includes(inv.status) && (
+              <Box>
+                <Button variant="outlined" onClick={() => navigate(`/payments?supplierId=${inv.supplierId}`)}>Pay with a payment voucher</Button>
+              </Box>
             )}
           </>
         }

@@ -17,6 +17,7 @@ export const DOC_ROUTES: Partial<Record<string, (id: string) => string>> = {
   PO: (id) => `/purchase-orders/${id}`,
   GRN: (id) => `/grns/${id}`,
   INV: (id) => `/invoices/${id}`,
+  PV: (id) => `/payment-vouchers/${id}`,
   RTS: (id) => `/supplier-returns/${id}`,
   SR: (id) => `/store-requisitions/${id}`,
   ISS: (id) => `/issues/${id}`,

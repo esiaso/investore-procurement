@@ -308,6 +308,7 @@ export interface Invoice extends Base {
   exchangeRate?: number;
   baseTotal?: number;
   whtTotal?: number;
+  paidAmount?: number;
   capturedBy: string;
   lastComment: string | null;
 }

@@ -71,6 +71,14 @@ const STATUS_COLOURS: Record<string, 'default' | 'info' | 'warning' | 'success' 
   EXPIRED: 'error',
   INVOICED: 'info',
   PAID: 'success',
+  SCHEDULED: 'info',
+  PARTIALLY_PAID: 'warning',
+  PROCESSING: 'info',
+  REVERSED: 'default',
+  SUCCESS: 'success',
+  UNKNOWN: 'warning',
+  MATCHED: 'success',
+  EXCEPTIONS: 'warning',
 };
 
 export function StatusChip({ status }: { status: string }) {

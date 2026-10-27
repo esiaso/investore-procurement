@@ -14,6 +14,7 @@ import { QuickBooksPage } from './accounting/QuickBooksPage';
 import { ApproveLinkPage } from './nonstock/ApproveLinkPage';
 import { FinanceSetupPage } from './nonstock/FinanceSetupPage';
 import { HandoverDetailPage } from './nonstock/HandoverPages';
+import { PayablesPage, PaymentVoucherDetailPage, PaymentVouchersPage, ReconciliationPage } from './payments/PaymentPages';
 import { ProcurementQueuePage, StaffRequisitionDetailPage, StaffRequisitionFormPage, StaffRequisitionsPage } from './nonstock/StaffRequisitionPages';
 import { DocumentsPage } from './reports/DocumentsPage';
 import { ReportsPage } from './reports/ReportsPage';
@@ -135,6 +136,11 @@ export function App() {
         <Route path="staff-requisitions/:id/edit" element={guarded([Permissions.STAFF_REQUISITION_CREATE], <StaffRequisitionFormPage />)} />
         <Route path="staff-requisitions/:id" element={<StaffRequisitionDetailPage />} />
         <Route path="handovers/:id" element={<HandoverDetailPage />} />
+        <Route path="payments" element={guardedAny([Permissions.PAYMENTS_PREPARE, Permissions.PAYMENTS_RELEASE, Permissions.PAYMENTS_RECONCILE], <PayablesPage />)} />
+        <Route path="payment-vouchers" element={guardedAny([Permissions.PAYMENTS_PREPARE, Permissions.PAYMENTS_RELEASE, Permissions.PAYMENTS_RECONCILE], <PaymentVouchersPage />)} />
+        <Route path="payment-vouchers/:id" element={guardedAny([Permissions.PAYMENTS_PREPARE, Permissions.PAYMENTS_RELEASE, Permissions.PAYMENTS_RECONCILE], <PaymentVoucherDetailPage />)} />
+        <Route path="payments/reconciliation" element={guarded([Permissions.PAYMENTS_RECONCILE], <ReconciliationPage />)} />
+        <Route path="payments/reconciliation/:id" element={guarded([Permissions.PAYMENTS_RECONCILE], <ReconciliationPage />)} />
         <Route path="procurement-queue" element={guarded([Permissions.STAFF_REQUISITION_READ_ALL], <ProcurementQueuePage />)} />
         <Route path="finance/setup" element={<FinanceSetupPage />} />
         <Route path="requisitions" element={guarded([Permissions.PURCHASING_READ], <RequisitionsPage />)} />
