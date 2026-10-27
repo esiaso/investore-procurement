@@ -18,7 +18,7 @@ import {
   registerDecorator,
   ValidateNested,
 } from 'class-validator';
-import { AttributeType, ControlledSchedule, isValidGtin, SalesClass } from '@sil/shared';
+import { AttributeType, ControlledSchedule, isValidGtin, SalesClass, VedClass } from '@sil/shared';
 import { PageQueryDto } from '../../common/pagination';
 
 const CODE = /^[A-Za-z0-9._/-]{1,40}$/;
@@ -57,6 +57,7 @@ export class CreateGenericDto {
   @ApiPropertyOptional({ description: 'Dispensing check: contraindicated in pregnancy' }) @IsOptional() @IsBoolean() pregnancyContraindicated?: boolean;
   @ApiPropertyOptional({ description: 'Dispensing check: youngest age in years', nullable: true }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(120) minAgeYears?: number | null;
   @ApiPropertyOptional({ description: 'OTC limit per sale (base units, all brands)', nullable: true }) @IsOptional() @IsNumber({ maxDecimalPlaces: 4 }) @Min(0.0001) maxQtyPerSale?: number | null;
+  @ApiPropertyOptional({ enum: VedClass, description: 'VED criticality (V / E / D)', nullable: true }) @IsOptional() @IsEnum(VedClass) vedClass?: VedClass | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateGenericDto extends PartialType(CreateGenericDto) {}

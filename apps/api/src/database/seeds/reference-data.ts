@@ -40,6 +40,11 @@ export const ACCOUNTING_SCHEDULES: Record<string, string> = {
   'accounting.refresh': '15 * * * *',
 };
 
+/** Slice 12 scheduled report emails (also merged into existing installations by a migration). */
+export const REPORT_SCHEDULES: Record<string, string> = {
+  'reports.scheduled': '*/15 * * * *',
+};
+
 /** Slice 9 HMIS jobs (also merged into existing installations by a migration). */
 export const HMIS_SCHEDULES: Record<string, string> = {
   'hmis.dispatch': '* * * * *',
@@ -131,6 +136,7 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
       ...PROCUREMENT_SCHEDULES,
       ...HMIS_SCHEDULES,
       ...ACCOUNTING_SCHEDULES,
+      ...REPORT_SCHEDULES,
     },
     description: 'Background job schedules (cron, in locale.timezone). Remove a job to stop scheduling it.',
     isPublic: false,
@@ -207,6 +213,10 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'accounting.maxAttempts', value: 8, description: 'Attempts to post a document to QuickBooks before it is marked failed', isPublic: false },
   { key: 'accounting.retryBaseSeconds', value: 60, description: 'QuickBooks retry back-off base (seconds, doubled per attempt, capped at 1 hour)', isPublic: false },
   { key: 'accounting.requestTimeoutMs', value: 15000, description: 'Timeout for each call to QuickBooks (ms)', isPublic: false },
+  { key: 'reports.abcThresholds', value: { a: 70, b: 90 }, description: 'ABC analysis: items making up the first a% of consumption value are A, up to b% B, the rest C', isPublic: true },
+  { key: 'reports.deadStockDays', value: 180, description: 'Dead-stock report: stock with no issue, dispense or transfer out for this many days', isPublic: true },
+  { key: 'reports.nearExpiryDays', value: 90, description: 'Near-expiry report: default horizon (days)', isPublic: true },
+  { key: 'reports.maxRows', value: 50000, description: 'Most rows a report returns or exports', isPublic: false },
   { key: 'pharmacy.activeMedicationDays', value: 30, description: 'Medicines dispensed within this many days count as active medications in the checks', isPublic: false },
   {
     key: 'pharmacy.blockingSeverities',
@@ -382,7 +392,7 @@ const READ_ALL: PermissionCode[] = [
   P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.BUDGETS_READ, P.PURCHASING_READ,
   P.PATIENTS_READ, P.PHARMACY_READ, P.BILLING_READ, P.ETIMS_READ,
   P.FORECASTING_READ, P.PLANS_READ, P.TENDERS_READ, P.CONTRACTS_READ, P.PROCUREMENT_KPIS,
-  P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ, P.POS_REPORTS, P.ACCOUNTING_READ,
+  P.QUALITY_READ, P.ASSETS_READ, P.HMIS_READ, P.POS_REPORTS, P.ACCOUNTING_READ, P.DOCUMENTS_READ,
 ];
 const BUYING: PermissionCode[] = [P.SUPPLIERS_READ, P.SUPPLIERS_MANAGE, P.BUDGETS_READ, P.PURCHASING_READ, P.PURCHASING_RFQ, P.PURCHASING_PO];
 /** Strategic procurement (slice 7) for procurement staff. */
@@ -402,7 +412,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     name: 'Procurement Officer',
     description: 'Raises requisitions and purchase orders; maintains the catalog',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.INVENTORY_READ, P.INVENTORY_VALUATION,
-      P.INVENTORY_PLANNING, ...BUYING, P.PURCHASING_REQUISITION, ...SOURCING, P.SHIPMENTS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ],
+      P.INVENTORY_PLANNING, ...BUYING, P.PURCHASING_REQUISITION, ...SOURCING, P.SHIPMENTS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ, P.REPORTS_SCHEDULE, P.DOCUMENTS_READ],
   },
   {
     code: RoleCodes.PROCUREMENT_MANAGER,
@@ -410,7 +420,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     description: 'Approves procurement documents',
     permissions: [P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.CATALOG_MANAGE, P.CATALOG_IMPORT, P.TAX_READ, P.AUDIT_READ, P.NUMBERING_READ,
       P.INVENTORY_READ, P.INVENTORY_VALUATION, P.INVENTORY_ADJUST_APPROVE, P.INVENTORY_STOCKTAKE_APPROVE, P.INVENTORY_CONSUMPTION, ...BUYING,
-      ...SOURCING, P.PLANS_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE, P.SHIPMENTS_MANAGE, P.FILES_UPLOAD, P.QUALITY_READ, P.ASSETS_READ],
+      ...SOURCING, P.PLANS_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE, P.SHIPMENTS_MANAGE, P.FILES_UPLOAD, P.QUALITY_READ, P.ASSETS_READ, P.REPORTS_SCHEDULE, P.DOCUMENTS_READ],
   },
   {
     code: RoleCodes.STOREKEEPER,
@@ -419,7 +429,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [
       P.ORG_READ, P.BINS_MANAGE, P.CATALOG_READ, ...STORE_OPS, P.INVENTORY_HANDLE_COLD_CHAIN, P.SUPPLIERS_READ, P.PURCHASING_READ,
       P.PURCHASING_REQUISITION, P.PURCHASING_RECEIVE, P.PURCHASING_EMERGENCY_RECEIPT, P.FORECASTING_READ,
-      P.DISTRIBUTION_MANAGE, P.QUALITY_READ, P.FILES_UPLOAD, P.ASSETS_READ,
+      P.DISTRIBUTION_MANAGE, P.QUALITY_READ, P.FILES_UPLOAD, P.ASSETS_READ, P.DOCUMENTS_READ,
     ],
   },
   {
@@ -436,7 +446,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.FORECASTING_READ, P.FORECASTING_MANAGE, P.PLANS_READ, P.PLANS_MANAGE,
       P.QUALITY_READ, P.QUALITY_MANAGE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.DISTRIBUTION_MANAGE, P.FILES_UPLOAD,
       P.HMIS_READ, P.PATIENTS_CHARGE,
-      P.POS_SELL, P.POS_APPROVE_POM, P.POS_OVERRIDE, P.POS_VOID, P.POS_REFUND, P.POS_APPROVE_VARIANCE, P.POS_REPORTS,
+      P.POS_SELL, P.POS_APPROVE_POM, P.POS_OVERRIDE, P.POS_VOID, P.POS_REFUND, P.POS_APPROVE_VARIANCE, P.POS_REPORTS, P.REPORTS_SCHEDULE,
     ],
   },
   {
@@ -459,7 +469,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
     permissions: [
       P.ORG_READ, P.STORE_ALL, P.CATALOG_READ, P.INVENTORY_READ, P.INVENTORY_BATCH_HOLD,
       P.INVENTORY_HANDLE_COLD_CHAIN, P.INVENTORY_HANDLE_CONTROLLED, P.SUPPLIERS_READ, P.PURCHASING_READ, P.PURCHASING_INSPECT,
-      P.QUALITY_READ, P.QUALITY_MANAGE, P.QUALITY_RELEASE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.FILES_UPLOAD,
+      P.QUALITY_READ, P.QUALITY_MANAGE, P.QUALITY_RELEASE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.FILES_UPLOAD, P.DOCUMENTS_READ,
     ],
   },
   {
@@ -484,7 +494,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.INVENTORY_CONSUMPTION, P.SUPPLIERS_READ, P.SUPPLIERS_BANK, P.BUDGETS_READ, P.BUDGETS_MANAGE, P.PURCHASING_READ, P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT,
       P.PATIENTS_READ, P.BILLING_READ, P.BILLING_MANAGE, P.ETIMS_READ, P.ETIMS_MANAGE, P.HMIS_READ,
       P.POS_REPORTS, P.POS_APPROVE_VARIANCE, P.POS_MANAGE, P.POS_REFUND,
-      P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST,
+      P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE, P.ACCOUNTING_POST, P.REPORTS_SCHEDULE, P.DOCUMENTS_READ,
       P.PLANS_READ, P.CONTRACTS_READ, P.TENDERS_READ, P.PROCUREMENT_KPIS, P.DISPOSALS_MANAGE, P.FILES_UPLOAD, P.ASSETS_READ],
   },
   {
@@ -506,12 +516,12 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       P.PURCHASING_EMERGENCY_RECEIPT, P.APPROVALS_MANAGE,
       ...SOURCING, P.FORECASTING_MANAGE, P.PLANS_CONSOLIDATE, P.CONTRACTS_MANAGE,
       P.QUALITY_READ, P.QUALITY_MANAGE, P.RECALLS_MANAGE, P.DISPOSALS_MANAGE, P.DISTRIBUTION_MANAGE, P.SHIPMENTS_MANAGE,
-      P.ASSETS_READ, P.ASSETS_MANAGE, P.SERVICES_CERTIFY, P.FILES_UPLOAD,
+      P.ASSETS_READ, P.ASSETS_MANAGE, P.SERVICES_CERTIFY, P.FILES_UPLOAD, P.REPORTS_SCHEDULE, P.DOCUMENTS_READ,
     ],
   },
   { code: RoleCodes.SUPPLIER, name: 'Supplier (portal)', description: 'External supplier portal user', permissions: [P.PORTAL_ACCESS] },
   { code: RoleCodes.AUDITOR, name: 'Auditor (read-only)', description: 'Read-only access to all records', permissions: READ_ALL },
-  { code: RoleCodes.HOSPITAL_MANAGEMENT, name: 'Hospital Management', description: 'Read-only oversight', permissions: READ_ALL },
+  { code: RoleCodes.HOSPITAL_MANAGEMENT, name: 'Hospital Management', description: 'Read-only oversight', permissions: [...READ_ALL, P.REPORTS_SCHEDULE] },
 ];
 
 /**

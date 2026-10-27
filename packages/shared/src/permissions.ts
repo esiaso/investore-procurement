@@ -158,6 +158,10 @@ export const Permissions = {
   ACCOUNTING_MANAGE: 'accounting.manage',
   /** Preview and post batches to QuickBooks; reprocess failed postings. */
   ACCOUNTING_POST: 'accounting.post',
+  /** Email reports on a schedule (own schedules; with settings.manage, everyone's). */
+  REPORTS_SCHEDULE: 'reports.schedule',
+  /** The documents register: every attachment the user's other permissions let them read, and expiring supplier documents. */
+  DOCUMENTS_READ: 'documents.read',
 } as const;
 
 export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];
@@ -270,6 +274,8 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   'accounting.read': 'View QuickBooks postings, mappings and reconciliation',
   'accounting.manage': 'Connect QuickBooks, map accounts, classes and tax codes, sync master data',
   'accounting.post': 'Preview and post batches to QuickBooks; reprocess failed postings',
+  'reports.schedule': 'Schedule reports to be emailed',
+  'documents.read': 'Search the documents register and see expiring supplier documents',
 };
 
 /** Built-in role codes (seeded). Additional roles can be created at runtime. */

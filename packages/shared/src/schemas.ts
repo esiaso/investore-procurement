@@ -6,6 +6,7 @@ import {
   ServicePoint,
   StoreType,
   TaxTreatment,
+  VedClass,
 } from './enums';
 
 const code = z
@@ -178,6 +179,7 @@ export const genericSchema = z.object({
   pregnancyContraindicated: z.boolean().default(false),
   minAgeYears: z.number().min(0).max(120).nullish(),
   maxQtyPerSale: z.number().positive().nullish(),
+  vedClass: z.nativeEnum(VedClass).nullish(),
   isActive: z.boolean().default(true),
 });
 export type GenericInput = z.infer<typeof genericSchema>;

@@ -348,5 +348,16 @@ async function seedSample(m: EntityManager, password: string, log: (msg: string)
     [itemScheme.id, seq + 1],
   );
 
+  // VED criticality for the ABC-VED analysis (a starting point for the pharmacy and therapeutics committee).
+  await m.query(
+    `UPDATE generic SET ved_class = CASE WHEN inn_name = ANY($1::text[]) THEN 'V' WHEN inn_name = ANY($2::text[]) THEN 'D' ELSE 'E' END::ved_class WHERE ved_class IS NULL`,
+    [
+      ['Oxytocin', 'Magnesium sulfate', 'Misoprostol', 'Ceftriaxone', 'Gentamicin', 'Artesunate', 'Insulin soluble (human)', 'Heparin sodium', 'Sodium chloride',
+        "Compound sodium lactate (Ringer's lactate)", 'Glucose', 'Hydrocortisone sodium succinate', 'Ketamine', 'Propofol', 'Morphine sulfate', 'Diazepam',
+        'Phytomenadione (Vitamin K1)', 'Potassium chloride', 'Water for injection', 'Anti-tetanus immunoglobulin', 'Rabies vaccine', 'Oral rehydration salts'],
+      ['Vitamin B complex', 'Cetirizine', 'Chlorphenamine maleate', 'Esomeprazole', 'Atorvastatin', 'Clotrimazole'],
+    ],
+  );
+
   log(`sample data: 1 facility, ${stores.size} stores, ${departments.size} departments, ${SAMPLE_USERS.length} users, ${SAMPLE_GENERICS.length} generics, ${itemCount} items`);
 }

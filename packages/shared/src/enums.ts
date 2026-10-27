@@ -995,3 +995,34 @@ export enum ExternalEntity {
   CUSTOMER = 'CUSTOMER',
   ITEM = 'ITEM',
 }
+
+// ------------------------------------------------------------------ slice 12: documents, dashboards and reports
+
+/** VED criticality of a generic (vital / essential / desirable). */
+export enum VedClass {
+  VITAL = 'V',
+  ESSENTIAL = 'E',
+  DESIRABLE = 'D',
+}
+
+export enum ReportFormat {
+  CSV = 'csv',
+  XLSX = 'xlsx',
+  PDF = 'pdf',
+}
+
+export enum ReportFrequency {
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
+}
+
+/** Period of a scheduled report, resolved when it runs. */
+export enum ReportPeriod {
+  YESTERDAY = 'YESTERDAY',
+  LAST_7_DAYS = 'LAST_7_DAYS',
+  LAST_30_DAYS = 'LAST_30_DAYS',
+  LAST_WEEK = 'LAST_WEEK',
+  LAST_MONTH = 'LAST_MONTH',
+  MONTH_TO_DATE = 'MONTH_TO_DATE',
+}

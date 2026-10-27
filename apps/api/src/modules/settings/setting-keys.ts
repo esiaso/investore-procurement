@@ -154,6 +154,10 @@ export interface SettingTypes {
   'accounting.maxAttempts': number;
   'accounting.retryBaseSeconds': number;
   'accounting.requestTimeoutMs': number;
+  'reports.abcThresholds': { a: number; b: number };
+  'reports.deadStockDays': number;
+  'reports.nearExpiryDays': number;
+  'reports.maxRows': number;
 }
 
 export interface SourcingMethodRule {

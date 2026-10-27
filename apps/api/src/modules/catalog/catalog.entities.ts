@@ -1,5 +1,5 @@
 import { Check, Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
-import { ControlledSchedule, SalesClass, type AttributeDefinition } from '@sil/shared';
+import { ControlledSchedule, SalesClass, VedClass, type AttributeDefinition } from '@sil/shared';
 import { AppBaseEntity } from '../../common/entities/base.entity';
 import { MONEY, numericTransformer, QUANTITY } from '../../common/entities/transformers';
 import { TaxCategory } from '../tax/tax.entities';
@@ -56,6 +56,10 @@ export class Generic extends AppBaseEntity {
   /** Over-the-counter limit per sale, in base units, across its brands (e.g. paracetamol, codeine products). */
   @Column({ ...QUANTITY, nullable: true })
   maxQtyPerSale: number | null;
+
+  /** VED criticality (vital / essential / desirable) for the ABC-VED analysis. */
+  @Column({ type: 'enum', enum: VedClass, enumName: 'ved_class', nullable: true })
+  vedClass: VedClass | null;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
