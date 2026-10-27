@@ -168,7 +168,7 @@ const consumption: ReportDef = {
     const g = ctx.f.groupBy ?? 'department';
     const extra = g === 'category' ? { sel: ', c.name AS category', grp: ', c.name', cols: [col('category', 'Category')] } : g === 'item' ? { sel: ', i.code, i.name AS item', grp: ', i.code, i.name', cols: [col('code', 'Code'), col('item', 'Item')] } : { sel: '', grp: '', cols: [] };
     const rows = await ctx.ds.query(
-      `SELECT d.name AS department, d.cost_centre_code AS "costCentre"${extra.sel}, -SUM(t.quantity)::float AS quantity, ROUND(-SUM(t.value_delta), 2)::float AS value
+      `SELECT d.name AS department, d.cost_centre_code AS "costCentre"${extra.sel}${g === 'item' ? ', -SUM(t.quantity)::float AS quantity' : ''}, ROUND(-SUM(t.value_delta), 2)::float AS value
          FROM stock_transaction t JOIN department d ON d.id = t.department_id JOIN item i ON i.id = t.item_id JOIN item_category c ON c.id = i.category_id
         WHERE t.txn_type IN ('ISSUE', 'RETURN_IN') AND ${q.between('t.effective_date', ctx)} AND ${q.store('t.store_id', ctx)} AND ${q.category('i', ctx)} AND ${q.eq('t.department_id', ctx.f.departmentId)}
         GROUP BY d.name, d.cost_centre_code${extra.grp} HAVING SUM(t.value_delta) <> 0
