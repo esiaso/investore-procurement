@@ -257,10 +257,45 @@ export class StoreRequisitionsService implements OnModuleInit, ApprovalHandler {
     return sr.status;
   }
 
+  /**
+   * An internal requisition already approved elsewhere (the stock lines of an
+   * approved staff requisition): created APPROVED, stock reserved, the store told.
+   */
+  async createApproved(
+    m: EntityManager,
+    input: { departmentId: string; storeId: string; priority: RequisitionPriority; requiredBy: string | null; notes: string; requestedBy: string; lines: { itemId: string; quantity: number; notes?: string | null }[] },
+  ): Promise<StoreRequisition> {
+    const items: { id: string; cost: string }[] = await m.query(
+      `SELECT i.id, COALESCE(c.avg_cost, i.unit_price) AS cost FROM item i LEFT JOIN item_store_cost c ON c.item_id = i.id AND c.store_id = $2 WHERE i.id = ANY($1::uuid[])`,
+      [input.lines.map((l) => l.itemId), input.storeId],
+    );
+    const sr = await m.save(
+      m.create(StoreRequisition, {
+        number: await this.numbering.next(DocumentType.STORE_REQUISITION, { storeId: input.storeId, manager: m }),
+        departmentId: input.departmentId,
+        storeId: input.storeId,
+        priority: input.priority,
+        requiredBy: input.requiredBy,
+        notes: input.notes,
+        requestedBy: input.requestedBy,
+        estimatedValue: round2(input.lines.reduce((s, l) => s + l.quantity * Number(items.find((i) => i.id === l.itemId)?.cost ?? 0), 0)),
+        status: StoreRequisitionStatus.DRAFT,
+        lines: input.lines.map((l, i) => m.create(StoreRequisitionLine, { lineNo: i + 1, itemId: l.itemId, requestedQty: l.quantity, notes: l.notes ?? null })),
+      }),
+    );
+    await this.markApproved(m, sr);
+    return sr;
+  }
+
   // ------------------------------------------------------------------ approval callbacks
 
   async onApproved(m: EntityManager, req: ApprovalRequest): Promise<void> {
     const sr = await m.findOneByOrFail(StoreRequisition, { id: req.documentId });
+    await this.markApproved(m, sr);
+  }
+
+  /** Approved: reserve stock (if configured) and tell the issuing store. */
+  private async markApproved(m: EntityManager, sr: StoreRequisition): Promise<void> {
     sr.status = StoreRequisitionStatus.APPROVED;
     sr.approvedAt = new Date();
     sr.lastComment = null;

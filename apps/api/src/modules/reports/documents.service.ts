@@ -24,6 +24,7 @@ const OWNERS: Record<string, { sql: string; type: string }> = {
   [AttachmentOwner.ASSET]: { type: 'Asset', sql: `SELECT x.tag_no AS label, '/assets/' || x.id AS link, x.store_id FROM asset x WHERE x.id = a.owner_id` },
   [AttachmentOwner.SERVICE_CERTIFICATE]: { type: 'Service certificate', sql: `SELECT c.number AS label, '/service-certificates/' || c.id AS link, NULL::uuid AS store_id FROM service_certificate c WHERE c.id = a.owner_id` },
   [AttachmentOwner.STOCK_ADJUSTMENT]: { type: 'Stock adjustment', sql: `SELECT x.number AS label, '/adjustments' AS link, x.store_id FROM stock_adjustment x WHERE x.id = a.owner_id` },
+  [AttachmentOwner.STAFF_REQUISITION]: { type: 'Requisition', sql: `SELECT x.number AS label, '/staff-requisitions/' || x.id AS link, NULL::uuid AS store_id FROM staff_requisition x WHERE x.id = a.owner_id` },
 };
 
 export interface DocumentRow {

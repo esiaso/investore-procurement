@@ -10,6 +10,7 @@ import { BudgetsService } from '../budgets/budgets.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { methodProblem, recommendMethod } from '../procurement/sourcing';
 import { SettingsService } from '../settings/settings.service';
+import { releasePurchaseRequisitionLines } from '../staff-requisitions/staff-requisition-status';
 import { CreateRequisitionDto, DocListQueryDto } from './purchasing.dto';
 import { PurchaseRequisition, PurchaseRequisitionLine } from './purchasing.entities';
 
@@ -94,12 +95,24 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
     return this.get(id);
   }
 
+  /**
+   * Non-stock lines (consolidated from staff requisitions) are bought through
+   * the non-stock cycle (RFQ, LPO, service acceptance), which arrives in phase
+   * 2; until then they cannot go on an RFQ or a stock PO.
+   */
+  async assertStockOnly(m: EntityManager, prId: string): Promise<void> {
+    const [{ n }] = await m.query(`SELECT COUNT(*)::int AS n FROM purchase_requisition_line WHERE requisition_id = $1 AND line_type <> 'STOCK'`, [prId]);
+    if (n) throw new ConflictException({ code: 'NON_STOCK_LINES', message: `This requisition has ${n} non-stock line(s); they are bought through the non-stock LPO cycle` });
+  }
+
   /** Only the requester may edit, and only while draft or returned. */
   async update(id: string, dto: CreateRequisitionDto, actor: SessionUser): Promise<PurchaseRequisition> {
     await this.ds.transaction(async (m) => {
       const pr = await this.lock(m, id);
       if (pr.requestedBy !== actor.id) throw new ForbiddenException('Only the requester can edit this requisition');
       if (![RequisitionStatus.DRAFT, RequisitionStatus.RETURNED].includes(pr.status)) throw new ConflictException(`Requisition is ${pr.status}`);
+      const [{ n }] = await m.query(`SELECT COUNT(*)::int AS n FROM purchase_requisition_line WHERE requisition_id = $1 AND source_requisition_line_id IS NOT NULL`, [id]);
+      if (n) throw new ConflictException('This requisition was consolidated from staff requisitions: cancel it (the lines go back to the queue) and consolidate again');
       await this.validateHeader(m, dto);
       const lines = await this.buildLines(m, dto.storeId, dto);
       await m.delete(PurchaseRequisitionLine, { requisitionId: id });
@@ -157,7 +170,8 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
         budgetWarning = check.message;
       }
       const categories: { category_id: string }[] = await m.query(
-        `SELECT DISTINCT i.category_id FROM purchase_requisition_line l JOIN item i ON i.id = l.item_id WHERE l.requisition_id = $1`,
+        `SELECT DISTINCT COALESCE(l.category_id, i.category_id) AS category_id FROM purchase_requisition_line l LEFT JOIN item i ON i.id = l.item_id
+          WHERE l.requisition_id = $1 AND COALESCE(l.category_id, i.category_id) IS NOT NULL`,
         [id],
       );
       await this.approvals.start(m, {
@@ -187,6 +201,8 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
       await this.approvals.cancelPending(m, DocumentType.PURCHASE_REQUISITION, id, actor.id);
       pr.status = RequisitionStatus.CANCELLED;
       await m.save(pr);
+      // Staff requisition lines it was consolidated from go back to the procurement queue.
+      await releasePurchaseRequisitionLines(m, id);
     });
     return this.get(id);
   }
@@ -204,6 +220,7 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
     pr.status = RequisitionStatus.REJECTED;
     pr.lastComment = comment;
     await m.save(pr);
+    await releasePurchaseRequisitionLines(m, pr.id);
   }
 
   async onReturned(m: EntityManager, req: ApprovalRequest, _a: SessionUser, comment: string): Promise<void> {
@@ -242,7 +259,7 @@ export class RequisitionsService implements OnModuleInit, ApprovalHandler {
   async get(id: string): Promise<PurchaseRequisition> {
     const pr = await this.ds.getRepository(PurchaseRequisition).findOne({
       where: { id },
-      relations: { department: true, store: true, lines: { item: { baseUom: true } } },
+      relations: { department: true, store: true, lines: { item: { baseUom: true }, uom: true } },
     });
     if (!pr) throw new NotFoundException('Requisition not found');
     return pr;

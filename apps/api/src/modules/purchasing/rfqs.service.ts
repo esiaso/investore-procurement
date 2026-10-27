@@ -9,6 +9,7 @@ import { NumberingService } from '../numbering/numbering.service';
 import { SettingsService } from '../settings/settings.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { PurchaseOrdersService } from './purchase-orders.service';
+import { RequisitionsService } from './requisitions.service';
 import { AwardRfqDto, CreateRfqDto, DocListQueryDto, RecordQuotationDto } from './purchasing.dto';
 import { PurchaseRequisition, PurchaseRequisitionLine, Quotation, QuotationLine, Rfq, RfqLine } from './purchasing.entities';
 
@@ -47,6 +48,7 @@ export class RfqsService implements OnModuleInit {
     private readonly suppliers: SuppliersService,
     private readonly settings: SettingsService,
     private readonly orders: PurchaseOrdersService,
+    private readonly requisitions: RequisitionsService,
   ) {}
 
   onModuleInit() {
@@ -70,10 +72,11 @@ export class RfqsService implements OnModuleInit {
         pr = await m.findOneBy(PurchaseRequisition, { id: dto.requisitionId });
         if (!pr) throw new NotFoundException('Requisition not found');
         if (pr.status !== RequisitionStatus.APPROVED) throw new ConflictException(`Requisition is ${pr.status}; it must be approved`);
+        await this.requisitions.assertStockOnly(m, pr.id);
         const prLines = await m.find(PurchaseRequisitionLine, { where: { requisitionId: pr.id } });
         lines = prLines
           .filter((l) => l.quantity > l.orderedQty)
-          .map((l) => ({ requisitionLineId: l.id, itemId: l.itemId, quantity: Math.round((l.quantity - l.orderedQty) * 10_000) / 10_000 }));
+          .map((l) => ({ requisitionLineId: l.id, itemId: l.itemId!, quantity: Math.round((l.quantity - l.orderedQty) * 10_000) / 10_000 }));
         if (!lines.length) throw new BadRequestException('Everything on this requisition is already ordered');
       } else {
         if (!dto.lines?.length) throw new BadRequestException('Give lines or a requisition');

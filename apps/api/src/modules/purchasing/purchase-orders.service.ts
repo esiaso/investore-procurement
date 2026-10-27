@@ -165,20 +165,22 @@ export class PurchaseOrdersService implements OnModuleInit, ApprovalHandler {
         const pr = await m.findOne(PurchaseRequisition, { where: { id: dto.requisitionId }, lock: { mode: 'pessimistic_write' } });
         if (!pr) throw new NotFoundException('Requisition not found');
         if (pr.status !== RequisitionStatus.APPROVED) throw new ConflictException(`Requisition is ${pr.status}; it must be approved`);
+        await this.requisitions.assertStockOnly(m, pr.id);
         const prLines = await m.find(PurchaseRequisitionLine, { where: { requisitionId: pr.id } });
         const lines: DraftLine[] = [];
         for (const l of dto.lines) {
           const prLine = prLines.find((p) => p.id === l.requisitionLineId);
           if (!prLine) throw new BadRequestException('Each line must reference a line of the requisition');
+          const itemId = prLine.itemId!; // stock-only (checked above)
           const remaining = round4(prLine.quantity - prLine.orderedQty);
           const uomId = l.uomId ?? null;
-          const factor = uomId ? await this.units.factorToBase(prLine.itemId, uomId) : 1;
+          const factor = uomId ? await this.units.factorToBase(itemId, uomId) : 1;
           const quantity = l.quantity ?? round4(remaining / factor);
           if (round4(quantity * factor) > remaining) throw new BadRequestException(`Ordering more than the remaining ${remaining} base units requested`);
-          const contract = await this.suppliers.priceOn(m, dto.supplierId, prLine.itemId, today);
+          const contract = await this.suppliers.priceOn(m, dto.supplierId, itemId, today);
           const unitPrice = l.unitPrice ?? (contract ? round4(contract.unitPrice * factor) : round4(prLine.estimatedUnitPrice * factor));
           // Priced from a contract: the order counts against that contract line's balance.
-          lines.push({ itemId: prLine.itemId, uomId, quantity, unitPrice, requisitionLineId: prLine.id, contractLineId: l.unitPrice === undefined ? (contract?.contractLineId ?? null) : null });
+          lines.push({ itemId, uomId, quantity, unitPrice, requisitionLineId: prLine.id, contractLineId: l.unitPrice === undefined ? (contract?.contractLineId ?? null) : null });
         }
         const po = await this.createDraft(
           m,

@@ -35,6 +35,8 @@ import { HmisIntegrationModule } from './modules/hmis/hmis-integration.module';
 import { PosModule } from './modules/pos/pos.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { FinanceModule } from './modules/finance/finance.module';
+import { StaffRequisitionsModule } from './modules/staff-requisitions/staff-requisitions.module';
 import { LabelsModule } from './modules/labels/labels.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { QualityModule } from './modules/quality/quality.module';
@@ -78,6 +80,8 @@ import { UsersModule } from './modules/users/users.module';
     PosModule,
     AccountingModule,
     ReportsModule,
+    FinanceModule,
+    StaffRequisitionsModule,
   ],
   controllers: [HealthController],
   providers: [
