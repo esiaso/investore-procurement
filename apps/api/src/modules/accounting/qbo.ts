@@ -130,10 +130,14 @@ const ACCOUNTS: [id: string, name: string, type: string][] = [
   ['2', 'M-Pesa till', 'Bank'],
   ['3', 'KCB current account', 'Bank'],
   ['4', 'Card settlements clearing', 'Bank'],
+  ['5', 'Petty cash', 'Bank'],
+  ['6', 'M-Pesa B2C / B2B paying account', 'Bank'],
   ['10', 'Accounts Receivable (A/R)', 'Accounts Receivable'],
   ['20', 'Accounts Payable (A/P)', 'Accounts Payable'],
   ['21', 'VAT payable (output)', 'Other Current Liability'],
   ['22', 'VAT recoverable (input)', 'Other Current Asset'],
+  ['23', 'Withholding tax payable', 'Other Current Liability'],
+  ['24', 'Staff advances', 'Other Current Asset'],
   ['30', 'Inventory - medicines', 'Other Current Asset'],
   ['31', 'Inventory - medical supplies', 'Other Current Asset'],
   ['32', 'Stock in transit', 'Other Current Asset'],
@@ -146,6 +150,10 @@ const ACCOUNTS: [id: string, name: string, type: string][] = [
   ['61', 'Stock write-offs (expiry, damage)', 'Expense'],
   ['62', 'Stock adjustments and count variances', 'Expense'],
   ['63', 'Loyalty redemptions', 'Expense'],
+  ['64', 'Repairs and maintenance', 'Expense'],
+  ['65', 'Bank and M-Pesa charges', 'Expense'],
+  ['66', 'Office and general expenses', 'Expense'],
+  ['67', 'Furniture and equipment (expensed)', 'Expense'],
   ['70', 'Opening balance equity', 'Equity'],
 ];
 const CLASSES: [string, string][] = [
@@ -282,9 +290,16 @@ export class MockQbo implements AccountingAdapter {
   }
 
   private create(path: string, b: Record<string, unknown>): QboReply {
-    const types: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', item: 'Item', bill: 'Bill', billpayment: 'BillPayment', vendorcredit: 'VendorCredit', salesreceipt: 'SalesReceipt', invoice: 'Invoice', payment: 'Payment', refundreceipt: 'RefundReceipt', creditmemo: 'CreditMemo', journalentry: 'JournalEntry' };
+    const types: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', item: 'Item', bill: 'Bill', billpayment: 'BillPayment', vendorcredit: 'VendorCredit', salesreceipt: 'SalesReceipt', invoice: 'Invoice', payment: 'Payment', refundreceipt: 'RefundReceipt', creditmemo: 'CreditMemo', journalentry: 'JournalEntry', purchaseorder: 'PurchaseOrder', purchase: 'Purchase', transfer: 'Transfer' };
     const type = types[path.toLowerCase()];
     if (!type) return this.fault(`Unsupported entity ${path}`);
+    // An update carries the Id and the current SyncToken (else: stale object).
+    let updating: Entity | null = null;
+    if (b.Id) {
+      updating = this.store.get(type)?.get(String(b.Id)) ?? null;
+      if (!updating) return this.fault('Object Not Found', `${type} ${String(b.Id)}`);
+      if (String(b.SyncToken) !== updating.SyncToken) return { status: 400, body: { Fault: { Error: [{ Message: 'Stale Object Error', Detail: `You and another user were working on the same thing (SyncToken ${String(b.SyncToken)}, current ${updating.SyncToken})`, code: '5010' }], type: 'ValidationFault' } } };
+    }
     const date = String(b.TxnDate ?? new Date().toISOString().slice(0, 10));
     if (!['Vendor', 'Customer', 'Item'].includes(type) && this.bookCloseDate && date <= this.bookCloseDate) return this.fault('Account Period Closed', `The books are closed up to ${this.bookCloseDate}`);
     if (['Vendor', 'Customer'].includes(type)) {
@@ -293,7 +308,9 @@ export class MockQbo implements AccountingAdapter {
       if (this.all(type).some((e) => e.DisplayName === name)) return this.fault('Duplicate Name Exists Error', `The name supplied already exists: ${name}`);
     }
     const lines = (b.Line as Record<string, unknown>[] | undefined) ?? [];
-    const amt = (l: Record<string, unknown>) => Number(l.Amount ?? 0);
+    // Foreign-currency transactions post in the home currency at their exchange rate.
+    const fx = Number(b.ExchangeRate ?? 1) || 1;
+    const amt = (l: Record<string, unknown>) => Number(l.Amount ?? 0) * fx;
     const cls = (l: Record<string, unknown>, detail: string) => this.ref((l[detail] as Record<string, unknown> | undefined)?.ClassRef) ?? this.ref(b.ClassRef);
     const tax = Number((b.TxnTaxDetail as { TotalTax?: number } | undefined)?.TotalTax ?? 0);
     const entries: { account: string; amount: number; classId: string | null }[] = [];
@@ -326,9 +343,40 @@ export class MockQbo implements AccountingAdapter {
         entries.push({ account: AP, amount: -sign * total, classId: null });
         break;
       }
+      case 'PurchaseOrder': {
+        // Non-posting: nothing reaches the ledger.
+        for (const l of lines) {
+          const d = l.AccountBasedExpenseLineDetail as Record<string, unknown>;
+          if (!this.store.get('Account')?.has(this.ref(d?.AccountRef) ?? '')) return this.fault('Invalid Reference Id', `Account ${this.ref(d?.AccountRef)}`);
+          total += amt(l);
+        }
+        break;
+      }
+      case 'Purchase': {
+        for (const l of lines) {
+          const d = l.AccountBasedExpenseLineDetail as Record<string, unknown>;
+          entries.push({ account: this.ref(d?.AccountRef) ?? '', amount: amt(l), classId: cls(l, 'AccountBasedExpenseLineDetail') });
+          total += amt(l);
+        }
+        entries.push({ account: this.ref(b.AccountRef) ?? '', amount: -total, classId: null });
+        break;
+      }
+      case 'Transfer': {
+        total = Number(b.Amount ?? 0);
+        entries.push({ account: this.ref(b.ToAccountRef) ?? '', amount: total, classId: null }, { account: this.ref(b.FromAccountRef) ?? '', amount: -total, classId: null });
+        break;
+      }
       case 'BillPayment': {
-        total = Number(b.TotalAmt ?? 0);
-        for (const l of lines) for (const lt of (l.LinkedTxn as { TxnId: string; TxnType: string }[]) ?? []) if (!this.store.get('Bill')?.has(lt.TxnId)) return this.fault('Invalid Reference Id', `Bill ${lt.TxnId}`);
+        total = Number(b.TotalAmt ?? 0) * fx;
+        for (const l of lines) {
+          for (const lt of (l.LinkedTxn as { TxnId: string; TxnType: string }[]) ?? []) {
+            const kind = lt.TxnType === 'VendorCredit' ? 'VendorCredit' : 'Bill';
+            if (!this.store.get(kind)?.has(lt.TxnId)) return this.fault('Invalid Reference Id', `${kind} ${lt.TxnId}`);
+          }
+        }
+        // Bills less the vendor credits applied must equal the amount paid.
+        const applied = lines.reduce((sum, l) => sum + (((l.LinkedTxn as { TxnType: string }[]) ?? [])[0]?.TxnType === 'VendorCredit' ? -1 : 1) * Number(l.Amount ?? 0), 0);
+        if (Math.abs(applied - Number(b.TotalAmt ?? 0)) > 0.005) return this.fault('Invalid amount', `Lines apply ${applied}, TotalAmt is ${String(b.TotalAmt)}`);
         entries.push({ account: AP, amount: total, classId: null }, { account: this.ref((b.CheckPayment as Record<string, unknown> | undefined)?.BankAccountRef) ?? '', amount: -total, classId: null });
         break;
       }
@@ -371,7 +419,11 @@ export class MockQbo implements AccountingAdapter {
       if (!e.account) return this.fault('Invalid Reference Id', 'An account reference is missing or unknown');
       if (!this.store.get('Account')?.has(e.account)) return this.fault('Invalid Reference Id', `Account ${e.account}`);
     }
-    const saved = this.put(type, { ...b, ...(['Vendor', 'Customer', 'Item'].includes(type) ? {} : { TotalAmt: Math.round(total * 100) / 100 }) });
+    // QuickBooks numbers the lines of a saved transaction.
+    const numbered = Array.isArray(b.Line) ? { Line: (b.Line as Record<string, unknown>[]).map((l, i) => ({ ...l, Id: String(i + 1), LineNum: l.LineNum ?? i + 1 })) } : {};
+    const saved = this.put(type, { ...b, ...numbered, ...(['Vendor', 'Customer', 'Item'].includes(type) ? {} : { TotalAmt: Math.round((type === 'BillPayment' ? Number(b.TotalAmt ?? 0) : total / fx) * 100) / 100 }) });
+    // An update replaces the transaction's ledger lines.
+    if (updating) this.ledger = this.ledger.filter((e) => !(e.txnType === type && e.txnId === saved.Id));
     for (const e of entries) this.ledger.push({ txnType: type, txnId: saved.Id, date, account: e.account, amount: Math.round(e.amount * 100) / 100, classId: e.classId });
     return { status: 200, body: { [type]: saved, time: new Date().toISOString() } };
   }

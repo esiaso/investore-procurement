@@ -44,6 +44,21 @@ export const SAMPLE_QBO_MAPPINGS: [AccountMappingKind, string, string][] = [
   [AccountMappingKind.SYSTEM, 'STOCK_WRITE_OFF', '61'],
   [AccountMappingKind.SYSTEM, 'OPENING_BALANCE', '70'],
   [AccountMappingKind.SYSTEM, 'BANK', '3'],
+  // Non-stock buying, supplier payments and petty cash.
+  [AccountMappingKind.SYSTEM, 'MPESA_CLEARING', '6'],
+  [AccountMappingKind.SYSTEM, 'WHT_PAYABLE', '23'],
+  [AccountMappingKind.SYSTEM, 'BANK_CHARGES', '65'],
+  [AccountMappingKind.SYSTEM, 'STAFF_ADVANCES', '24'],
+  [AccountMappingKind.PAYMENT_ACCOUNT, 'CHEQUE', '3'],
+  [AccountMappingKind.PAYMENT_ACCOUNT, 'MPESA_PAYBILL', '6'],
+  [AccountMappingKind.PAYMENT_ACCOUNT, 'MPESA_TILL', '6'],
+  [AccountMappingKind.PAYMENT_ACCOUNT, 'MPESA_B2C', '6'],
+  // Sample chart of accounts (GL codes) → mock QuickBooks accounts.
+  ...(['5100', '5110'] as const).map((g): [AccountMappingKind, string, string] => [AccountMappingKind.GL_ACCOUNT, g, '64']),
+  ...(['5200', '5210', '5300', '5310', '5400', '5410', '5500', '5510', '5600', '5610'] as const).map((g): [AccountMappingKind, string, string] => [AccountMappingKind.GL_ACCOUNT, g, '66']),
+  ...(['5700', '1600', '1610'] as const).map((g): [AccountMappingKind, string, string] => [AccountMappingKind.GL_ACCOUNT, g, '67']),
+  [AccountMappingKind.GL_ACCOUNT, '5800', '65'],
+  [AccountMappingKind.GL_ACCOUNT, '1020', '5'],
 ];
 
 /**

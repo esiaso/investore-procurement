@@ -1004,6 +1004,8 @@ export enum QboEnvironment {
 
 /** What a local document becomes in QuickBooks. */
 export enum PostingDocType {
+  /** Approved LPO / LSO (non-posting in QuickBooks). */
+  PURCHASE_ORDER = 'PURCHASE_ORDER',
   BILL = 'BILL',
   BILL_PAYMENT = 'BILL_PAYMENT',
   VENDOR_CREDIT = 'VENDOR_CREDIT',
@@ -1013,6 +1015,10 @@ export enum PostingDocType {
   REFUND_RECEIPT = 'REFUND_RECEIPT',
   CREDIT_MEMO = 'CREDIT_MEMO',
   JOURNAL = 'JOURNAL',
+  /** Expense paid straight from a bank / cash account (petty cash, M-PESA charges). */
+  PURCHASE = 'PURCHASE',
+  /** Money moved between accounts (petty cash replenishment). */
+  TRANSFER = 'TRANSFER',
 }
 
 /** READY (previewed, valid) → POSTED; BLOCKED (mapping missing, period closed); PENDING (retrying); FAILED. */
@@ -1041,6 +1047,8 @@ export enum AccountMappingKind {
   PAYMENT_ACCOUNT = 'PAYMENT_ACCOUNT',
   /** Control accounts: GRNI, AP, AR, VAT, stock adjustment, write-off, in transit, opening balance. */
   SYSTEM = 'SYSTEM',
+  /** GL account (by code) → QuickBooks account, when it was not imported from QuickBooks. */
+  GL_ACCOUNT = 'GL_ACCOUNT',
 }
 
 /** Local master data mirrored in QuickBooks. */

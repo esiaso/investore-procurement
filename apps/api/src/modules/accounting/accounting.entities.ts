@@ -167,6 +167,14 @@ export class AccountingPosting {
   @Column({ type: 'varchar', length: 40, nullable: true })
   externalId: string | null;
 
+  /** QuickBooks SyncToken of the posted entity (needed to update it). */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  syncToken: string | null;
+
+  /** Source version posted (purchase orders are versioned by amendments). */
+  @Column({ type: 'int', nullable: true })
+  localVersion: number | null;
+
   @Column({ type: 'varchar', length: 1000, nullable: true })
   error: string | null;
 

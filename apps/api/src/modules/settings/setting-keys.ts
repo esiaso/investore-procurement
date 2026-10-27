@@ -168,6 +168,8 @@ export interface SettingTypes {
   'requisitions.handoverOtpMaxAttempts': number;
   'payments.mpesaFollowUpMinutes': number;
   'pettyCash.duplicateWindowDays': number;
+  'accounting.autoSync': boolean;
+  'accounting.autoSyncFrom': string;
   'pettyCash.retirementDays': number;
   'payments.mpesaMaxAttempts': number;
   'payments.mpesaMaxStatusChecks': number;

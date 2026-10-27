@@ -50,6 +50,7 @@ export const REPORT_SCHEDULES: Record<string, string> = {
   'payments.mpesaFollowUp': '*/5 * * * *',
   'payments.mpesaReconcile': '0 6 * * *',
   'pettyCash.retirementReminders': '0 7 * * *',
+  'accounting.autoSync': '*/15 * * * *',
 };
 
 /** Slice 9 HMIS jobs (also merged into existing installations by a migration). */
@@ -235,6 +236,8 @@ export const DEFAULT_SETTINGS: { key: string; value: unknown; description: strin
   { key: 'purchasing.matchPriceToleranceAbs', value: 0, description: 'Three-way match: largest price difference tolerated per line (amount, order currency); 0 = percentage only', isPublic: false },
   { key: 'purchasing.autoApproveMatchedInvoices', value: false, description: 'Invoices that match the order and the receipts within tolerance are approved without the approval workflow (exceptions still go through it)', isPublic: false },
   { key: 'requisitions.handoverOtpMinutes', value: 15, description: 'How long a hand-over one-time code is valid (minutes)', isPublic: false },
+  { key: 'accounting.autoSync', value: false, description: 'QuickBooks: queue and post purchase orders, bills, payments and petty cash automatically (job accounting.autoSync)', isPublic: false },
+  { key: 'accounting.autoSyncFrom', value: '', description: 'QuickBooks automatic sync: documents dated from (YYYY-MM-DD; empty = the last 30 days)', isPublic: false },
   { key: 'pettyCash.duplicateWindowDays', value: 7, description: 'Petty cash: a request to the same payee for the same amount within this many days needs a justification', isPublic: true },
   { key: 'pettyCash.retirementDays', value: 7, description: 'Petty cash: days to retire an advance after it is paid (no new advance until then)', isPublic: true },
   { key: 'payments.mpesaFollowUpMinutes', value: 10, description: 'M-PESA payouts: minutes to wait for the result callback before asking M-PESA (Transaction Status)', isPublic: false },

@@ -3,7 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { Permissions, SessionUser } from '@sil/shared';
 import { CurrentUser, Public, RequireAnyPermission, RequirePermissions } from '../../common/decorators';
-import { ConnectionDto, MappingDto, PeriodQueryDto, PostingQueryDto, PreviewDto, SettlementDto } from './accounting.dto';
+import { ConnectionDto, MappingDto, PeriodQueryDto, PostingQueryDto, PreviewDto, SettlementDto, SyncStatusQueryDto, VendorSyncDto } from './accounting.dto';
 import { AccountingService } from './accounting.service';
 
 const P = Permissions;
@@ -63,6 +63,24 @@ export class AccountingController {
   @Delete('mappings/:id') @HttpCode(204) @RequirePermissions(P.ACCOUNTING_MANAGE)
   deleteMapping(@Param('id', ParseUUIDPipe) id: string) {
     return this.acc.deleteMapping(id);
+  }
+
+  /** Vendors ↔ suppliers: PULL links existing QuickBooks vendors, PUSH creates the missing ones. */
+  @Post('vendors/sync') @HttpCode(200) @RequirePermissions(P.ACCOUNTING_MANAGE)
+  syncVendors(@Body() dto: VendorSyncDto) {
+    return this.acc.syncVendors(dto.direction);
+  }
+
+  /** QuickBooks sync status of documents (?ids=a,b): SYNCED / PENDING / FAILED / NOT_QUEUED. */
+  @Get('sync-status') @RequirePermissions()
+  syncStatus(@Query() q: SyncStatusQueryDto) {
+    return this.acc.syncStatus(q.ids.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 200));
+  }
+
+  /** Runs the automatic sync now (accounting.autoSync must be on). */
+  @Post('auto-sync') @HttpCode(200) @RequirePermissions(P.ACCOUNTING_POST)
+  autoSync() {
+    return this.acc.autoSync();
   }
 
   @Get('external-refs') @RequireAnyPermission(P.ACCOUNTING_READ, P.ACCOUNTING_MANAGE)

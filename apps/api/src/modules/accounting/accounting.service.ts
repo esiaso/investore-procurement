@@ -30,9 +30,14 @@ export const SYSTEM_ACCOUNTS: Record<string, string> = {
   STOCK_WRITE_OFF: 'Stock write-offs (expiry, damage, disposal)',
   OPENING_BALANCE: 'Opening balance equity (opening stock)',
   BANK: 'Default bank account for supplier payments',
+  MPESA_CLEARING: 'M-PESA paying account (payouts and their charges)',
+  WHT_PAYABLE: 'Withholding tax payable (deducted from supplier payments)',
+  BANK_CHARGES: 'Bank and M-PESA transaction charges',
+  STAFF_ADVANCES: 'Staff advances / imprests outstanding',
 };
 const WRITE_OFF_REASONS = new Set(['EXPIRY', 'DISPOSAL', 'DAMAGE', 'BREAKAGE', 'THEFT', 'LOSS', 'TRANSIT_LOSS']);
 const ORDER: PostingDocType[] = [
+  PostingDocType.PURCHASE_ORDER,
   PostingDocType.BILL,
   PostingDocType.VENDOR_CREDIT,
   PostingDocType.BILL_PAYMENT,
@@ -42,8 +47,11 @@ const ORDER: PostingDocType[] = [
   PostingDocType.REFUND_RECEIPT,
   PostingDocType.CREDIT_MEMO,
   PostingDocType.JOURNAL,
+  PostingDocType.PURCHASE,
+  PostingDocType.TRANSFER,
 ];
 const ENTITY_PATH: Record<PostingDocType, string> = {
+  PURCHASE_ORDER: 'purchaseorder',
   BILL: 'bill',
   BILL_PAYMENT: 'billpayment',
   VENDOR_CREDIT: 'vendorcredit',
@@ -53,6 +61,8 @@ const ENTITY_PATH: Record<PostingDocType, string> = {
   REFUND_RECEIPT: 'refundreceipt',
   CREDIT_MEMO: 'creditmemo',
   JOURNAL: 'journalentry',
+  PURCHASE: 'purchase',
+  TRANSFER: 'transfer',
 };
 
 /** What a document becomes: QuickBooks body (with {$ref} / {$posting} placeholders) and the local entries. */
@@ -61,6 +71,8 @@ interface Built {
   localDocType: string;
   localDocId: string;
   localDocNo: string | null;
+  /** Version of the source (purchase orders): a newer one is sent again as an update. */
+  localVersion?: number;
   txnDate: string;
   amount: number;
   entries: { account: string; amount: number; classId?: string | null }[];
@@ -93,6 +105,7 @@ export class AccountingService implements OnModuleInit {
   onModuleInit() {
     this.jobs.register('accounting.dispatch', 'Retry QuickBooks postings that are waiting (back-off)', () => this.dispatch());
     this.jobs.register('accounting.refresh', 'Refresh the QuickBooks token and the books closing date', () => this.refreshJob());
+    this.jobs.register('accounting.autoSync', 'Queue and post new purchasing, payment and petty cash documents to QuickBooks (accounting.autoSync)', () => this.autoSync());
   }
 
   // ------------------------------------------------------------------ connection and OAuth
@@ -254,7 +267,10 @@ export class AccountingService implements OnModuleInit {
       this.ds.query(`SELECT code, name FROM tax_category ORDER BY code`),
       this.ds.query(`SELECT code, name FROM payment_mode WHERE is_active AND NOT is_credit ORDER BY code`),
     ]);
-    const methods: { method: string }[] = await this.ds.query(`SELECT DISTINCT upper(method) AS method FROM payment_voucher ORDER BY 1`);
+    const methods: { method: string }[] = await this.ds.query(
+      `SELECT DISTINCT upper(method) AS method FROM (SELECT method FROM payment_voucher UNION SELECT method FROM petty_cash_request) x ORDER BY 1`,
+    );
+    const gls = await this.ds.query(`SELECT code, name FROM gl_account WHERE is_active AND qbo_account_id IS NULL ORDER BY code`);
     return {
       mappings: rows,
       keys: {
@@ -267,6 +283,7 @@ export class AccountingService implements OnModuleInit {
         TAX_CODE: taxes,
         PAYMENT_ACCOUNT: [...modes, ...methods.filter((x) => !modes.some((m: { code: string }) => m.code === x.method)).map((x) => ({ code: x.method, name: `Supplier payments by ${x.method}` }))],
         SYSTEM: Object.entries(SYSTEM_ACCOUNTS).map(([code, name]) => ({ code, name })),
+        GL_ACCOUNT: gls,
       },
     };
   }
@@ -291,7 +308,20 @@ export class AccountingService implements OnModuleInit {
     const index = new Map(rows.map((r) => [`${r.kind}|${r.localKey}`, r.externalId]));
     const cats: { id: string; code: string; parent_id: string | null }[] = await m.query(`SELECT id, code, parent_id FROM item_category`);
     const catById = new Map(cats.map((c) => [c.id, c]));
+    const gls: { id: string; code: string; qbo_account_id: string | null }[] = await m.query(`SELECT id, code, qbo_account_id FROM gl_account`);
+    const glById = new Map(gls.map((g) => [g.id, g]));
     return {
+      /** QuickBooks account of a GL account: imported from QuickBooks, else mapped by code. */
+      gl(glId: string | null | undefined, missing: string[], label: string): string {
+        const g = glId ? glById.get(glId) : undefined;
+        if (!g) {
+          missing.push(`expense account (GL) on ${label}`);
+          return '';
+        }
+        const v = g.qbo_account_id ?? index.get(`${AccountMappingKind.GL_ACCOUNT}|${g.code}`);
+        if (!v) missing.push(`QuickBooks account for GL ${g.code}`);
+        return v ?? '';
+      },
       get(kind: AccountMappingKind, k: string | null | undefined, missing: string[], label?: string): string {
         const v = k ? index.get(`${kind}|${k}`) : undefined;
         if (!v) missing.push(`${kind.replace(/_/g, ' ').toLowerCase()} for ${label ?? k ?? '(none)'}`);
@@ -319,33 +349,129 @@ export class AccountingService implements OnModuleInit {
     return v ? { value: v } : undefined;
   }
 
-  /** Bills from approved, matched supplier invoices (debit GRNI; input VAT unless VAT is part of stock cost). */
+  /** Foreign-currency fields of a QuickBooks transaction (none in the home currency). */
+  private currency(base: string, currency: string | null, rate: number): Record<string, unknown> {
+    return currency && currency !== base ? { CurrencyRef: { value: currency }, ExchangeRate: rate } : {};
+  }
+
+  /**
+   * Approved LPOs / LSOs as QuickBooks purchase orders (non-posting): stock
+   * lines against goods received not invoiced, non-stock lines against their
+   * GL account; class from the cost centre (else the store). An amended order
+   * is sent again as an update (its version is newer).
+   */
+  private async buildPurchaseOrders(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
+    const base = await this.settings.get('locale.currency', m);
+    const pos: { id: string; number: string; version: number; order_date: string; expected_delivery: string | null; currency: string; exchange_rate: string; supplier_id: string; supplier: string; store_code: string; dept_code: string | null; base_total: string; subtotal: string }[] = await m.query(
+      `SELECT po.id, po.number, po.version, to_char(po.order_date, 'YYYY-MM-DD') AS order_date, to_char(po.expected_delivery, 'YYYY-MM-DD') AS expected_delivery, po.currency, po.exchange_rate,
+              po.supplier_id, s.name AS supplier, st.code AS store_code, d.code AS dept_code, po.base_total, po.subtotal
+         FROM purchase_order po JOIN supplier s ON s.id = po.supplier_id JOIN store st ON st.id = po.store_id LEFT JOIN department d ON d.id = po.department_id
+        WHERE po.status IN ('APPROVED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'INVOICED', 'PAID', 'CLOSED')
+          AND ${ids ? `po.id = ANY($1::uuid[])` : `po.order_date BETWEEN $1::date AND $2::date`}`,
+      ids ? [ids] : [from, to],
+    );
+    const out: Built[] = [];
+    for (const po of pos) {
+      const missing: string[] = [];
+      const lines: { line_no: number; line_type: string; item: string; quantity: string; unit_price: string; line_subtotal: string; gl_account_id: string | null; tax_code: string }[] = await m.query(
+        `SELECT l.line_no, l.line_type, COALESCE(it.name, l.description) AS item, l.quantity, l.unit_price, l.line_subtotal, l.gl_account_id, tc.code AS tax_code
+           FROM purchase_order_line l LEFT JOIN item it ON it.id = l.item_id JOIN tax_category tc ON tc.id = l.tax_category_id
+          WHERE l.purchase_order_id = $1 ORDER BY l.line_no`,
+        [po.id],
+      );
+      // Stock for the store's class; non-stock for the cost centre's (else the store's).
+      const storeClass = mp.optional(AccountMappingKind.STORE_CLASS, po.store_code);
+      const deptClass = mp.optional(AccountMappingKind.DEPARTMENT_CLASS, po.dept_code) ?? storeClass;
+      const qLines = lines.map((l) => ({
+        LineNum: l.line_no,
+        DetailType: 'AccountBasedExpenseLineDetail',
+        Amount: Number(l.line_subtotal),
+        Description: `${l.item} × ${Number(l.quantity)} @ ${Number(l.unit_price)}`,
+        AccountBasedExpenseLineDetail: {
+          AccountRef: this.ref(l.line_type === 'STOCK' ? mp.get(AccountMappingKind.SYSTEM, 'GRNI', missing) : mp.gl(l.gl_account_id, missing, `${po.number} line ${l.line_no}`)),
+          ClassRef: this.ref(l.line_type === 'STOCK' ? storeClass : deptClass),
+          TaxCodeRef: this.ref(mp.get(AccountMappingKind.TAX_CODE, l.tax_code, missing, `tax category ${l.tax_code}`)),
+        },
+      }));
+      out.push({
+        docType: PostingDocType.PURCHASE_ORDER,
+        localDocType: 'PURCHASE_ORDER',
+        localDocId: po.id,
+        localDocNo: po.number,
+        localVersion: po.version,
+        txnDate: po.order_date,
+        amount: Number(po.subtotal),
+        // A purchase order posts nothing to the ledger.
+        entries: [],
+        payload: {
+          VendorRef: { $ref: { entity: ExternalEntity.VENDOR, localKey: po.supplier_id, name: po.supplier } } satisfies MasterRef,
+          TxnDate: po.order_date,
+          ...(po.expected_delivery ? { DueDate: po.expected_delivery } : {}),
+          DocNumber: po.number.slice(0, 21),
+          POStatus: 'Open',
+          PrivateNote: `${po.number} version ${po.version}`,
+          ...this.currency(base, po.currency, Number(po.exchange_rate)),
+          Line: qLines,
+        },
+        missing,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Bills from approved supplier invoices (matched, or exceptions approved
+   * through the approval matrix): stock lines debit goods received not
+   * invoiced, non-stock lines their GL account; input VAT unless VAT is part
+   * of stock cost; in the invoice currency; lines linked to the QuickBooks
+   * purchase order when it was sent.
+   */
   private async buildBills(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
     const costIncludesVat = await this.settings.get('purchasing.costIncludesVat', m);
-    const invs: { id: string; number: string; supplier_invoice_no: string; invoice_date: string; due_date: string | null; total: string; tax_total: string; subtotal: string; supplier_id: string; supplier: string; store_code: string; po: string }[] = await m.query(
+    const base = await this.settings.get('locale.currency', m);
+    const invs: { id: string; number: string; supplier_invoice_no: string; invoice_date: string; due_date: string | null; total: string; tax_total: string; subtotal: string; currency: string; exchange_rate: string; supplier_id: string; supplier: string; store_code: string; dept_code: string | null; po: string; po_id: string }[] = await m.query(
       `SELECT si.id, si.number, si.supplier_invoice_no, to_char(si.invoice_date, 'YYYY-MM-DD') AS invoice_date, to_char(si.due_date, 'YYYY-MM-DD') AS due_date, si.total, si.tax_total, si.subtotal,
-              si.supplier_id, s.name AS supplier, st.code AS store_code, po.number AS po
+              si.currency, si.exchange_rate, si.supplier_id, s.name AS supplier, st.code AS store_code, d.code AS dept_code, po.number AS po, po.id AS po_id
          FROM supplier_invoice si JOIN supplier s ON s.id = si.supplier_id JOIN purchase_order po ON po.id = si.purchase_order_id JOIN store st ON st.id = po.store_id
-        WHERE si.status IN ('APPROVED', 'PAID') AND si.match_status = 'MATCHED' AND ${ids ? `si.id = ANY($1::uuid[])` : `si.invoice_date BETWEEN $1::date AND $2::date`}`,
+         LEFT JOIN department d ON d.id = po.department_id
+        WHERE si.status IN ('APPROVED', 'SCHEDULED', 'PARTIALLY_PAID', 'PAID')
+          AND (si.match_status = 'MATCHED' OR EXISTS (SELECT 1 FROM approval_request ar WHERE ar.document_type = 'INV' AND ar.document_id = si.id AND ar.status = 'APPROVED'))
+          AND ${ids ? `si.id = ANY($1::uuid[])` : `si.invoice_date BETWEEN $1::date AND $2::date`}`,
       ids ? [ids] : [from, to],
     );
     const out: Built[] = [];
     for (const i of invs) {
       const missing: string[] = [];
-      const lines: { quantity: string; unit_price: string; tax_amount: string; line_total: string; item: string; tax_code: string }[] = await m.query(
-        `SELECT l.quantity, l.unit_price, l.tax_amount, l.line_total, it.name AS item, tc.code AS tax_code
-           FROM supplier_invoice_line l JOIN purchase_order_line pl ON pl.id = l.po_line_id JOIN item it ON it.id = pl.item_id JOIN tax_category tc ON tc.id = it.tax_category_id
-          WHERE l.invoice_id = $1`,
+      const lines: { quantity: string; unit_price: string; tax_amount: string; line_total: string; item: string; tax_code: string; line_type: string; gl_account_id: string | null; line_no: number }[] = await m.query(
+        `SELECT l.quantity, l.unit_price, l.tax_amount, l.line_total, COALESCE(it.name, pl.description) AS item, tc.code AS tax_code, pl.line_type, pl.gl_account_id, pl.line_no
+           FROM supplier_invoice_line l JOIN purchase_order_line pl ON pl.id = l.po_line_id LEFT JOIN item it ON it.id = pl.item_id JOIN tax_category tc ON tc.id = pl.tax_category_id
+          WHERE l.invoice_id = $1 ORDER BY pl.line_no`,
         [i.id],
       );
-      const grni = mp.get(AccountMappingKind.SYSTEM, 'GRNI', missing);
+      // The QuickBooks purchase order, when it was sent: bill lines are linked to its lines.
+      const poPosting = await m.findOneBy(AccountingPosting, { docType: PostingDocType.PURCHASE_ORDER, localDocId: i.po_id, status: PostingStatus.POSTED });
+      const poLines = (((poPosting?.response as Record<string, unknown> | null)?.PurchaseOrder as { Line?: { Id?: string; LineNum?: number }[] } | undefined)?.Line ?? []);
       const ap = mp.get(AccountMappingKind.SYSTEM, 'AP', missing);
+      const rate = Number(i.exchange_rate) || 1;
       const tax = Number(i.tax_total);
       const vatIn = tax && !costIncludesVat ? mp.get(AccountMappingKind.SYSTEM, 'VAT_INPUT', missing) : null;
-      const cls = mp.optional(AccountMappingKind.STORE_CLASS, i.store_code);
+      const storeClass = mp.optional(AccountMappingKind.STORE_CLASS, i.store_code);
+      const deptClass = mp.optional(AccountMappingKind.DEPARTMENT_CLASS, i.dept_code) ?? storeClass;
+      const byAccount = new Map<string, { account: string; amount: number; classId: string | null }>();
       const qLines = lines.map((l) => {
         const amount = costIncludesVat ? Number(l.line_total) : round2(Number(l.quantity) * Number(l.unit_price));
-        return { DetailType: 'AccountBasedExpenseLineDetail', Amount: amount, Description: `${l.item} × ${Number(l.quantity)}`, AccountBasedExpenseLineDetail: { AccountRef: this.ref(grni), ClassRef: this.ref(cls), TaxCodeRef: this.ref(mp.get(AccountMappingKind.TAX_CODE, l.tax_code, missing, `tax category ${l.tax_code}`)) } };
+        const account = l.line_type === 'STOCK' ? mp.get(AccountMappingKind.SYSTEM, 'GRNI', missing) : mp.gl(l.gl_account_id, missing, `${i.number} (${l.item})`);
+        const cls = l.line_type === 'STOCK' ? storeClass : deptClass;
+        const k = `${account}|${cls ?? ''}`;
+        byAccount.set(k, { account, classId: cls, amount: round2((byAccount.get(k)?.amount ?? 0) + amount * rate) });
+        const poLine = poPosting ? poLines.find((x) => x.LineNum === l.line_no) : undefined;
+        return {
+          DetailType: 'AccountBasedExpenseLineDetail',
+          Amount: amount,
+          Description: `${l.item} × ${Number(l.quantity)}`,
+          AccountBasedExpenseLineDetail: { AccountRef: this.ref(account), ClassRef: this.ref(cls), TaxCodeRef: this.ref(mp.get(AccountMappingKind.TAX_CODE, l.tax_code, missing, `tax category ${l.tax_code}`)) },
+          ...(poPosting ? { LinkedTxn: [{ TxnId: poPosting.externalId, TxnType: 'PurchaseOrder', ...(poLine ? { TxnLineId: poLine.Id ?? String(poLine.LineNum) } : {}) }] } : {}),
+        };
       });
       const lineSum = round2(qLines.reduce((s, l) => s + l.Amount, 0));
       const total = round2(lineSum + (vatIn ? tax : 0));
@@ -355,8 +481,8 @@ export class AccountingService implements OnModuleInit {
         localDocId: i.id,
         localDocNo: i.number,
         txnDate: i.invoice_date,
-        amount: total,
-        entries: [{ account: grni, amount: lineSum, classId: cls }, ...(vatIn ? [{ account: vatIn, amount: tax }] : []), { account: ap, amount: -total }],
+        amount: round2(total * rate),
+        entries: [...byAccount.values()].concat(vatIn ? [{ account: vatIn, amount: round2(tax * rate), classId: null }] : [], [{ account: ap, amount: -round2(total * rate), classId: null }]).map((e) => (e.classId ? e : { account: e.account, amount: e.amount })),
         payload: {
           VendorRef: { $ref: { entity: ExternalEntity.VENDOR, localKey: i.supplier_id, name: i.supplier } } satisfies MasterRef,
           TxnDate: i.invoice_date,
@@ -364,6 +490,7 @@ export class AccountingService implements OnModuleInit {
           DocNumber: i.supplier_invoice_no.slice(0, 21),
           PrivateNote: `${i.number} · ${i.po}`,
           GlobalTaxCalculation: vatIn ? 'TaxExcluded' : 'NotApplicable',
+          ...this.currency(base, i.currency, rate),
           Line: qLines,
           ...(vatIn ? { TxnTaxDetail: { TotalTax: tax } } : {}),
         },
@@ -373,13 +500,28 @@ export class AccountingService implements OnModuleInit {
     return out;
   }
 
+  /** Paid vouchers: the account money left from (by method; M-PESA from its paying account). */
+  private payingAccount(mp: Awaited<ReturnType<AccountingService['mapper']>>, method: string, missing: string[]): string {
+    const mapped = mp.optional(AccountMappingKind.PAYMENT_ACCOUNT, method);
+    if (mapped) return mapped;
+    return method.startsWith('MPESA') ? mp.get(AccountMappingKind.SYSTEM, 'MPESA_CLEARING', missing) : mp.get(AccountMappingKind.SYSTEM, 'BANK', missing);
+  }
+
+  /**
+   * Bill payments of paid vouchers: each bill settled in full for its share
+   * (net + WHT), the withholding tax applied as the voucher's WHT vendor
+   * credit, so QuickBooks receives the cash actually paid.
+   */
   private async buildBillPayments(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
+    const base = await this.settings.get('locale.currency', m);
     // A voucher pays one or more bills (its lines; older vouchers name one invoice).
-    const rows: { id: string; number: string; amount: string; paid_on: string; reference: string; method: string; supplier_id: string; supplier: string; lines: { invoice_id: string; amount: number }[] }[] = await m.query(
-      `SELECT pv.id, pv.number, pv.amount, to_char(pv.paid_on, 'YYYY-MM-DD') AS paid_on, pv.payment_reference AS reference, upper(pv.method) AS method, s.id AS supplier_id, s.name AS supplier,
-              COALESCE(json_agg(json_build_object('invoice_id', l.invoice_id, 'amount', l.net_amount)) FILTER (WHERE l.id IS NOT NULL),
+    const rows: { id: string; number: string; amount: string; wht_amount: string; currency: string; rate: string | null; paid_on: string; reference: string; method: string; supplier_id: string; supplier: string; lines: { invoice_id: string; amount: number }[] }[] = await m.query(
+      `SELECT pv.id, pv.number, pv.amount, pv.wht_amount, pv.currency, MAX(COALESCE(li.exchange_rate, si.exchange_rate)) AS rate, to_char(pv.paid_on, 'YYYY-MM-DD') AS paid_on, pv.payment_reference AS reference,
+              upper(pv.method) AS method, s.id AS supplier_id, s.name AS supplier,
+              COALESCE(json_agg(json_build_object('invoice_id', l.invoice_id, 'amount', l.amount)) FILTER (WHERE l.id IS NOT NULL),
                        json_build_array(json_build_object('invoice_id', pv.invoice_id, 'amount', pv.amount))) AS lines
          FROM payment_voucher pv LEFT JOIN supplier_invoice si ON si.id = pv.invoice_id LEFT JOIN payment_voucher_line l ON l.voucher_id = pv.id
+         LEFT JOIN supplier_invoice li ON li.id = l.invoice_id
          JOIN supplier s ON s.id = COALESCE(pv.supplier_id, si.supplier_id)
         WHERE pv.status = 'PAID' AND ${ids ? `pv.id = ANY($1::uuid[])` : `pv.paid_on BETWEEN $1::date AND $2::date`}
         GROUP BY pv.id, s.id, s.name`,
@@ -387,30 +529,221 @@ export class AccountingService implements OnModuleInit {
     );
     return rows.map((p) => {
       const missing: string[] = [];
-      const bank = mp.optional(AccountMappingKind.PAYMENT_ACCOUNT, p.method) ?? mp.get(AccountMappingKind.SYSTEM, 'BANK', missing);
+      const bank = this.payingAccount(mp, p.method, missing);
       const ap = mp.get(AccountMappingKind.SYSTEM, 'AP', missing);
-      const amount = Number(p.amount);
+      const net = Number(p.amount);
+      const wht = Number(p.wht_amount);
+      const rate = Number(p.rate ?? 1) || 1;
       return {
         docType: PostingDocType.BILL_PAYMENT,
         localDocType: 'PAYMENT_VOUCHER',
         localDocId: p.id,
         localDocNo: p.number,
         txnDate: p.paid_on,
-        amount,
-        entries: [{ account: ap, amount }, { account: bank, amount: -amount }],
+        amount: round2(net * rate),
+        entries: [{ account: ap, amount: round2(net * rate) }, { account: bank, amount: -round2(net * rate) }],
         payload: {
-          VendorRef: { $ref: { entity: ExternalEntity.VENDOR, localKey: p.supplier_id, name: p.supplier } },
+          VendorRef: { $ref: { entity: ExternalEntity.VENDOR, localKey: p.supplier_id, name: p.supplier } } satisfies MasterRef,
           PayType: 'Check',
           CheckPayment: { BankAccountRef: this.ref(bank) },
-          TotalAmt: amount,
+          TotalAmt: net,
           TxnDate: p.paid_on,
           DocNumber: p.number.slice(0, 21),
-          PrivateNote: `${p.method} ${p.reference}`,
-          Line: p.lines.map((l) => ({ Amount: Number(l.amount), LinkedTxn: [{ TxnId: { $posting: `BILL|${l.invoice_id}` }, TxnType: 'Bill' }] })),
+          PrivateNote: `${p.method} ${p.reference ?? ''}`.trim(),
+          ...this.currency(base, p.currency, rate),
+          Line: [
+            ...p.lines.map((l) => ({ Amount: Number(l.amount), LinkedTxn: [{ TxnId: { $posting: `BILL|${l.invoice_id}` }, TxnType: 'Bill' }] })),
+            ...(wht > 0 ? [{ Amount: wht, LinkedTxn: [{ TxnId: { $posting: `VENDOR_CREDIT|${p.id}` }, TxnType: 'VendorCredit' }] }] : []),
+          ],
         },
         missing,
       };
     });
+  }
+
+  /** Withholding tax deducted on paid vouchers: a vendor credit to WHT payable, applied by the bill payment. */
+  private async buildWhtCredits(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
+    const rows: { id: string; number: string; wht_amount: string; paid_on: string; supplier_id: string; supplier: string }[] = await m.query(
+      `SELECT pv.id, pv.number, pv.wht_amount, to_char(pv.paid_on, 'YYYY-MM-DD') AS paid_on, s.id AS supplier_id, s.name AS supplier
+         FROM payment_voucher pv JOIN supplier s ON s.id = pv.supplier_id
+        WHERE pv.status = 'PAID' AND pv.wht_amount > 0 AND ${ids ? `pv.id = ANY($1::uuid[])` : `pv.paid_on BETWEEN $1::date AND $2::date`}`,
+      ids ? [ids] : [from, to],
+    );
+    return rows.map((p) => {
+      const missing: string[] = [];
+      const wht = Number(p.wht_amount);
+      const whtAccount = mp.get(AccountMappingKind.SYSTEM, 'WHT_PAYABLE', missing);
+      const ap = mp.get(AccountMappingKind.SYSTEM, 'AP', missing);
+      return {
+        docType: PostingDocType.VENDOR_CREDIT,
+        localDocType: 'PAYMENT_VOUCHER_WHT',
+        localDocId: p.id,
+        localDocNo: `${p.number} WHT`,
+        txnDate: p.paid_on,
+        amount: wht,
+        entries: [{ account: ap, amount: wht }, { account: whtAccount, amount: -wht }],
+        payload: {
+          VendorRef: { $ref: { entity: ExternalEntity.VENDOR, localKey: p.supplier_id, name: p.supplier } } satisfies MasterRef,
+          TxnDate: p.paid_on,
+          DocNumber: `${p.number}-WHT`.slice(0, 21),
+          PrivateNote: `Withholding tax deducted on ${p.number}`,
+          Line: [{ DetailType: 'AccountBasedExpenseLineDetail', Amount: wht, Description: 'Withholding tax', AccountBasedExpenseLineDetail: { AccountRef: this.ref(whtAccount) } }],
+        },
+        missing,
+      };
+    });
+  }
+
+  /** M-PESA transaction charges on payouts (vouchers and petty cash): an expense from the M-PESA account. */
+  private async buildMpesaCharges(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
+    const tz = await this.zone(m);
+    const rows: { id: string; receipt_no: string; charges: string; date: string; doc_no: string }[] = await m.query(
+      `SELECT p.id, p.receipt_no, p.charges, to_char(p.completed_at AT TIME ZONE ${tz}, 'YYYY-MM-DD') AS date, COALESCE(v.number, pc.number) AS doc_no
+         FROM mpesa_payout p LEFT JOIN payment_voucher v ON v.id = p.voucher_id LEFT JOIN petty_cash_request pc ON pc.id = p.petty_cash_id
+        WHERE p.status IN ('SUCCESS', 'REVERSED') AND p.charges > 0
+          AND ${ids ? `p.id = ANY($1::uuid[])` : `(p.completed_at AT TIME ZONE ${tz})::date BETWEEN $1::date AND $2::date`}`,
+      ids ? [ids] : [from, to],
+    );
+    return rows.map((r) => {
+      const missing: string[] = [];
+      const clearing = mp.get(AccountMappingKind.SYSTEM, 'MPESA_CLEARING', missing);
+      const charges = mp.get(AccountMappingKind.SYSTEM, 'BANK_CHARGES', missing);
+      const amount = Number(r.charges);
+      return {
+        docType: PostingDocType.PURCHASE,
+        localDocType: 'MPESA_CHARGES',
+        localDocId: r.id,
+        localDocNo: `${r.doc_no} charges`,
+        txnDate: r.date,
+        amount,
+        entries: [{ account: charges, amount }, { account: clearing, amount: -amount }],
+        payload: {
+          AccountRef: this.ref(clearing),
+          PaymentType: 'Cash',
+          TxnDate: r.date,
+          DocNumber: (r.receipt_no ?? r.doc_no).slice(0, 21),
+          PrivateNote: `M-PESA charges on ${r.doc_no} (${r.receipt_no})`,
+          Line: [{ DetailType: 'AccountBasedExpenseLineDetail', Amount: amount, Description: 'M-PESA transaction charges', AccountBasedExpenseLineDetail: { AccountRef: this.ref(charges) } }],
+        },
+        missing,
+      };
+    });
+  }
+
+  /**
+   * Petty cash: payments as expenses (Purchase) from the float's cash account
+   * (or the M-PESA account); advances as journals to staff advances, cleared
+   * at retirement by the receipts (and the refund / overspend); replenishments
+   * as transfers from the bank into the float.
+   */
+  private async buildPettyCash(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
+    const tz = await this.zone(m);
+    const out: Built[] = [];
+    const reqs: { id: string; number: string; kind: string; status: string; method: string; amount: string; disbursed_on: string; retired_on: string | null; purpose: string; payee_name: string; supplier_id: string | null; supplier: string | null; gl_account_id: string | null; dept_code: string; float_gl: string | null; refund_amount: string | null }[] = await m.query(
+      `SELECT r.id, r.number, r.kind, r.status, r.method, r.amount, to_char(r.disbursed_on, 'YYYY-MM-DD') AS disbursed_on, to_char(r.retired_at AT TIME ZONE ${tz}, 'YYYY-MM-DD') AS retired_on,
+              r.purpose, r.payee_name, r.supplier_id, s.name AS supplier, r.gl_account_id, d.code AS dept_code, f.gl_account_id AS float_gl, r.refund_amount
+         FROM petty_cash_request r JOIN petty_cash_float f ON f.id = r.float_id JOIN department d ON d.id = r.department_id LEFT JOIN supplier s ON s.id = r.supplier_id
+        WHERE r.status IN ('DISBURSED', 'RETIREMENT_SUBMITTED', 'RETIRED') AND r.disbursed_on IS NOT NULL
+          AND ${ids ? `r.id = ANY($1::uuid[])` : `(r.disbursed_on BETWEEN $1::date AND $2::date OR (r.retired_at AT TIME ZONE ${tz})::date BETWEEN $1::date AND $2::date)`}`,
+      ids ? [ids] : [from, to],
+    );
+    const inRange = (d: string | null) => !!d && (ids ? true : d >= from && d <= to);
+    for (const r of reqs) {
+      const missing: string[] = [];
+      const cls = mp.optional(AccountMappingKind.DEPARTMENT_CLASS, r.dept_code);
+      const cash = r.method === 'CASH' ? mp.gl(r.float_gl, missing, `the float of ${r.number}`) : this.payingAccount(mp, r.method, missing);
+      const amount = Number(r.amount);
+      const ref = { localDocNo: r.number, txnDate: r.disbursed_on };
+      if (r.kind === 'PAYMENT' && inRange(r.disbursed_on)) {
+        const expense = mp.gl(r.gl_account_id, missing, r.number);
+        out.push({
+          docType: PostingDocType.PURCHASE,
+          localDocType: 'PETTY_CASH',
+          localDocId: r.id,
+          ...ref,
+          amount,
+          entries: [{ account: expense, amount, classId: cls }, { account: cash, amount: -amount }],
+          payload: {
+            AccountRef: this.ref(cash),
+            PaymentType: 'Cash',
+            TxnDate: r.disbursed_on,
+            DocNumber: r.number.slice(0, 21),
+            PrivateNote: `${r.payee_name}: ${r.purpose}`.slice(0, 4000),
+            ...(r.supplier_id ? { EntityRef: { $ref: { entity: ExternalEntity.VENDOR, localKey: r.supplier_id, name: r.supplier! } } satisfies MasterRef } : {}),
+            Line: [{ DetailType: 'AccountBasedExpenseLineDetail', Amount: amount, Description: r.purpose.slice(0, 4000), AccountBasedExpenseLineDetail: { AccountRef: this.ref(expense), ClassRef: this.ref(cls) } }],
+          },
+          missing,
+        });
+        continue;
+      }
+      if (r.kind !== 'ADVANCE') continue;
+      const advances = mp.get(AccountMappingKind.SYSTEM, 'STAFF_ADVANCES', missing);
+      const jl = (type: 'Debit' | 'Credit', account: string, amt: number, description: string, classId: string | null = null) => ({
+        DetailType: 'JournalEntryLineDetail',
+        Amount: amt,
+        Description: description,
+        JournalEntryLineDetail: { PostingType: type, AccountRef: this.ref(account), ...(classId ? { ClassRef: this.ref(classId) } : {}) },
+      });
+      if (inRange(r.disbursed_on)) {
+        out.push({
+          docType: PostingDocType.JOURNAL,
+          localDocType: 'PETTY_CASH_ADVANCE',
+          localDocId: r.id,
+          ...ref,
+          amount,
+          entries: [{ account: advances, amount }, { account: cash, amount: -amount }],
+          payload: { TxnDate: r.disbursed_on, DocNumber: r.number.slice(0, 21), PrivateNote: `Advance to ${r.payee_name}: ${r.purpose}`.slice(0, 4000), Line: [jl('Debit', advances, amount, `Advance ${r.number}`), jl('Credit', cash, amount, `Advance ${r.number}`)] },
+          missing: [...missing],
+        });
+      }
+      if (r.status === 'RETIRED' && inRange(r.retired_on)) {
+        const rm: string[] = [...missing];
+        const receipts: { description: string; amount: string; gl_account_id: string | null }[] = await m.query(`SELECT description, amount, gl_account_id FROM petty_cash_retirement_line WHERE request_id = $1 ORDER BY created_at`, [r.id]);
+        const refund = Number(r.refund_amount ?? 0);
+        const lines = receipts.map((x) => ({ account: mp.gl(x.gl_account_id ?? r.gl_account_id, rm, `${r.number} receipt "${x.description}"`), amount: Number(x.amount), description: x.description }));
+        const qLines = [
+          ...lines.map((l) => jl('Debit', l.account, l.amount, l.description, cls)),
+          ...(refund > 0 ? [jl('Debit', cash, refund, 'Unspent advance returned')] : []),
+          ...(refund < 0 ? [jl('Credit', cash, -refund, 'Overspend paid out')] : []),
+          jl('Credit', advances, amount, `Advance ${r.number} retired`),
+        ];
+        out.push({
+          docType: PostingDocType.JOURNAL,
+          localDocType: 'PETTY_CASH_RETIREMENT',
+          localDocId: `R:${r.id}`,
+          localDocNo: `${r.number} retirement`,
+          txnDate: r.retired_on!,
+          amount,
+          entries: [...lines.map((l) => ({ account: l.account, amount: l.amount, classId: cls })), ...(refund ? [{ account: cash, amount: refund }] : []), { account: advances, amount: -amount }],
+          payload: { TxnDate: r.retired_on, DocNumber: `${r.number}-R`.slice(0, 21), PrivateNote: `Retirement of advance ${r.number}`, Line: qLines },
+          missing: rm,
+        });
+      }
+    }
+    const reps: { id: string; number: string; amount: string; received_on: string; reference: string | null; float_gl: string | null; float: string }[] = await m.query(
+      `SELECT rp.id, rp.number, rp.amount, to_char(rp.received_at AT TIME ZONE ${tz}, 'YYYY-MM-DD') AS received_on, rp.reference, f.gl_account_id AS float_gl, f.name AS float
+         FROM petty_cash_replenishment rp JOIN petty_cash_float f ON f.id = rp.float_id
+        WHERE rp.status = 'RECEIVED' AND ${ids ? `rp.id = ANY($1::uuid[])` : `(rp.received_at AT TIME ZONE ${tz})::date BETWEEN $1::date AND $2::date`}`,
+      ids ? [ids] : [from, to],
+    );
+    for (const rp of reps) {
+      const missing: string[] = [];
+      const bank = mp.get(AccountMappingKind.SYSTEM, 'BANK', missing);
+      const cash = mp.gl(rp.float_gl, missing, rp.float);
+      const amount = Number(rp.amount);
+      out.push({
+        docType: PostingDocType.TRANSFER,
+        localDocType: 'PETTY_CASH_REPLENISHMENT',
+        localDocId: rp.id,
+        localDocNo: rp.number,
+        txnDate: rp.received_on,
+        amount,
+        entries: [{ account: cash, amount }, { account: bank, amount: -amount }],
+        payload: { FromAccountRef: this.ref(bank), ToAccountRef: this.ref(cash), Amount: amount, TxnDate: rp.received_on, PrivateNote: `${rp.number} top-up of ${rp.float}${rp.reference ? ` (${rp.reference})` : ''}` },
+        missing,
+      });
+    }
+    return out;
   }
 
   private async buildVendorCredits(m: EntityManager, mp: Awaited<ReturnType<AccountingService['mapper']>>, from: string, to: string, ids?: string[]): Promise<Built[]> {
@@ -722,7 +1055,17 @@ export class AccountingService implements OnModuleInit {
     const lo = c?.journalsFrom && c.journalsFrom > from ? c.journalsFrom : from;
     const want = (k: string) => !kinds.length || kinds.includes(k);
     const out: Built[] = [];
-    if (want('PURCHASES')) out.push(...(await this.buildBills(m, mp, lo, to)), ...(await this.buildVendorCredits(m, mp, lo, to)), ...(await this.buildBillPayments(m, mp, lo, to)));
+    if (want('PURCHASES')) {
+      out.push(
+        ...(await this.buildPurchaseOrders(m, mp, lo, to)),
+        ...(await this.buildBills(m, mp, lo, to)),
+        ...(await this.buildVendorCredits(m, mp, lo, to)),
+        ...(await this.buildWhtCredits(m, mp, lo, to)),
+        ...(await this.buildBillPayments(m, mp, lo, to)),
+        ...(await this.buildMpesaCharges(m, mp, lo, to)),
+      );
+    }
+    if (want('PETTY_CASH')) out.push(...(await this.buildPettyCash(m, mp, lo, to)));
     if (want('SALES')) out.push(...(await this.buildSales(m, mp, lo, to)), ...(await this.buildReceipts(m, mp, lo, to)));
     if (want('INVENTORY')) for (const p of await this.periods(m, from, to, c?.journalsFrom ?? null)) {
       const j = await this.buildJournal(m, mp, p);
@@ -744,6 +1087,17 @@ export class AccountingService implements OnModuleInit {
         return pick(await this.buildBillPayments(m, mp, ...far, ids));
       case 'SUPPLIER_RETURN':
         return pick(await this.buildVendorCredits(m, mp, ...far, ids));
+      case 'PURCHASE_ORDER':
+        return pick(await this.buildPurchaseOrders(m, mp, ...far, ids));
+      case 'PAYMENT_VOUCHER_WHT':
+        return pick(await this.buildWhtCredits(m, mp, ...far, ids));
+      case 'MPESA_CHARGES':
+        return pick(await this.buildMpesaCharges(m, mp, ...far, ids));
+      case 'PETTY_CASH':
+      case 'PETTY_CASH_ADVANCE':
+      case 'PETTY_CASH_RETIREMENT':
+      case 'PETTY_CASH_REPLENISHMENT':
+        return pick(await this.buildPettyCash(m, mp, ...far, [p.localDocId.replace(/^R:/, '')]));
       case 'SALES_INVOICE':
       case 'CREDIT_NOTE':
         return pick(await this.buildSales(m, mp, ...far, ids));
@@ -777,16 +1131,18 @@ export class AccountingService implements OnModuleInit {
    * (mappings, closed period). READY documents are posted with the batch;
    * BLOCKED ones say what to fix. Documents already posted are left out.
    */
-  async preview(dto: PreviewDto, actor: SessionUser) {
+  async preview(dto: PreviewDto, actor: SessionUser | null) {
     const c = await this.conn();
     if (!c) throw new ConflictException('Configure QuickBooks first');
     if (dto.to < dto.from) throw new BadRequestException('The period ends before it starts');
     const batchId = await this.ds.transaction(async (m) => {
       const built = await this.build(m, dto.from, dto.to, dto.kinds ?? []);
-      const batch = await m.save(m.create(AccountingBatch, { number: await this.numbering.next(DocumentType.ACCOUNTING_BATCH, { manager: m }), fromDate: dto.from, toDate: dto.to, kinds: (dto.kinds ?? ['ALL']).join(','), status: 'PREVIEW', createdBy: actor.id }));
+      const batch = await m.save(m.create(AccountingBatch, { number: await this.numbering.next(DocumentType.ACCOUNTING_BATCH, { manager: m }), fromDate: dto.from, toDate: dto.to, kinds: (dto.kinds ?? ['ALL']).join(','), status: 'PREVIEW', createdBy: actor?.id ?? null }));
       for (const b of built) {
         const existing = await m.findOneBy(AccountingPosting, { docType: b.docType, localDocId: b.localDocId });
-        if (existing && (existing.status === PostingStatus.POSTED || existing.status === PostingStatus.PENDING)) continue;
+        // Posted and unchanged, or already queued: nothing to do. A newer version of a posted document is sent as an update.
+        const amended = existing?.status === PostingStatus.POSTED && b.localVersion !== undefined && b.localVersion > (existing.localVersion ?? 0);
+        if (existing && (existing.status === PostingStatus.POSTED || existing.status === PostingStatus.PENDING) && !amended) continue;
         const reason = this.blockedReason(b, c.closingDate);
         const row = existing ?? m.create(AccountingPosting, { docType: b.docType, localDocId: b.localDocId });
         Object.assign(row, {
@@ -796,10 +1152,12 @@ export class AccountingService implements OnModuleInit {
           amount: b.amount,
           entries: b.entries,
           payload: b.payload,
+          localVersion: b.localVersion ?? null,
           status: reason ? PostingStatus.BLOCKED : PostingStatus.READY,
           error: reason,
           batchId: batch.id,
           nextAttemptAt: new Date(),
+          ...(amended ? { attempts: 0 } : {}),
         });
         await m.save(row);
       }
@@ -825,7 +1183,7 @@ export class AccountingService implements OnModuleInit {
   }
 
   /** Posts the batch's READY documents in dependency order (bills before their payments, invoices before payments). */
-  async post(id: string, actor: SessionUser) {
+  async post(id: string, actor: SessionUser | null) {
     const b = await this.ds.getRepository(AccountingBatch).findOneBy({ id });
     if (!b) throw new NotFoundException('Batch not found');
     const rows = await this.ds.getRepository(AccountingPosting).find({ where: { batchId: id, status: In([PostingStatus.READY, PostingStatus.PENDING]) } });
@@ -833,7 +1191,7 @@ export class AccountingService implements OnModuleInit {
     await this.ds.getRepository(AccountingBatch).update(id, { status: 'POSTING' });
     const totals = { posted: 0, failed: 0, retry: 0 };
     for (const r of rows) {
-      const res = await this.send(r.id, actor.id);
+      const res = await this.send(r.id, actor?.id ?? null);
       if (res === 'POSTED') totals.posted++;
       else if (res === 'FAILED') totals.failed++;
       else totals.retry++;
@@ -908,11 +1266,13 @@ export class AccountingService implements OnModuleInit {
     const c = await this.conn();
     try {
       if (c?.closingDate && p.txnDate <= c.closingDate) throw new QboError(`Period closed: the books are closed up to ${c.closingDate}`);
-      const body = (await this.resolve(p.payload)) as Record<string, unknown>;
-      // The posting id is QuickBooks' requestid: a retried request is not duplicated there.
-      const res = await this.api('POST', ENTITY_PATH[p.docType], body, p.id);
-      const entity = Object.values(res).find((v) => v && typeof v === 'object' && 'Id' in (v as object)) as { Id: string } | undefined;
-      await repo.update(id, { status: PostingStatus.POSTED, externalId: entity?.Id ?? null, response: res as never, error: null, postedAt: new Date(), postedBy: actorId });
+      let body = (await this.resolve(p.payload)) as Record<string, unknown>;
+      // Already in QuickBooks (an amended purchase order): a full update with its Id and SyncToken.
+      if (p.externalId) body = { ...body, Id: p.externalId, SyncToken: p.syncToken ?? '0', sparse: false };
+      // The posting id (and version) is QuickBooks' requestid: a retried request is not duplicated there.
+      const res = await this.api('POST', ENTITY_PATH[p.docType], body, p.externalId ? `${p.id}-v${p.localVersion ?? 0}` : p.id);
+      const entity = Object.values(res).find((v) => v && typeof v === 'object' && 'Id' in (v as object)) as { Id: string; SyncToken?: string } | undefined;
+      await repo.update(id, { status: PostingStatus.POSTED, externalId: entity?.Id ?? p.externalId, syncToken: entity?.SyncToken ?? null, response: res as never, error: null, postedAt: new Date(), postedBy: actorId });
       return 'POSTED';
     } catch (e) {
       const err = e as QboError;
@@ -976,6 +1336,78 @@ export class AccountingService implements OnModuleInit {
     const p = await this.ds.getRepository(AccountingPosting).findOneBy({ id });
     if (!p) throw new NotFoundException('Posting not found');
     return p;
+  }
+
+  // ------------------------------------------------------------------ automatic sync and status
+
+  /**
+   * Job accounting.autoSync: what is not yet in QuickBooks (purchases,
+   * payments, petty cash) since accounting.autoSyncFrom (default 30 days
+   * back) is queued and posted; blocked ones wait for their mapping, failed
+   * ones for a retry from the error log. Amended purchase orders are updated.
+   */
+  async autoSync() {
+    if (!(await this.settings.get('accounting.autoSync'))) return { skipped: 'accounting.autoSync is off' };
+    const c = await this.conn();
+    if (!c?.realmId) return { skipped: 'QuickBooks is not connected' };
+    const to = await this.settings.today();
+    const back = new Date(`${to}T12:00:00Z`);
+    back.setUTCDate(back.getUTCDate() - 30);
+    const from = (await this.settings.get('accounting.autoSyncFrom')) || back.toISOString().slice(0, 10);
+    const preview = await this.preview({ from, to, kinds: ['PURCHASES', 'PETTY_CASH'] }, null);
+    const posted = await this.post(preview.id, null);
+    return { batch: posted.number, ...posted.totals, blocked: posted.items.filter((i) => i.status === PostingStatus.BLOCKED).length };
+  }
+
+  /**
+   * Sync status of local documents: SYNCED (everything posted), FAILED (failed
+   * or blocked: see the error), PENDING (queued / retrying), NOT_QUEUED.
+   */
+  async syncStatus(localDocIds: string[]) {
+    const rows: { local_doc_id: string; doc_type: string; status: PostingStatus; external_id: string | null; error: string | null; posted_at: Date | null }[] = await this.ds.query(
+      `SELECT local_doc_id, doc_type, status, external_id, error, posted_at FROM accounting_posting WHERE local_doc_id = ANY($1::text[]) OR local_doc_id = ANY($2::text[])`,
+      [localDocIds, localDocIds.map((x) => `R:${x}`)],
+    );
+    return localDocIds.map((id) => {
+      const mine = rows.filter((r) => r.local_doc_id === id || r.local_doc_id === `R:${id}`);
+      const status = !mine.length
+        ? 'NOT_QUEUED'
+        : mine.some((r) => r.status === PostingStatus.FAILED || r.status === PostingStatus.BLOCKED)
+          ? 'FAILED'
+          : mine.every((r) => r.status === PostingStatus.POSTED)
+            ? 'SYNCED'
+            : 'PENDING';
+      return { localDocId: id, status, postings: mine.map((r) => ({ docType: r.doc_type, status: r.status, externalId: r.external_id, error: r.error, postedAt: r.posted_at })) };
+    });
+  }
+
+  /**
+   * Vendors ↔ suppliers. PULL links QuickBooks vendors to suppliers by KRA PIN
+   * (tax id) or name; PUSH creates the active suppliers QuickBooks does not
+   * have yet (found by name first).
+   */
+  async syncVendors(direction: 'PULL' | 'PUSH') {
+    const suppliers: { id: string; name: string; kra_pin: string | null }[] = await this.ds.query(`SELECT id, name, kra_pin FROM supplier WHERE status = 'ACTIVE' ORDER BY name`);
+    const repo = this.ds.getRepository(ExternalRef);
+    const linked = new Set((await repo.findBy({ entity: ExternalEntity.VENDOR })).map((r) => r.localKey));
+    let done = 0;
+    if (direction === 'PULL') {
+      const vendors = await this.query<{ Id: string; DisplayName: string; TaxIdentifier?: string; Active?: boolean }>('Vendor');
+      for (const s of suppliers) {
+        if (linked.has(s.id)) continue;
+        const v = vendors.find((x) => (s.kra_pin && x.TaxIdentifier === s.kra_pin) || x.DisplayName.trim().toLowerCase() === s.name.trim().toLowerCase());
+        if (!v) continue;
+        await repo.upsert({ entity: ExternalEntity.VENDOR, localKey: s.id, externalId: String(v.Id), displayName: v.DisplayName, syncedAt: new Date() }, ['entity', 'localKey']);
+        done++;
+      }
+      return { direction, linked: done, unmatched: suppliers.length - linked.size - done };
+    }
+    for (const s of suppliers) {
+      if (linked.has(s.id)) continue;
+      await this.master({ entity: ExternalEntity.VENDOR, localKey: s.id, name: s.name });
+      done++;
+    }
+    return { direction, pushed: done };
   }
 
   externalRefs() {

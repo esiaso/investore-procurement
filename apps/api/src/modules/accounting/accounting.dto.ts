@@ -27,10 +27,10 @@ export class MappingDto {
 export class PreviewDto {
   @ApiProperty() @IsDateString() from: string;
   @ApiProperty() @IsDateString() to: string;
-  @ApiPropertyOptional({ isArray: true, enum: ['PURCHASES', 'SALES', 'INVENTORY'], description: 'All when left out' })
+  @ApiPropertyOptional({ isArray: true, enum: ['PURCHASES', 'SALES', 'INVENTORY', 'PETTY_CASH'], description: 'All when left out. PURCHASES: purchase orders, bills, vendor credits, bill payments (with WHT) and M-PESA charges' })
   @IsOptional()
   @IsArray()
-  @IsIn(['PURCHASES', 'SALES', 'INVENTORY'], { each: true })
+  @IsIn(['PURCHASES', 'SALES', 'INVENTORY', 'PETTY_CASH'], { each: true })
   kinds?: string[];
 }
 
@@ -59,4 +59,12 @@ export class SettlementDto {
   @ApiProperty({ description: 'Remittance / EFT reference' }) @IsString() @MinLength(2) @MaxLength(100) reference: string;
   @ApiProperty({ type: [AllocationDto] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => AllocationDto) allocations: AllocationDto[];
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) notes?: string;
+}
+
+export class SyncStatusQueryDto {
+  @ApiProperty({ description: 'Comma-separated local document ids' }) @IsString() @MaxLength(4000) ids: string;
+}
+
+export class VendorSyncDto {
+  @ApiProperty({ enum: ['PULL', 'PUSH'] }) @IsIn(['PULL', 'PUSH']) direction: 'PULL' | 'PUSH';
 }
