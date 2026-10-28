@@ -23,7 +23,9 @@ COPY packages packages
 COPY apps apps
 RUN pnpm --filter @sil/shared build \
  && pnpm --filter @sil/api build \
- && pnpm --filter @sil/web exec vite build
+ && pnpm --filter @sil/web exec vite build \
+ # The runtime runs as 'node': make everything readable whatever the host checkout's permissions (umask 077).
+ && chmod -R a+rX /repo
 
 # ---- test runner (docker compose --profile test run --rm test)
 FROM build AS test
