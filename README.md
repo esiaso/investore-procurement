@@ -127,6 +127,10 @@ Other scripts:
 
 ## Environment variables
 
+For production (TLS, secrets, callbacks, jobs, backups, monitoring, the first
+administrator) follow **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**: with
+`NODE_ENV=production` the API refuses to start with unsafe settings.
+
 | Variable | Default (dev) | Notes |
 |---|---|---|
 | `DATABASE_URL` | `postgres://silp:…@localhost:5432/silp` | |
@@ -150,6 +154,10 @@ Other scripts:
 | `MOCK_ETIMS_PORT` | `8088` | port of the `mock-etims` service |
 | `CHROMIUM_PATH` | – | Chromium for PDFs; default is Playwright's bundled browser (installed in the Docker image) |
 | `DB_LOGGING` | `false` | log SQL |
+| `AUTH_RATE_LIMIT_PER_MINUTE` | `60` | per IP on login, 2FA and approval links (Redis, shared by every API process) |
+| `CALLBACK_RATE_LIMIT_PER_MINUTE` | `120` | per IP on `/api/v1/callbacks/…` (Redis) |
+| `API_DOCS` | on outside production | serve `/api/v1/docs` and `/api/v1/openapi.json` |
+| `MPESA_PAYOUT_*` | `MODE=mock` (`off` in production) | M-PESA payouts; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 | `TEST_DATABASE_URL`, `TEST_REDIS_URL` | `…/silp_test`, `redis://…/1` | used by the API tests |
 
 Business configuration is in the database, editable through the API (and seeded with
@@ -309,23 +317,49 @@ in fridges.
 ### Load test
 
 `pnpm --filter @sil/api load-test` builds a separate database (`LOAD_DATABASE_URL`,
-default `…/silp_load`) holding the sample hospital, ~32k extra balance rows and
-**1,000,001 ledger rows**, then times the endpoints through the full HTTP stack. Results
-on a developer laptop (Docker Desktop on Windows), median of 3:
+default `…/silp_load`) and times every stock, list, dashboard and report endpoint
+(**every report, every grouping, over three years**: 102 requests) through the full HTTP
+stack. It exits non-zero if any is not answered in under 2 s; the database cancels any
+statement over 30 s.
+
+The database starts as a copy of the integration-test database (`LOAD_TEMPLATE_DATABASE`,
+default `silp_test`: run `pnpm test:api` first), so it holds every kind of document the
+tests create, then adds ~43k balance rows and **1,000,000 ledger rows**, and copies every
+procurement, payment, petty-cash, approval and audit row `LOAD_DOC_COPIES` times (default
+3,000; the audit log 200) spread over three years (`scripts/load-documents.ts`). Result:
+51k purchase orders, 60k order lines, 69k supplier invoices, 42k payment vouchers, 39k
+M-PESA payouts, 45k petty-cash requests, 45k staff requisitions, 309k approval requests,
+690k approval actions, 207k document links, 162k QuickBooks postings, 1.3M audit entries.
+`-- --reuse` measures an existing load database (migrating it first).
+
+Results (October 2026, MacBook, PostgreSQL 16 in Docker), median of 3 in ms; all 102
+under 2 s:
 
 | Query | ms |
 |---|---:|
-| Stock on hand, all stores, batch level (page 1) | 89 |
-| Stock on hand, all stores, item level (page 1) | 56 |
-| Stock on hand, main store, page 20 | 53 |
-| Stock on hand, search "amox" | 122 |
-| Stock on hand, by generic | 37 |
-| Stock on hand, by category, item level | 59 |
-| Stock on hand, expiring within 90 days | 49 |
-| Bin card, busiest item (page 1 / last page) | 19 / 25 |
-| Valuation by store, today | 480 |
-| Valuation by category, 1 year ago | 332 |
-| Reconciliation (full ledger scan) | 1051 |
+| Stock on hand, all stores, batch / item level (page 1) | 38 / 39 |
+| Stock on hand, main store, page 20 | 25 |
+| Stock on hand, search "amox" | 81 |
+| Bin card, busiest item (page 1 / last page) | 15 / 21 |
+| Valuation by store today / by category a year ago | 159 / 125 |
+| Reconciliation (full ledger scan) | 448 |
+| Dashboard | 1305 |
+| Purchase orders, invoices, GRNs, vouchers, petty cash, requisitions (page 1) | 7–57 |
+| Approvals inbox | 77 |
+| Payables | 435 |
+| Reports: control exceptions / pending purchase requests / cycle time | 1123 / 874 / 879 |
+| Reports: stock status (by item, batch, store, category) / dead stock | 762–938 / 1128 |
+| Reports: approval audit trail / budget vs actual / M-PESA log | 666 / 407 / 242 |
+| Every other report and grouping | under 400 |
+
+The go-live pass found and fixed (migration `1762800000000-GoLiveIndexes`): foreign keys
+documents are looked up by had no index (order lines by order, invoices / GRNs /
+certificates by order, orders by RFQ and requisition, approvals by document, …), which
+made the order register, RFQ awards and cycle-time reports scan every line once per
+document (over 30 s); the GRN and transfer registers looked up stock movements without
+the document type; and the split-request check in *Payment control exceptions* is now one
+window-function pass instead of a lookup per document (identical results, 25 ms instead of
+24 s on the petty-cash part).
 
 ## Procurement (slice 3)
 
@@ -2228,3 +2262,37 @@ Report totals are checked against independent queries in `test/non-stock-phase7.
   slim it with `pnpm deploy` before production.
 * Money and quantities are `NUMERIC(18,4)` in the database and JavaScript numbers in the
   API. Use a decimal library when stock valuation arrives.
+
+## Go-live hardening
+
+Production installation, TLS, callbacks, background jobs, backups and monitoring:
+**[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**. In short:
+
+* **Security review**:
+  * Wrong 2FA codes count towards the account lockout, and a pending 2FA sign-in is
+    dropped after 5 wrong codes.
+  * Login, 2FA and e-mailed approval links are rate-limited per IP
+    (`AUTH_RATE_LIMIT_PER_MINUTE`).
+  * The callback and sign-in limits are counted in **Redis**, so they hold across API
+    processes.
+  * Download file names are sanitised.
+  * With `NODE_ENV=production` the API refuses insecure settings: plain-HTTP origins,
+    insecure cookies, the M-PESA simulator, a weak or non-HTTPS M-PESA callback. M-PESA
+    payouts default to `off`, and the API docs are off.
+  * `test/rbac-coverage.spec.ts` fails on any new route without a permission (the few
+    public and signed-in-only routes are listed and reviewed).
+  * Vulnerable dependencies were upgraded; the accepted remainder is listed in the
+    deployment guide.
+* **First administrator**: `node dist/database/seeds/create-admin.js <username> "<name>"`
+  creates a system administrator with a one-time password (the production reference
+  seed has no users).
+* **Backups** (`ops/backup/`):
+  * `backup.sh` dumps the database and the attachment store (S3 / MinIO or local) with
+    checksums, row counts and optional encryption.
+  * `restore.sh` puts a backup back.
+  * `verify-restore.sh` is the restore drill: it restores into a scratch database and
+    checks every table and attachment.
+* **Monitoring**: `ops/monitoring/check.sh` checks the API, the worker and jobs, the
+  mail outbox, M-PESA results, QuickBooks failures, the eTIMS and HMIS queues and
+  backup age, and exits with Nagios-style codes.
+* **Performance**: see *Load test* above.
