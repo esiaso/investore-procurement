@@ -5,7 +5,7 @@ FROM node:22-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN corepack enable
 # Headless Chromium (+ system libraries) for PO PDFs. Keep the version in step with apps/api's playwright.
-RUN npx -y playwright@1.49.1 install --with-deps chromium && rm -rf /root/.npm /var/lib/apt/lists/*
+RUN npx -y playwright@1.64.1 install --with-deps chromium && rm -rf /root/.npm /var/lib/apt/lists/*
 WORKDIR /repo
 
 # ---- dependencies (cached unless a manifest or the lockfile changes)
