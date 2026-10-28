@@ -91,6 +91,7 @@ const supplierPerformance: ReportDef = {
     col('onTime', 'On time %', 'percent'),
     col('rejected', 'Rejected %', 'percent'),
     col('returns', 'Returns', 'number'),
+    col('priceVariance', 'Price variance %', 'percent'),
   ],
   async run(ctx) {
     const q = new Sql();
@@ -102,7 +103,11 @@ const supplierPerformance: ReportDef = {
               (SELECT COUNT(*)::int FROM purchase_order po WHERE po.supplier_id = s.id AND po.status::text IN ${LIVE} AND po.order_date BETWEEN ${f}::date AND ${t}::date AND ${store('po.store_id')}) AS orders,
               (SELECT ROUND(COALESCE(SUM(po.total), 0), 2)::float FROM purchase_order po WHERE po.supplier_id = s.id AND po.status::text IN ${LIVE} AND po.order_date BETWEEN ${f}::date AND ${t}::date AND ${store('po.store_id')}) AS "orderValue",
               g.deliveries, g.lead_days AS "leadDays", g.on_time AS "onTime", g.rejected,
-              (SELECT COUNT(*)::int FROM return_to_supplier r WHERE r.supplier_id = s.id AND r.status::text <> 'CANCELLED' AND r.return_date BETWEEN ${f}::date AND ${t}::date AND ${store('r.store_id')}) AS returns
+              (SELECT COUNT(*)::int FROM return_to_supplier r WHERE r.supplier_id = s.id AND r.status::text <> 'CANCELLED' AND r.return_date BETWEEN ${f}::date AND ${t}::date AND ${store('r.store_id')}) AS returns,
+              -- Invoiced against ordered price, weighted by value (positive: invoiced above the order).
+              (SELECT ROUND(100 * SUM((il.unit_price - pl.unit_price) * il.quantity) / NULLIF(SUM(pl.unit_price * il.quantity), 0), 2)::float
+                 FROM supplier_invoice_line il JOIN supplier_invoice i ON i.id = il.invoice_id JOIN purchase_order_line pl ON pl.id = il.po_line_id
+                WHERE i.supplier_id = s.id AND i.status::text NOT IN ('CANCELLED', 'REJECTED') AND i.invoice_date BETWEEN ${f}::date AND ${t}::date) AS "priceVariance"
          FROM supplier s
          CROSS JOIN LATERAL (
            SELECT COUNT(*)::int AS deliveries, ROUND(AVG(gr.received_date - po.order_date)::numeric, 1)::float AS lead_days,

@@ -114,16 +114,37 @@ export class DashboardService {
       add({ key: 'open-pos', section: 'Procurement', label: 'Outstanding orders', value: open.n, format: 'count', link: '/reports?key=outstanding-pos' });
       add({ key: 'late-pos', section: 'Procurement', label: 'Orders past due date', value: open.late, format: 'count', link: '/reports?key=outstanding-pos', tone: open.late ? 'error' : 'success' });
       add({ key: 'inspection', section: 'Procurement', label: 'Deliveries awaiting inspection', value: await one(`SELECT COUNT(*) AS v FROM goods_received_note WHERE status = 'INSPECTION' AND ${sc('store_id')}`), format: 'count', link: '/grns' });
+      // Purchases this month against last month (base currency, all order kinds).
+      const lastMonth = new Date(`${month}T12:00:00Z`);
+      lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+      const prev = lastMonth.toISOString().slice(0, 10);
+      const spent = (fromDate: string, toDate: string) =>
+        one(
+          `SELECT COALESCE(SUM(COALESCE(NULLIF(base_total, 0), total)), 0)::float AS v FROM purchase_order
+            WHERE status IN ('APPROVED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'INVOICED', 'PAID', 'CLOSED') AND order_date >= $2::date AND order_date < $3::date AND ${sc('store_id')}`,
+          [fromDate, toDate],
+        );
+      const thisMonth = await spent(month, '9999-12-31');
+      const before = await spent(prev, month);
       add({
         key: 'spend',
         section: 'Procurement',
         label: 'Ordered this month',
-        value: await one(`SELECT COALESCE(SUM(total), 0)::float AS v FROM purchase_order WHERE status IN ('APPROVED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED') AND order_date >= $2::date AND ${sc('store_id')}`, [month]),
+        value: thisMonth,
         format: 'money',
-        link: '/reports?key=po-status',
+        link: '/reports?key=purchases-over-time',
+        hint: before ? `${thisMonth >= before ? '+' : ''}${Math.round((100 * (thisMonth - before)) / before)}% on last month (${Math.round(before).toLocaleString('en-KE')})` : 'Nothing ordered last month',
       });
-      if (can(P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT)) {
-        add({ key: 'to-pay', section: 'Procurement', label: 'Approved invoices to pay', value: await all(`SELECT COUNT(*) AS v FROM supplier_invoice WHERE status = 'APPROVED'`), format: 'count', link: '/invoices' });
+      add({
+        key: 'open-lpo-value',
+        section: 'Procurement',
+        label: 'Open orders and LPOs (value)',
+        value: await one(`SELECT COALESCE(SUM(COALESCE(NULLIF(base_total, 0), total)), 0)::float AS v FROM purchase_order WHERE status IN ('APPROVED', 'SENT', 'PARTIALLY_RECEIVED') AND ${sc('store_id')}`),
+        format: 'money',
+        link: '/reports?key=open-lpos',
+      });
+      if (can(P.PURCHASING_INVOICE, P.PURCHASING_PAYMENT, P.PAYMENTS_PREPARE)) {
+        add({ key: 'to-pay', section: 'Procurement', label: 'Approved invoices to pay', value: await all(`SELECT COUNT(*) AS v FROM supplier_invoice WHERE status IN ('APPROVED', 'SCHEDULED', 'PARTIALLY_PAID')`), format: 'count', link: '/payments' });
       }
     }
 
@@ -134,6 +155,16 @@ export class DashboardService {
       add({ key: 'sales-month', section: 'Sales', label: 'Sales this month', value: await sales(month), format: 'money', link: '/reports?key=sales-margin' });
     }
 
+    if (can(P.PAYMENTS_PREPARE, P.PAYMENTS_RELEASE, P.PAYMENTS_RECONCILE, P.PETTY_CASH_MANAGE)) {
+      const n = await all(`SELECT (SELECT COUNT(*) FROM payment_voucher WHERE status IN ('FAILED', 'REVIEW')) + (SELECT COUNT(*) FROM petty_cash_request WHERE status IN ('FAILED', 'REVIEW')) AS v`);
+      add({ key: 'mpesa-review', section: 'Integrations', label: 'M-PESA payments failed or in review', value: n, format: 'count', link: '/payment-vouchers', tone: n ? 'error' : 'success' });
+    }
+    if (can(P.PETTY_CASH_MANAGE, P.PETTY_CASH_DISBURSE)) {
+      const [pc] = await this.ds.query(`SELECT COALESCE(SUM(balance), 0)::float AS v, COUNT(*) FILTER (WHERE balance < replenish_threshold)::int AS low FROM petty_cash_float WHERE is_active AND ($1 OR custodian_id = $2)`, [can(P.PETTY_CASH_MANAGE), user.id]);
+      add({ key: 'petty-cash', section: 'Petty cash', label: 'Petty cash in hand', value: pc.v, format: 'money', link: '/petty-cash/floats', hint: pc.low ? `${pc.low} float(s) below the replenishment level` : undefined, tone: pc.low ? 'warning' : 'default' });
+      const adv = await all(`SELECT COUNT(*) AS v FROM petty_cash_request WHERE kind = 'ADVANCE' AND status = 'DISBURSED' AND retirement_due_on < $1::date`, [today]);
+      add({ key: 'advances-overdue', section: 'Petty cash', label: 'Advances overdue for retirement', value: adv, format: 'count', link: '/reports?key=outstanding-advances', tone: adv ? 'warning' : 'success' });
+    }
     if (can(P.ETIMS_READ)) {
       const n = await all(`SELECT COUNT(*) AS v FROM etims_outbox WHERE status = 'FAILED' OR (status = 'PENDING' AND created_at < now() - interval '1 hour')`);
       add({ key: 'etims', section: 'Integrations', label: 'eTIMS failed or delayed', value: n, format: 'count', link: '/etims', tone: n ? 'error' : 'success' });

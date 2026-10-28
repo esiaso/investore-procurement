@@ -11,12 +11,13 @@ import { UsersService } from '../users/users.service';
 import { INVENTORY_REPORTS } from './definitions/inventory';
 import { PHARMACY_REPORTS } from './definitions/pharmacy';
 import { PURCHASING_REPORTS } from './definitions/purchasing';
+import { NON_STOCK_REPORTS } from './definitions/nonstock';
 import { RenderedReport, reportCsv, reportHtml, reportXlsx } from './report-export';
 import { ReportDef, ReportFilters, ReportResult } from './report-types';
 import { ScheduleDto } from './reports.dto';
 import { ReportRun, ReportSchedule } from './reports.entities';
 
-export const REPORTS: ReportDef[] = [...INVENTORY_REPORTS, ...PHARMACY_REPORTS, ...PURCHASING_REPORTS];
+export const REPORTS: ReportDef[] = [...INVENTORY_REPORTS, ...PHARMACY_REPORTS, ...PURCHASING_REPORTS, ...NON_STOCK_REPORTS];
 
 const CONTENT_TYPES: Record<ReportFormat, string> = {
   csv: 'text/csv; charset=utf-8',
@@ -139,9 +140,18 @@ export class ReportsService implements OnModuleInit {
       } else if (k === 'status') {
         if (!/^[A-Z_]{2,40}$/.test(s)) throw new BadRequestException('Invalid status');
         f.status = s;
+      } else if (k === 'currency') {
+        if (!/^[A-Z]{3}$/.test(s)) throw new BadRequestException('currency must be a 3-letter code');
+        f.currency = s;
+      } else if (k === 'method') {
+        if (!/^[A-Z_]{2,30}$/.test(s)) throw new BadRequestException('Invalid payment method');
+        f.method = s;
+      } else if (k === 'period') {
+        if (!['DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR'].includes(s)) throw new BadRequestException('period must be DAY, WEEK, MONTH, QUARTER or YEAR');
+        f.period = s;
       } else {
         if (!UUID.test(s)) throw new BadRequestException(`${k} must be an id`);
-        f[k] = s;
+        (f as Record<string, unknown>)[k] = s;
       }
     }
     for (const k of d.required ?? []) if (f[k] === undefined) throw new BadRequestException(`${d.title} needs ${k}`);
@@ -184,10 +194,16 @@ export class ReportsService implements OnModuleInit {
       ['Item', await name('item', f.itemId, `code || ' ' || name`)],
       ['Supplier', await name('supplier', f.supplierId)],
       ['Department', await name('department', f.departmentId)],
+      ['Project', await name('project', f.projectId)],
+      ['User', await name('app_user', f.userId, 'full_name')],
+      ['Float', await name('petty_cash_float', f.floatId)],
     ];
     for (const [k, v] of pairs) if (v) out.push(`${k}: ${v}`);
     if (f.groupBy) out.push(`By: ${d.groupBy?.find((g) => g.value === f.groupBy)?.label ?? f.groupBy}`);
     if (f.status) out.push(`Status: ${f.status}`);
+    if (f.currency) out.push(`Currency: ${f.currency}`);
+    if (f.method) out.push(`Method: ${f.method}`);
+    if (f.period) out.push(`Per: ${f.period.toLowerCase()}`);
     if (f.days) out.push(`Days: ${f.days}`);
     if (f.limit) out.push(`Top: ${f.limit}`);
     if (!out.length) out.push(`As at ${await this.settings.today()}`);

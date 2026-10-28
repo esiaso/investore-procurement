@@ -95,12 +95,14 @@ describe('Reports, dashboards and the documents register', () => {
         if (r.filters.includes('from')) Object.assign(base, { from, to });
         if (r.required?.includes('storeId')) base.storeId = ids.MS;
         if (r.required?.includes('itemId')) base.itemId = ids.item;
+        if (r.required?.includes('floatId')) base.floatId = (await one(`SELECT id FROM petty_cash_float ORDER BY created_at LIMIT 1`))?.id;
         for (const g of r.groupBy?.map((x) => x.value) ?? [undefined]) {
           const res = await c.admin.get(`/reports/${r.key}?${new URLSearchParams({ ...base, ...(g ? { groupBy: g } : {}) })}`);
           if (res.status !== 200) throw new Error(`${r.key} ${g ?? ''}: ${res.status} ${JSON.stringify(res.body)}`);
           expect(res.body.columns.length).toBeGreaterThan(0);
           expect(Array.isArray(res.body.rows)).toBe(true);
-          for (const row of res.body.rows.slice(0, 5)) for (const k of Object.keys(row)) expect(res.body.columns.map((x: { key: string }) => x.key)).toContain(k);
+          // Keys starting with "_" carry drill-down ids.
+          for (const row of res.body.rows.slice(0, 5)) for (const k of Object.keys(row).filter((x) => !x.startsWith('_'))) expect(res.body.columns.map((x: { key: string }) => x.key)).toContain(k);
         }
       }
     });

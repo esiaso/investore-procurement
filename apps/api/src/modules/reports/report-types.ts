@@ -8,9 +8,32 @@ export interface ReportColumn {
   key: string;
   label: string;
   type: ColumnType;
+  /**
+   * Drill-down: the cell links to a source document. `docType` is a document
+   * code (PO, INV, PV, PCV …) or, with a leading "@", the row key holding it;
+   * `idKey` the row key with its id (hidden keys start with "_").
+   */
+  link?: { docType: string; idKey: string };
 }
 
-export type FilterKey = 'from' | 'to' | 'storeId' | 'categoryId' | 'itemId' | 'supplierId' | 'departmentId' | 'groupBy' | 'days' | 'limit' | 'status';
+export type FilterKey =
+  | 'from'
+  | 'to'
+  | 'storeId'
+  | 'categoryId'
+  | 'itemId'
+  | 'supplierId'
+  | 'departmentId'
+  | 'groupBy'
+  | 'days'
+  | 'limit'
+  | 'status'
+  | 'projectId'
+  | 'userId'
+  | 'currency'
+  | 'floatId'
+  | 'method'
+  | 'period';
 
 /** Values as received (query string): dates YYYY-MM-DD, ids uuid. */
 export interface ReportFilters {
@@ -25,6 +48,14 @@ export interface ReportFilters {
   days?: number;
   limit?: number;
   status?: string;
+  projectId?: string;
+  userId?: string;
+  currency?: string;
+  floatId?: string;
+  /** Payment method (EFT, MPESA_B2C …). */
+  method?: string;
+  /** Time bucket: DAY, WEEK, MONTH, QUARTER, YEAR. */
+  period?: string;
 }
 
 export interface ReportContext {
@@ -47,7 +78,7 @@ export interface ReportResult {
   notes?: string[];
 }
 
-export type ReportGroup = 'INVENTORY' | 'PHARMACY' | 'PURCHASING' | 'SUPPLY_CHAIN';
+export type ReportGroup = 'INVENTORY' | 'PHARMACY' | 'PURCHASING' | 'SUPPLY_CHAIN' | 'PAYMENTS' | 'PETTY_CASH' | 'AUDIT';
 
 export interface ReportDef {
   key: string;
@@ -62,6 +93,8 @@ export interface ReportDef {
   columns: ReportColumn[];
   /** Wide reports print landscape. */
   landscape?: boolean;
+  /** The screen draws a chart: x = row key, series = numeric column keys. */
+  chart?: { type: 'line' | 'bar'; x: string; series: string[] };
   run(ctx: ReportContext): Promise<ReportResult>;
 }
 
@@ -117,4 +150,4 @@ export const TXN_CONSUMPTION = `('ISSUE','DISPENSE','RETURN_IN','DISPENSE_RETURN
 /** Adjustment reasons that are losses (expiry, damage, disposal…). */
 export const WRITE_OFF_REASONS = `('EXPIRY','DISPOSAL','DAMAGE','BREAKAGE','THEFT','LOSS','TRANSIT_LOSS')`;
 
-export const col = (key: string, label: string, type: ColumnType = 'text'): ReportColumn => ({ key, label, type });
+export const col = (key: string, label: string, type: ColumnType = 'text', link?: ReportColumn['link']): ReportColumn => ({ key, label, type, ...(link ? { link } : {}) });
