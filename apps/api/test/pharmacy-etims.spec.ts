@@ -71,6 +71,8 @@ describe('Pharmacy, billing and KRA eTIMS (mock control unit)', () => {
     const stored = await one(`SELECT cmc_key_enc FROM etims_config WHERE id = $1`, [configId]);
     expect(stored.cmc_key_enc).toBeTruthy();
     expect(stored.cmc_key_enc).not.toContain([...mock.devices.values()][0].cmcKey); // encrypted at rest
+    // Code tables sync through the first active device: make it this one, from scratch (other suites leave theirs synced).
+    await q(`UPDATE etims_config SET is_active = (id = $1), last_request = '{}'::jsonb`, [configId]);
     const synced = await c.finance.post('/etims/codes/sync').expect(200);
     expect(synced.body.codes).toBeGreaterThan(20);
     await c.finance.put('/etims/mappings', { kind: 'ITEM_CLASS', localKey: 'category:DRUG', etimsCode: '9999999999' }).expect(400); // not in the classification
