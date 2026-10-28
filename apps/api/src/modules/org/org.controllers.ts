@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Permissions } from '@sil/shared';
 import { RequirePermissions, StoreScoped } from '../../common/decorators';
@@ -9,12 +9,15 @@ import {
   CreateDepartmentDto,
   CreateFacilityDto,
   CreateStoreDto,
+  HospitalDetailsDto,
+  LogoDto,
   StoreQueryDto,
   UpdateBinDto,
   UpdateDepartmentDto,
   UpdateFacilityDto,
   UpdateStoreDto,
 } from './org.dto';
+import { HospitalService } from './hospital.service';
 import { OrgService } from './org.service';
 
 @ApiTags('org')
@@ -134,5 +137,37 @@ export class DepartmentsController {
   @Delete(':id') @HttpCode(204) @RequirePermissions(Permissions.ORG_MANAGE)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.org.deleteDepartment(id);
+  }
+}
+
+/** Organisation → Hospital details: name and contacts on every document, the letterhead logo and the e-mail sender. */
+@ApiTags('org')
+@Controller('hospital')
+export class HospitalController {
+  constructor(private readonly hospital: HospitalService) {}
+
+  @Get() @RequirePermissions(Permissions.ORG_READ)
+  get() {
+    return this.hospital.get();
+  }
+
+  @Put() @RequirePermissions(Permissions.ORG_MANAGE)
+  update(@Body() dto: HospitalDetailsDto) {
+    return this.hospital.update(dto);
+  }
+
+  @Get('logo') @RequirePermissions(Permissions.ORG_READ)
+  logo() {
+    return this.hospital.getLogo();
+  }
+
+  @Put('logo') @RequirePermissions(Permissions.ORG_MANAGE)
+  setLogo(@Body() dto: LogoDto) {
+    return this.hospital.setLogo(dto.dataUrl);
+  }
+
+  @Delete('logo') @RequirePermissions(Permissions.ORG_MANAGE)
+  removeLogo() {
+    return this.hospital.setLogo(null);
   }
 }

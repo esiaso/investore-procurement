@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { toCsv } from '../../common/csv';
 import type { ReportColumn } from './report-types';
+import { LETTERHEAD_LOGO_SMALL } from '../../common/html';
 
 export interface RenderedReport {
   title: string;
@@ -93,7 +94,7 @@ export function reportHtml(r: RenderedReport): string {
     td.n, th.n { text-align: right; white-space: nowrap; } tr.total td { font-weight: 700; border-top: 2px solid #9aa8b6; }
     tr { page-break-inside: avoid; } .notes { margin-top: 8px; color: #556; font-style: italic; } .empty { padding: 12px; color: #667; }
   </style></head><body>
-    <div class="facility">${esc(r.facility)}</div><h1>${esc(r.title)}</h1>
+    ${LETTERHEAD_LOGO_SMALL}<div class="facility">${esc(r.facility)}</div><h1>${esc(r.title)}</h1>
     <div class="meta">${r.criteria.map((c) => `<div>${esc(c)}</div>`).join('')}<div>Generated ${esc(r.generatedAt)}${r.generatedBy ? ` by ${esc(r.generatedBy)}` : ''} · ${r.rows.length} row(s)</div></div>
     <table><thead><tr>${r.columns.map((c) => `<th class="${num(c.type) ? 'n' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
     ${r.rows.map((row) => `<tr>${cells(row)}</tr>`).join('')}

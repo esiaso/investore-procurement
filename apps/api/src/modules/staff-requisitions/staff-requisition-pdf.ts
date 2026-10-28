@@ -1,3 +1,4 @@
+import { LETTERHEAD_LOGO_SMALL } from '../../common/html';
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const money = (v: number) => Number(v).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const human = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
@@ -41,7 +42,7 @@ export function renderStaffRequisitionHtml(r: PdfRequisition, approvals: { step:
     .sub { color: #667; font-size: 8.5pt; } tfoot td { font-weight: 700; border-top: 2px solid #9aa8b6; }
     .sigs { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 28px; } .sig { width: 180px; } .sig .line { border-bottom: 1px solid #333; height: 22px; font-weight: 600; }
   </style></head><body>
-    <div class="facility">${esc(facility)}</div>
+    ${LETTERHEAD_LOGO_SMALL}<div class="facility">${esc(facility)}</div>
     <h1>Requisition ${esc(r.number)}</h1>
     <div class="meta">
       <div>Department: <b>${esc(r.department?.name)}</b>${r.department?.costCentreCode ? ` (cost centre ${esc(r.department.costCentreCode)})` : ''}</div>

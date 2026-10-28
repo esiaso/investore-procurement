@@ -35,9 +35,15 @@ export const DOC_STYLES = `
   .foot { margin-top: 24px; font-size: 10px; color: #666; }
 `;
 
+/** Letterhead logo placeholder; PdfService puts the hospital logo here (or a LOGO box when none is set). */
+export const LETTERHEAD_LOGO = '<!--letterhead-logo-->';
+
+/** Optional small logo above a document title; PdfService fills it in, or removes it when no logo is set. */
+export const LETTERHEAD_LOGO_SMALL = '<!--letterhead-logo-small-->';
+
 export function letterhead(facility: { name: string; address: string | null; phone: string | null; email: string | null; kra_pin?: string | null } | undefined) {
   return `<div class="head">
-      <div class="logo">LOGO</div>
+      ${LETTERHEAD_LOGO}
       <div style="text-align:right">
         <div style="font-size:14px;font-weight:bold">${esc(facility?.name)}</div>
         <div>${esc(facility?.address)}</div>

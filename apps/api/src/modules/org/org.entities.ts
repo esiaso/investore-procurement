@@ -23,6 +23,10 @@ export class Facility extends AppBaseEntity {
   @Column({ type: 'varchar', length: 20, nullable: true })
   kraPin: string | null;
 
+  /** Letterhead logo as a data: URL (PNG or JPEG). Not loaded unless asked for. */
+  @Column({ type: 'text', nullable: true, select: false })
+  logo?: string | null;
+
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   EntityManager,
   EntityMetadata,
@@ -14,6 +15,15 @@ import { AuditLog } from './audit-log.entity';
 
 /** Never written to the audit trail in clear. */
 const REDACTED_FIELDS = new Set(['passwordHash', 'totpSecretEnc', 'bankAccountEnc']);
+/** Images kept as data: URLs: the trail records their type, size and fingerprint, not the bytes. */
+const IMAGE_FIELDS = new Set(['logo']);
+
+function imageSummary(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const m = /^data:([^;,]+)[^,]*,(.*)$/.exec(value);
+  const bytes = m ? Buffer.from(m[2], 'base64') : Buffer.from(value);
+  return `${m?.[1] ?? 'image'}, ${Math.ceil(bytes.length / 1024)} KB, sha256 ${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}`;
+}
 /** Bookkeeping columns not worth diffing. */
 const IGNORED_FIELDS = new Set(['updatedAt', 'updatedBy']);
 /** Tables that are not audited row-by-row (the audit log itself, counters). */
@@ -52,7 +62,11 @@ export function snapshot(metadata: EntityMetadata, entity: ObjectLiteral | undef
     if (column.relationMetadata && !column.propertyName.endsWith('Id')) continue;
     const value = column.getEntityValue(entity);
     if (value === undefined) continue;
-    out[column.propertyName] = REDACTED_FIELDS.has(column.propertyName) ? (value ? '[REDACTED]' : null) : normalise(value);
+    out[column.propertyName] = REDACTED_FIELDS.has(column.propertyName)
+      ? value ? '[REDACTED]' : null
+      : IMAGE_FIELDS.has(column.propertyName)
+        ? imageSummary(value)
+        : normalise(value);
   }
   return out;
 }

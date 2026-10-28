@@ -75,6 +75,7 @@ import { ImportPage } from './pages/ImportPage';
 import { ItemsPage } from './pages/ItemsPage';
 import { RolesPage } from './pages/RolesPage';
 import { StoresPage } from './pages/StoresPage';
+import { HospitalPage } from './pages/HospitalPage';
 import { UsersPage } from './pages/UsersPage';
 
 export function RequirePermission({ permissions, any, children }: { permissions: PermissionCode[]; any?: boolean; children: ReactNode }) {
@@ -252,6 +253,7 @@ export function App() {
         <Route path="items" element={guarded([Permissions.CATALOG_READ], <ItemsPage />)} />
         <Route path="generics" element={guarded([Permissions.CATALOG_READ], <GenericsPage />)} />
         <Route path="import" element={guarded([Permissions.CATALOG_IMPORT], <ImportPage />)} />
+        <Route path="hospital" element={guarded([Permissions.ORG_READ], <HospitalPage />)} />
         <Route path="stores" element={guarded([Permissions.ORG_READ], <StoresPage />)} />
         <Route path="bins" element={guarded([Permissions.ORG_READ], <BinsPage />)} />
         <Route path="departments" element={guarded([Permissions.ORG_READ], <DepartmentsPage />)} />

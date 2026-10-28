@@ -1,4 +1,5 @@
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import EventBusyIcon from '@mui/icons-material/EventBusy';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
@@ -180,6 +181,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Items', path: '/items', icon: <Inventory2Icon />, permissions: [Permissions.CATALOG_READ], section: 'Catalog' },
   { label: 'Generics', path: '/generics', icon: <MedicationIcon />, permissions: [Permissions.CATALOG_READ], section: 'Catalog' },
   { label: 'Bulk import', path: '/import', icon: <UploadFileIcon />, permissions: [Permissions.CATALOG_IMPORT], section: 'Catalog' },
+  { label: 'Hospital details', path: '/hospital', icon: <LocalHospitalIcon />, permissions: [Permissions.ORG_READ], section: 'Organisation' },
   { label: 'Stores', path: '/stores', icon: <StoreIcon />, permissions: [Permissions.ORG_READ], section: 'Organisation' },
   { label: 'Bins', path: '/bins', icon: <ViewModuleIcon />, permissions: [Permissions.ORG_READ], section: 'Organisation' },
   { label: 'Departments', path: '/departments', icon: <CategoryIcon />, permissions: [Permissions.ORG_READ], section: 'Organisation' },

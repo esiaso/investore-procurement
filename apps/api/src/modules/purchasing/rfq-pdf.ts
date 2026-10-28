@@ -1,4 +1,4 @@
-import { esc } from '../../common/html';
+import { esc, LETTERHEAD_LOGO_SMALL } from '../../common/html';
 import type { Rfq } from './purchasing.entities';
 
 /** Request for quotation sent to the invited suppliers (A4). */
@@ -17,7 +17,7 @@ export function renderRfqHtml(rfq: Rfq, facility: { name: string; address: strin
     th { background: #f2f6f6; } .r { text-align: right; } .blank { width: 110px; } .muted { color: #777; }
     .box { border: 1px solid #ddd; padding: 8px; border-radius: 4px; margin-top: 10px; }
   </style></head><body>
-    <div class="head"><div><b style="font-size:14px">${esc(facility?.name)}</b><br>${esc(facility?.address)}<br>${esc(facility?.phone)} · ${esc(facility?.email)}</div><div style="text-align:right">KRA PIN ${esc(facility?.kra_pin)}</div></div>
+    <div class="head"><div>${LETTERHEAD_LOGO_SMALL}<b style="font-size:14px">${esc(facility?.name)}</b><br>${esc(facility?.address)}<br>${esc(facility?.phone)} · ${esc(facility?.email)}</div><div style="text-align:right">KRA PIN ${esc(facility?.kra_pin)}</div></div>
     <h1>REQUEST FOR QUOTATION ${esc(rfq.number)}</h1>
     <div>${esc(rfq.title)}</div>
     <div class="box">Quotations close on <b>${esc(rfq.closingDate)}</b>. Quote unit prices excluding VAT, the delivery time, payment terms and how long the prices are valid. Attach your KRA PIN certificate and any technical literature.</div>

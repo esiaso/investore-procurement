@@ -1,4 +1,4 @@
-import { esc, fmtDate, money } from '../../common/html';
+import { esc, fmtDate, money, LETTERHEAD_LOGO } from '../../common/html';
 import type { PurchaseOrder } from './purchasing.entities';
 
 /**
@@ -57,7 +57,7 @@ export function renderPurchaseOrderHtml(
     .foot { margin-top: 24px; font-size: 10px; color: #666; }
   </style></head><body>
     <div class="head">
-      <div class="logo">LOGO</div>
+      ${LETTERHEAD_LOGO}
       <div style="text-align:right">
         <div style="font-size:14px;font-weight:bold">${esc(facility?.name)}</div>
         <div>${esc(facility?.address)}</div>

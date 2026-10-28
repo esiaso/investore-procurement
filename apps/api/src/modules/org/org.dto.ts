@@ -19,6 +19,22 @@ export class CreateFacilityDto {
 }
 export class UpdateFacilityDto extends PartialType(CreateFacilityDto) {}
 
+/** Hospital details (Organisation → Hospital details): the main facility and the e-mail sender. */
+export class HospitalDetailsDto {
+  @ApiProperty() @IsString() @MaxLength(200) @Matches(/\S/, { message: 'name is required' }) name: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(500) address?: string | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(40) phone?: string | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @ValidateIf((o) => o.email !== null) @IsEmail() email?: string | null;
+  @ApiPropertyOptional({ example: 'P051234567X' }) @IsOptional() @Transform(emptyToNull) @ValidateIf((o) => o.kraPin !== null) @Matches(/^[AP]\d{9}[A-Z]$/, { message: 'kraPin must look like P051234567X' }) kraPin?: string | null;
+  @ApiProperty({ example: 'Procurement <procurement@hospital.org>', description: 'Sender of outgoing e-mail' })
+  @IsString() @MaxLength(200) @Matches(/^([^<>@\r\n]+ <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>|[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+)$/, { message: 'mailFrom must be an e-mail address, or Name <address>' })
+  mailFrom: string;
+}
+
+export class LogoDto {
+  @ApiProperty({ description: 'data:image/png;base64,… or data:image/jpeg;base64,… (at most 500 KB)' }) @IsString() @MaxLength(700_000) dataUrl: string;
+}
+
 export class CreateStoreDto {
   @ApiProperty() @IsUUID() facilityId: string;
   @ApiProperty() @IsString() @Matches(CODE) code: string;
