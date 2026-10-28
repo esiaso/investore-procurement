@@ -239,7 +239,7 @@ function FilterBar({ def, f, setF }: { def: ReportDef; f: Filters; setF(f: Filte
       {has('to') && <TextField type="date" label="To" required={req('to')} value={f.to ?? ''} onChange={(e) => set('to', e.target.value)} InputLabelProps={{ shrink: true }} />}
       {has('storeId') && <StoreSelect label={req('storeId') ? 'Store *' : 'Store'} value={f.storeId ?? ''} onChange={(v) => set('storeId', v)} allowAll={req('storeId') ? undefined : 'All my stores'} sx={{ minWidth: 200 }} />}
       {has('categoryId') && (
-        <TextField select label="Category" value={f.categoryId ?? ''} onChange={(e) => set('categoryId', e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label="Category" value={f.categoryId ?? ''} onChange={(e) => set('categoryId', e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">All categories</MenuItem>
           {(categories.data ?? []).map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
         </TextField>
@@ -250,53 +250,53 @@ function FilterBar({ def, f, setF }: { def: ReportDef; f: Filters; setF(f: Filte
         </Box>
       )}
       {has('supplierId') && (
-        <TextField select label="Supplier" value={f.supplierId ?? ''} onChange={(e) => set('supplierId', e.target.value)} sx={{ minWidth: 220 }}>
+        <TextField select label="Supplier" value={f.supplierId ?? ''} onChange={(e) => set('supplierId', e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
           <MenuItem value="">All suppliers</MenuItem>
           {(suppliers.data ?? []).map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
         </TextField>
       )}
       {has('departmentId') && (
-        <TextField select label="Department" value={f.departmentId ?? ''} onChange={(e) => set('departmentId', e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label="Department" value={f.departmentId ?? ''} onChange={(e) => set('departmentId', e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">All departments</MenuItem>
           {(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
         </TextField>
       )}
       {has('groupBy') && def.groupBy && (
-        <TextField select label="Group by" value={f.groupBy ?? def.groupBy[0].value} onChange={(e) => set('groupBy', e.target.value)} sx={{ minWidth: 180 }}>
+        <TextField select label="Group by" value={f.groupBy ?? def.groupBy[0].value} onChange={(e) => set('groupBy', e.target.value)} sx={{ minWidth: 180, width: 'auto' }}>
           {def.groupBy.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
         </TextField>
       )}
       {has('period') && (
-        <TextField select label="Per" value={f.period ?? 'MONTH'} onChange={(e) => set('period', e.target.value)} sx={{ minWidth: 130 }}>
+        <TextField select label="Per" value={f.period ?? 'MONTH'} onChange={(e) => set('period', e.target.value)} sx={{ minWidth: 130, width: 'auto' }}>
           {BUCKETS.map((b) => <MenuItem key={b.value} value={b.value}>{b.label}</MenuItem>)}
         </TextField>
       )}
       {has('floatId') && (
-        <TextField select label={req('floatId') ? 'Float *' : 'Float'} value={f.floatId ?? ''} onChange={(e) => set('floatId', e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label={req('floatId') ? 'Float *' : 'Float'} value={f.floatId ?? ''} onChange={(e) => set('floatId', e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           {!req('floatId') && <MenuItem value="">All floats</MenuItem>}
           {(floats.data ?? []).map((x) => <MenuItem key={x.id} value={x.id}>{x.name}</MenuItem>)}
         </TextField>
       )}
       {has('projectId') && (
-        <TextField select label="Project" value={f.projectId ?? ''} onChange={(e) => set('projectId', e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label="Project" value={f.projectId ?? ''} onChange={(e) => set('projectId', e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">All projects</MenuItem>
           {(projects.data ?? []).map((p) => <MenuItem key={p.id} value={p.id}>{p.code} {p.name}</MenuItem>)}
         </TextField>
       )}
       {has('userId') && (
-        <TextField select label="User" value={f.userId ?? ''} onChange={(e) => set('userId', e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label="User" value={f.userId ?? ''} onChange={(e) => set('userId', e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">Everyone</MenuItem>
           {(users.data ?? []).map((u) => <MenuItem key={u.id} value={u.id}>{u.fullName}</MenuItem>)}
         </TextField>
       )}
       {has('currency') && (
-        <TextField select label="Currency" value={f.currency ?? ''} onChange={(e) => set('currency', e.target.value)} sx={{ minWidth: 120 }}>
+        <TextField select label="Currency" value={f.currency ?? ''} onChange={(e) => set('currency', e.target.value)} sx={{ minWidth: 120, width: 'auto' }}>
           <MenuItem value="">Any</MenuItem>
           {(currencies.data ?? []).map((x) => <MenuItem key={x.code} value={x.code}>{x.code}</MenuItem>)}
         </TextField>
       )}
       {has('method') && (
-        <TextField select label="Method" value={f.method ?? ''} onChange={(e) => set('method', e.target.value)} sx={{ minWidth: 160 }}>
+        <TextField select label="Method" value={f.method ?? ''} onChange={(e) => set('method', e.target.value)} sx={{ minWidth: 160, width: 'auto' }}>
           <MenuItem value="">All methods</MenuItem>
           {PAY_METHODS.map((m) => <MenuItem key={m} value={m}>{humanise(m)}</MenuItem>)}
         </TextField>

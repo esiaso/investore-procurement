@@ -78,12 +78,12 @@ export function SalesInvoicesPage() {
       <PageHeader title="Sales invoices" search={search} onSearch={setSearch} searchPlaceholder="Number, customer or CU no." onNew={can(P.BILLING_INVOICE) ? () => navigate('/sales/new') : undefined} newLabel="New sale" />
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
         <StoreSelect value={storeId} onChange={setStoreId} label="Outlet" allowAll="All outlets" sx={{ minWidth: 200 }} />
-        <TextField select label="Type" value={docType} onChange={(e) => setDocType(e.target.value)} sx={{ minWidth: 160 }}>
+        <TextField select label="Type" value={docType} onChange={(e) => setDocType(e.target.value)} sx={{ minWidth: 160, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           <MenuItem value="INVOICE">Invoices</MenuItem>
           <MenuItem value="CREDIT_NOTE">Credit notes</MenuItem>
         </TextField>
-        <TextField select label="eTIMS" value={etimsStatus} onChange={(e) => setEtimsStatus(e.target.value)} sx={{ minWidth: 160 }}>
+        <TextField select label="eTIMS" value={etimsStatus} onChange={(e) => setEtimsStatus(e.target.value)} sx={{ minWidth: 160, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           {['ACCEPTED', 'PENDING', 'FAILED', 'NOT_REQUIRED'].map((s) => <MenuItem key={s} value={s}>{humanise(s)}</MenuItem>)}
         </TextField>
@@ -149,7 +149,7 @@ export function SaleFormPage() {
         <Stack spacing={2}>
           <Stack direction="row" spacing={2}>
             <StoreSelect value={storeId} onChange={setStoreId} label="Outlet" sx={{ minWidth: 220 }} />
-            <TextField select label="Sale type" value={source} onChange={(e) => setSource(e.target.value as 'OTC')} sx={{ minWidth: 220 }}>
+            <TextField select label="Sale type" value={source} onChange={(e) => setSource(e.target.value as 'OTC')} sx={{ minWidth: 220, width: 'auto' }}>
               <MenuItem value="OTC">Over the counter</MenuItem>
               <MenuItem value="CONSUMABLE">Patient-chargeable consumables</MenuItem>
             </TextField>
@@ -167,13 +167,13 @@ export function SaleFormPage() {
             <TextField label="Name" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />
             <TextField label="KRA PIN" value={customer.kraPin} onChange={(e) => setCustomer({ ...customer, kraPin: e.target.value.toUpperCase() })} helperText="e.g. P051234567X" />
             <TextField label="Phone" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
-            <TextField select label="Payer" value={customer.payerId} onChange={(e) => setCustomer({ ...customer, payerId: e.target.value })} sx={{ minWidth: 200 }}>
+            <TextField select label="Payer" value={customer.payerId} onChange={(e) => setCustomer({ ...customer, payerId: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
               <MenuItem value="">None (cash)</MenuItem>
               {(payers.data ?? []).filter((p) => p.isActive).map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
             </TextField>
           </Stack>
           <Stack direction="row" spacing={1}>
-            <TextField select label="Payment" value={mode} onChange={(e) => setMode(e.target.value)} sx={{ minWidth: 180 }}>
+            <TextField select label="Payment" value={mode} onChange={(e) => setMode(e.target.value)} sx={{ minWidth: 180, width: 'auto' }}>
               {(modes.data ?? []).filter((m) => m.isActive).map((m) => <MenuItem key={m.code} value={m.code}>{m.name}</MenuItem>)}
             </TextField>
             <TextField label="Amount tendered" type="number" value={amount} onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))} />

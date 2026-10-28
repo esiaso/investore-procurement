@@ -280,7 +280,7 @@ export function TillPage() {
     <Box onKeyDown={onKey}>
       <PageHeader title="Till" />
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }} sx={{ mb: 2 }}>
-        <TextField select size="small" label="Till" value={terminalId} onChange={(e) => chooseTerminal(e.target.value)} sx={{ minWidth: 220 }}>
+        <TextField select size="small" label="Till" value={terminalId} onChange={(e) => chooseTerminal(e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
           {(terminals.data ?? (catalog ? [{ ...catalog.terminal }] : [])).map((t) => (
             <MenuItem key={t.id} value={t.id}>{t.code} · {t.name}</MenuItem>
           ))}

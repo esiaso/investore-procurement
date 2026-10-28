@@ -96,7 +96,7 @@ export function AttachmentsPanel({ ownerType, ownerId, categories = ['GENERAL'],
       {canUpload && can(Permissions.FILES_UPLOAD) && (
         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="center">
           {categories.length > 1 && (
-            <TextField select size="small" label="Type" value={category} onChange={(e) => setCategory(e.target.value)} sx={{ minWidth: 170 }}>
+            <TextField select size="small" label="Type" value={category} onChange={(e) => setCategory(e.target.value)} sx={{ minWidth: 170, width: 'auto' }}>
               {categories.map((c) => <MenuItem key={c} value={c}>{c.replace(/_/g, ' ').toLowerCase()}</MenuItem>)}
             </TextField>
           )}

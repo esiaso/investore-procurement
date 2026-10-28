@@ -194,11 +194,11 @@ export function StaffRequisitionFormPage() {
       <PageHeader title={id ? `Edit ${existing.data?.number ?? ''}` : 'New requisition'} />
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-          <TextField select required label="Department / cost centre" value={head.departmentId} onChange={(e) => setHead({ ...head, departmentId: e.target.value })} sx={{ minWidth: 240 }}
+          <TextField select required label="Department / cost centre" value={head.departmentId} onChange={(e) => setHead({ ...head, departmentId: e.target.value })} sx={{ minWidth: 240, width: 'auto' }}
             helperText={head.departmentId && head.departmentId !== user?.departmentId ? 'On behalf of another department: its head approves' : ' '}>
             {(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
           </TextField>
-          <TextField select label="Project" value={head.projectId} onChange={(e) => setHead({ ...head, projectId: e.target.value })} sx={{ minWidth: 200 }}>
+          <TextField select label="Project" value={head.projectId} onChange={(e) => setHead({ ...head, projectId: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
             <MenuItem value="">None</MenuItem>
             {(projects.data ?? []).map((p) => <MenuItem key={p.id} value={p.id}>{p.code} · {p.name}</MenuItem>)}
           </TextField>
@@ -214,7 +214,7 @@ export function StaffRequisitionFormPage() {
           {lines.map((l, i) => (
             <Paper key={i} variant="outlined" sx={{ p: 1.5 }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'flex-start' }}>
-                <TextField select label="Type" value={l.lineType} onChange={(e) => set(i, { lineType: e.target.value as LineType, item: null })} sx={{ minWidth: 210 }}>
+                <TextField select label="Type" value={l.lineType} onChange={(e) => set(i, { lineType: e.target.value as LineType, item: null })} sx={{ minWidth: 210, width: 'auto' }}>
                   {LINE_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
                 </TextField>
                 {l.lineType === 'STOCK' ? (
@@ -238,11 +238,11 @@ export function StaffRequisitionFormPage() {
               </Stack>
               {l.lineType !== 'STOCK' && (
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mt: 1.5 }}>
-                  <TextField select label="GL account" value={l.glAccountId} onChange={(e) => set(i, { glAccountId: e.target.value })} sx={{ minWidth: 280 }} helperText="What it is charged to (finance can recode)">
+                  <TextField select label="GL account" value={l.glAccountId} onChange={(e) => set(i, { glAccountId: e.target.value })} sx={{ minWidth: 280, width: 'auto' }} helperText="What it is charged to (finance can recode)">
                     <MenuItem value="">Not sure</MenuItem>
                     {(gl.data ?? []).filter((a) => ['EXPENSE', 'ASSET'].includes(a.type)).map((a) => <MenuItem key={a.id} value={a.id}>{a.code} · {a.name}</MenuItem>)}
                   </TextField>
-                  <TextField select label="Category" value={l.categoryId} onChange={(e) => set(i, { categoryId: e.target.value })} sx={{ minWidth: 200 }}>
+                  <TextField select label="Category" value={l.categoryId} onChange={(e) => set(i, { categoryId: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
                     <MenuItem value="">—</MenuItem>
                     {(categories.data ?? []).map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                   </TextField>
@@ -455,11 +455,11 @@ function ConsolidateDialog({ lines, onClose, onDone }: { lines: QueueLine[]; onC
         {[...new Set(lines.map((l) => l.department))].join(', ')} · estimate {money(lines.reduce((s, l) => s + l.estimatedTotal, 0))}
       </Typography>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField select required label="Owning department" value={f.departmentId} onChange={(e) => setF({ ...f, departmentId: e.target.value })} sx={{ minWidth: 220 }}>
+        <TextField select required label="Owning department" value={f.departmentId} onChange={(e) => setF({ ...f, departmentId: e.target.value })} sx={{ minWidth: 220, width: 'auto' }}>
           {(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
         </TextField>
         <StoreSelect label="Delivery location" value={f.storeId} onChange={(v) => setF({ ...f, storeId: v })} sx={{ minWidth: 220 }} />
-        <TextField select label="Procurement method" value={f.sourcingMethod} onChange={(e) => setF({ ...f, sourcingMethod: e.target.value })} sx={{ minWidth: 200 }}>
+        <TextField select label="Procurement method" value={f.sourcingMethod} onChange={(e) => setF({ ...f, sourcingMethod: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">Recommended by value</MenuItem>
           {['DIRECT', 'LOW_VALUE', 'RFQ', 'RFP', 'RESTRICTED_TENDER', 'OPEN_TENDER', 'FRAMEWORK'].map((m) => <MenuItem key={m} value={m}>{humanise(m)}</MenuItem>)}
         </TextField>

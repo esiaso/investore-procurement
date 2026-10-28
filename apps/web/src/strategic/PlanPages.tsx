@@ -109,10 +109,10 @@ export function PlanFormPage({ mode }: { mode: 'new' | 'edit' | 'revise' }) {
               </>
             )}
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField select label="Department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} disabled={mode !== 'new' || (!canChooseDepartment && !!user?.departmentId)} sx={{ minWidth: 240 }}>
+              <TextField select label="Department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} disabled={mode !== 'new' || (!canChooseDepartment && !!user?.departmentId)} sx={{ minWidth: 240, width: 'auto' }}>
                 {(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
               </TextField>
-              <TextField label="Financial year" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} disabled={mode !== 'new'} helperText="e.g. 2026 or 2026/27" />
+              <TextField sx={{ flex: 1 }} label="Financial year" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} disabled={mode !== 'new'} helperText="e.g. 2026 or 2026/27" />
               <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} disabled={mode === 'revise'} sx={{ flex: 1 }} required />
             </Stack>
             {departmentId && !voteHeads.length && !budgets.isFetching && <Alert severity="warning">This department has no budget for {financialYear || 'the year'}; finance sets up the vote heads first.</Alert>}

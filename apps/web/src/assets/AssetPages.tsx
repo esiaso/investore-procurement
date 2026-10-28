@@ -200,11 +200,11 @@ export function AssetDetailPage() {
             <TextField select label="Kind" value={maint.kind} onChange={(e) => setMaint({ ...maint, kind: e.target.value })} sx={{ flex: 1 }}>
               {['PREVENTIVE', 'CORRECTIVE', 'CALIBRATION', 'INSPECTION'].map((k) => <MenuItem key={k} value={k}>{humanise(k)}</MenuItem>)}
             </TextField>
-            <TextField label="Date" type="date" value={maint.performedOn} onChange={(e) => setMaint({ ...maint, performedOn: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField sx={{ flex: 1 }} label="Date" type="date" value={maint.performedOn} onChange={(e) => setMaint({ ...maint, performedOn: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
           </Stack>
           <Stack direction="row" spacing={2}>
             <TextField label="Done by" value={maint.performedBy} onChange={(e) => setMaint({ ...maint, performedBy: e.target.value })} sx={{ flex: 1 }} />
-            <TextField label="Cost" type="number" value={maint.cost} onChange={(e) => setMaint({ ...maint, cost: e.target.value === '' ? '' : Number(e.target.value) })} />
+            <TextField sx={{ flex: 1 }} label="Cost" type="number" value={maint.cost} onChange={(e) => setMaint({ ...maint, cost: e.target.value === '' ? '' : Number(e.target.value) })} />
           </Stack>
           <TextField label="Notes" value={maint.notes} onChange={(e) => setMaint({ ...maint, notes: e.target.value })} multiline minRows={2} />
           <Typography variant="caption">The next due date is set from the maintenance interval.</Typography>

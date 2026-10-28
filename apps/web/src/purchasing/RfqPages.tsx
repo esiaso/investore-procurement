@@ -72,10 +72,10 @@ function QuotationDialog({ rfq, suppliers, onClose }: { rfq: Rfq; suppliers: Sup
   return (
     <FormDialog open maxWidth="md" title="Record a quotation" onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField select label="Supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label="Supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           {suppliers.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
         </TextField>
-        <TextField select label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} sx={{ minWidth: 140 }} helperText="Blank: base currency">
+        <TextField select label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} sx={{ minWidth: 140, width: 'auto' }} helperText="Blank: base currency">
           <MenuItem value="">Base currency</MenuItem>
           {(currencies.data ?? []).map((c) => <MenuItem key={c.code} value={c.code}>{c.code}</MenuItem>)}
         </TextField>

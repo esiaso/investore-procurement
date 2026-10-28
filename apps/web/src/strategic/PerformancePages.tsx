@@ -314,7 +314,7 @@ function DeliveryDialog({ order, onClose }: { order: AgencyOrder; onClose(): voi
         <Typography key={ev.id} variant="body2">{date(ev.at)} · {humanise(ev.stage)}{ev.reference ? ` · ${ev.reference}` : ''}{ev.expectedDate ? ` · expected ${date(ev.expectedDate)}` : ''}{ev.viaPortal ? ' (portal)' : ''}{ev.note ? ` — ${ev.note}` : ''}</Typography>
       ))}
       <Stack direction="row" spacing={2}>
-        <TextField select label="Stage" value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })} sx={{ minWidth: 160 }}>
+        <TextField select label="Stage" value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })} sx={{ minWidth: 160, width: 'auto' }}>
           {Object.values(DeliveryStage).map((s) => <MenuItem key={s} value={s}>{humanise(s)}</MenuItem>)}
         </TextField>
         <TextField label="Reference" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />

@@ -88,13 +88,13 @@ export function ConsumptionPage() {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
           <TextField label="From" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label="To" type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-          <TextField select label="Group by" value={f.groupBy} onChange={(e) => setF({ ...f, groupBy: e.target.value as GroupBy })} sx={{ minWidth: 170 }}>
+          <TextField select label="Group by" value={f.groupBy} onChange={(e) => setF({ ...f, groupBy: e.target.value as GroupBy })} sx={{ minWidth: 170, width: 'auto' }}>
             <MenuItem value="department">Department</MenuItem>
             <MenuItem value="period">Month × department</MenuItem>
             <MenuItem value="item">Item</MenuItem>
             <MenuItem value="patient">Patient reference</MenuItem>
           </TextField>
-          <TextField select label="Department" value={f.departmentId} onChange={(e) => setF({ ...f, departmentId: e.target.value })} sx={{ minWidth: 200 }}>
+          <TextField select label="Department" value={f.departmentId} onChange={(e) => setF({ ...f, departmentId: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
             <MenuItem value="">All</MenuItem>
             {deptOptions.map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
           </TextField>

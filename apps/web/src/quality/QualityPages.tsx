@@ -29,7 +29,7 @@ export function BatchPicker({ value, onChange, label = 'Batch' }: { value: Batch
   return (
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
       <ItemPicker value={item} onChange={(i) => { setItem(i); onChange(null); }} />
-      <TextField select label={label} value={value?.id ?? ''} onChange={(e) => onChange((batches.data ?? []).find((b) => b.id === e.target.value) ?? null)} disabled={!item} sx={{ minWidth: 200 }}>
+      <TextField select label={label} value={value?.id ?? ''} onChange={(e) => onChange((batches.data ?? []).find((b) => b.id === e.target.value) ?? null)} disabled={!item} sx={{ minWidth: 200, width: 'auto' }}>
         {(batches.data ?? []).map((b) => <MenuItem key={b.id} value={b.id}>{b.batchNo} · exp {b.expiryDate ?? '—'}{b.holdStatus !== 'NONE' ? ` · ${b.holdStatus}` : ''}</MenuItem>)}
       </TextField>
     </Stack>
@@ -143,7 +143,7 @@ function UnitDialog({ row, onClose }: { row: StorageUnit | null; onClose(): void
   return (
     <FormDialog open title={row ? row.name : 'New fridge / cold room'} onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <Stack direction="row" spacing={2}>
-        <TextField label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
+        <TextField sx={{ flex: 1 }} label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
         <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required sx={{ flex: 1 }} />
       </Stack>
       <StoreSelect value={form.storeId} onChange={(v) => setForm({ ...form, storeId: v, binIds: [] })} />
@@ -187,7 +187,7 @@ function UnitReadings({ unit }: { unit: StorageUnit }) {
       {canAny(Permissions.QUALITY_MANAGE, Permissions.INVENTORY_HANDLE_COLD_CHAIN) && (
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }} sx={{ mb: 1 }}>
           <TextField size="small" label="°C" type="number" value={t} onChange={(e) => setT(e.target.value === '' ? '' : Number(e.target.value))} sx={{ width: 100 }} />
-          <TextField size="small" label="At" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField sx={{ flex: 1 }} size="small" label="At" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField size="small" label="Note" value={note} onChange={(e) => setNote(e.target.value)} sx={{ flex: 1 }} />
           <Button variant="contained" disabled={t === '' || record.isPending} onClick={() => record.mutate(undefined, { onSuccess: () => { setT(''); setNote(''); } })}>Record</Button>
           <Button component="label" variant="outlined" disabled={upload.isPending}>Import logger CSV<input hidden type="file" accept=".csv,text/csv" aria-label="Logger CSV" onChange={(e) => e.target.files?.[0] && upload.mutate(e.target.files[0])} /></Button>
@@ -393,11 +393,11 @@ function RecallDialog({ onClose }: { onClose(): void }) {
   return (
     <FormDialog open maxWidth="md" title="Receive a recall notice" submitLabel="Quarantine and trace" onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: (r) => navigate(`/recalls/${r.id}`) }); }}>
       <Stack direction="row" spacing={2}>
-        <TextField select label="From" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
+        <TextField sx={{ flex: 1 }} select label="From" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
           {Object.values(RecallSource).map((s) => <MenuItem key={s} value={s}>{humanise(s)}</MenuItem>)}
         </TextField>
         <TextField label="Notice reference" value={form.noticeReference} onChange={(e) => setForm({ ...form, noticeReference: e.target.value })} sx={{ flex: 1 }} />
-        <TextField label="Notice date" type="date" value={form.noticeDate} onChange={(e) => setForm({ ...form, noticeDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField sx={{ flex: 1 }} label="Notice date" type="date" value={form.noticeDate} onChange={(e) => setForm({ ...form, noticeDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
       </Stack>
       <ItemPicker value={item} onChange={setItem} label="Product recalled" />
       <TextField label="Batch numbers (comma-separated; blank = all batches)" value={form.batchNos} onChange={(e) => setForm({ ...form, batchNos: e.target.value })} />
@@ -694,11 +694,11 @@ export function DisposalDetailPage() {
               </Table>
               {editable && (
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 2 }}>
-                  <TextField select size="small" label="Method" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} sx={{ minWidth: 200 }}>
+                  <TextField select size="small" label="Method" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
                     {Object.values(DisposalMethod).map((m) => <MenuItem key={m} value={m}>{humanise(m)}</MenuItem>)}
                   </TextField>
                   <TextField size="small" label="Buyer / recipient / supplier" value={form.recipient} onChange={(e) => setForm({ ...form, recipient: e.target.value })} sx={{ flex: 1 }} />
-                  <TextField size="small" label="Public notice ref (PPADA)" value={form.publicNoticeRef} onChange={(e) => setForm({ ...form, publicNoticeRef: e.target.value })} />
+                  <TextField sx={{ flex: 1 }} size="small" label="Public notice ref (PPADA)" value={form.publicNoticeRef} onChange={(e) => setForm({ ...form, publicNoticeRef: e.target.value })} />
                   <Button disabled={update.isPending} onClick={() => update.mutate()}>Save</Button>
                 </Stack>
               )}

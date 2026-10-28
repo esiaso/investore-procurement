@@ -139,7 +139,7 @@ export function RequisitionFormPage() {
               )} />
               <Controller control={control} name="requiredBy" render={({ field }) => <TextField label="Required by" type="date" {...field} slotProps={{ inputLabel: { shrink: true } }} />} />
               <Controller control={control} name="sourcingMethod" render={({ field }) => (
-                <TextField select label="Sourcing method" {...field} value={field.value ?? ''} helperText="Checked against the value bands when submitted" sx={{ minWidth: 240 }}>
+                <TextField select label="Sourcing method" {...field} value={field.value ?? ''} helperText="Checked against the value bands when submitted" sx={{ minWidth: 240, width: 'auto' }}>
                   <MenuItem value="">Recommended for the value</MenuItem>
                   {(methods.data ?? []).filter((m) => m.isActive).map((m) => <MenuItem key={m.code} value={m.code}>{m.label}</MenuItem>)}
                 </TextField>

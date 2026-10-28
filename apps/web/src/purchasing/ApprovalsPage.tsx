@@ -74,12 +74,12 @@ function Delegations() {
         </Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
           {can(Permissions.APPROVALS_MANAGE) && (
-            <TextField select label="On behalf of" value={form.fromUserId} onChange={(e) => setForm({ ...form, fromUserId: e.target.value })} sx={{ minWidth: 200 }}>
+            <TextField select label="On behalf of" value={form.fromUserId} onChange={(e) => setForm({ ...form, fromUserId: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
               <MenuItem value="">Me</MenuItem>
               {(users.data ?? []).map((u) => <MenuItem key={u.id} value={u.id}>{u.fullName}</MenuItem>)}
             </TextField>
           )}
-          <TextField select label="Delegate to" value={form.toUserId} onChange={(e) => setForm({ ...form, toUserId: e.target.value })} sx={{ minWidth: 220 }}>
+          <TextField select label="Delegate to" value={form.toUserId} onChange={(e) => setForm({ ...form, toUserId: e.target.value })} sx={{ minWidth: 220, width: 'auto' }}>
             {(users.data ?? []).filter((u) => u.id !== user?.id).map((u) => <MenuItem key={u.id} value={u.id}>{u.fullName} ({u.username})</MenuItem>)}
           </TextField>
           <TextField label="From" type="date" value={form.startsOn} onChange={(e) => setForm({ ...form, startsOn: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
@@ -194,7 +194,7 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
         </TextField>
       </Stack>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField select label="Only for department" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} sx={{ minWidth: 220 }}>
+        <TextField select label="Only for department" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} sx={{ minWidth: 220, width: 'auto' }}>
           <MenuItem value="">Any</MenuItem>
           {(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
         </TextField>
@@ -206,17 +206,17 @@ function WorkflowDialog({ workflow, onClose }: { workflow: Workflow | 'new'; onC
         <Stack key={i} direction="row" spacing={1} alignItems="center">
           <Typography sx={{ width: 24 }}>{i + 1}.</Typography>
           <TextField label="Step name" value={s.name} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
-          <TextField select label="Approver role" value={s.roleId} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, roleId: e.target.value } : x)) })} sx={{ minWidth: 240 }}>
+          <TextField select label="Approver role" value={s.roleId} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, roleId: e.target.value } : x)) })} sx={{ minWidth: 240, width: 'auto' }}>
             {(roles.data ?? []).map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
           </TextField>
-          <TextField select label="Who" value={s.approverType} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, approverType: e.target.value } : x)) })} sx={{ minWidth: 220 }}>
+          <TextField select label="Who" value={s.approverType} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, approverType: e.target.value } : x)) })} sx={{ minWidth: 220, width: 'auto' }}>
             <MenuItem value="ROLE">Anyone with the role</MenuItem>
             <MenuItem value="DEPARTMENT_ROLE">Role holder in the document's department</MenuItem>
           </TextField>
           <TextField label="Approvals needed" type="number" value={s.minApprovals} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, minApprovals: e.target.value } : x)) })} sx={{ width: 110 }} helperText="N of the role" />
           <TextField label="Remind after h" type="number" value={s.remindAfterHours} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, remindAfterHours: e.target.value } : x)) })} sx={{ width: 110 }} />
           <TextField label="Escalate after h" type="number" value={s.escalateAfterHours} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, escalateAfterHours: e.target.value } : x)) })} sx={{ width: 110 }} />
-          <TextField select label="Escalate to" value={s.escalateToRoleId} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, escalateToRoleId: e.target.value } : x)) })} sx={{ minWidth: 160 }}>
+          <TextField select label="Escalate to" value={s.escalateToRoleId} onChange={(e) => setForm({ ...form, steps: form.steps.map((x, j) => (j === i ? { ...x, escalateToRoleId: e.target.value } : x)) })} sx={{ minWidth: 160, width: 'auto' }}>
             <MenuItem value="">—</MenuItem>
             {(roles.data ?? []).map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
           </TextField>

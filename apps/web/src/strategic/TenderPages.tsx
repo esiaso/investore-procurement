@@ -111,7 +111,7 @@ export function TenderFormPage() {
             <TextField label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
             <TextField label="Description / scope" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} multiline minRows={2} />
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField select label="Method" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} sx={{ minWidth: 220 }}>
+              <TextField select label="Method" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} sx={{ minWidth: 220, width: 'auto' }}>
                 {TENDER_METHODS.map((m) => <MenuItem key={m} value={m}>{methodLabel(methods.data, m)}</MenuItem>)}
               </TextField>
               <TextField label="Estimated value" type="number" value={form.estimatedValue} onChange={(e) => setForm({ ...form, estimatedValue: Number(e.target.value) })} />
@@ -134,7 +134,7 @@ export function TenderFormPage() {
             {lines.map((l, i) => (
               <Stack key={i} direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'flex-start' }}>
                 <ItemPicker value={l.item} onChange={(item) => setLine(i, { item })} label="Catalogue item" />
-                {!l.item && <TextField label="Description" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />}
+                {!l.item && <TextField sx={{ flex: 1 }} label="Description" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />}
                 <TextField label="Quantity" type="number" value={l.quantity} onChange={(e) => setLine(i, { quantity: Number(e.target.value) })} sx={{ width: { md: 120 } }} />
                 <TextField label="Specification" value={l.specification} onChange={(e) => setLine(i, { specification: e.target.value })} sx={{ flex: 1 }} />
                 <IconButton aria-label={`Remove line ${i + 1}`} onClick={() => setLines(lines.filter((_, j) => j !== i))} disabled={lines.length === 1}><DeleteIcon /></IconButton>

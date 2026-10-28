@@ -448,7 +448,7 @@ function SettlementDialog({ onClose }: { onClose(): void }) {
           {(payers.data ?? []).map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </TextField>
         <Stack direction="row" spacing={2}>
-          <TextField type="date" required label="Received on" value={f.receivedOn} onChange={(e) => setF({ ...f, receivedOn: e.target.value })} InputLabelProps={{ shrink: true }} />
+          <TextField sx={{ flex: 1 }} type="date" required label="Received on" value={f.receivedOn} onChange={(e) => setF({ ...f, receivedOn: e.target.value })} InputLabelProps={{ shrink: true }} />
           <TextField required label="Mode" value={f.modeCode} onChange={(e) => setF({ ...f, modeCode: e.target.value.toUpperCase() })} helperText="Mapped to a bank account" sx={{ width: 140 }} />
           <TextField required label="Remittance / EFT reference" value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} sx={{ flex: 1 }} />
         </Stack>

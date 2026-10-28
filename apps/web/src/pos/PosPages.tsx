@@ -75,10 +75,10 @@ export function PosShiftsPage() {
     <>
       <PageHeader title="Shifts and cash-up" />
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 160 }}>
+        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 160, width: 'auto' }}>
           <MenuItem value="">All</MenuItem><MenuItem value="OPEN">Open</MenuItem><MenuItem value="CLOSED">Closed</MenuItem>
         </TextField>
-        <TextField select label="Variance" value={varianceStatus} onChange={(e) => setVarianceStatus(e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label="Variance" value={varianceStatus} onChange={(e) => setVarianceStatus(e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>{['PENDING', 'APPROVED', 'REJECTED', 'NONE'].map((s) => <MenuItem key={s} value={s}>{s === 'NONE' ? 'Within tolerance' : humanise(s)}</MenuItem>)}
         </TextField>
       </Stack>
@@ -260,7 +260,7 @@ function PromotionDialog({ value, onClose }: { value: Partial<PromotionRow>; onC
   return (
     <FormDialog open title={value.id ? `Promotion ${value.code}` : 'New promotion'} onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <Stack direction="row" spacing={1}>
-        <TextField label="Code" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} required />
+        <TextField sx={{ flex: 1 }} label="Code" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} required />
         <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required sx={{ flex: 1 }} />
       </Stack>
       <ItemPicker value={item} onChange={setItem} label="Item (or choose a category)" />
@@ -375,7 +375,7 @@ function StatementDialog({ customer, onClose }: { customer: CustomerRow; onClose
       <Typography variant="h6">Owes {money(st.data?.balance ?? 0)}</Typography>
       <Stack direction="row" spacing={1}>
         <TextField label="Payment" type="number" value={amount} onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))} />
-        <TextField select label="By" value={mode} onChange={(e) => setMode(e.target.value)} sx={{ minWidth: 120 }}>
+        <TextField select label="By" value={mode} onChange={(e) => setMode(e.target.value)} sx={{ minWidth: 120, width: 'auto' }}>
           <MenuItem value="CASH">Cash</MenuItem><MenuItem value="MPESA">M-Pesa</MenuItem><MenuItem value="CARD">Card</MenuItem>
         </TextField>
         {mode !== 'CASH' && <TextField label="Reference" value={reference} onChange={(e) => setReference(e.target.value)} />}
@@ -415,7 +415,7 @@ function MpesaTab() {
         </TextField>
         <Stack direction="row" spacing={1}>
           <TextField label="Business shortcode" value={f.shortcode} onChange={(e) => setF({ ...f, shortcode: e.target.value })} />
-          <TextField select label="Type" value={f.transactionType} onChange={(e) => setF({ ...f, transactionType: e.target.value })} sx={{ minWidth: 220 }}>
+          <TextField select label="Type" value={f.transactionType} onChange={(e) => setF({ ...f, transactionType: e.target.value })} sx={{ minWidth: 220, width: 'auto' }}>
             <MenuItem value="CustomerPayBillOnline">Paybill</MenuItem><MenuItem value="CustomerBuyGoodsOnline">Buy goods (till)</MenuItem>
           </TextField>
           {f.transactionType === 'CustomerBuyGoodsOnline' && <TextField label="Till number" value={f.partyB} onChange={(e) => setF({ ...f, partyB: e.target.value })} />}
@@ -466,7 +466,7 @@ export function PosReportsPage() {
         <TextField label="From" type="date" value={from} onChange={(e) => setFrom(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="To" type="date" value={to} onChange={(e) => setTo(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         <StoreSelect value={storeId} onChange={setStoreId} label="Store" allowAll="All" sx={{ minWidth: 200 }} />
-        <TextField select label="By" value={groupBy} onChange={(e) => setGroupBy(e.target.value)} sx={{ minWidth: 180 }}>
+        <TextField select label="By" value={groupBy} onChange={(e) => setGroupBy(e.target.value)} sx={{ minWidth: 180, width: 'auto' }}>
           {['cashier', 'shift', 'item', 'category', 'mode', 'hour'].map((g) => <MenuItem key={g} value={g}>{g === 'mode' ? 'Payment mode' : humanise(g)}</MenuItem>)}
         </TextField>
         <Box sx={{ flexGrow: 1 }} />

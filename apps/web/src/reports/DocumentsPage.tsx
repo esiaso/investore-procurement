@@ -72,16 +72,16 @@ function RegisterTab() {
     <Stack spacing={2}>
       <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
         <TextField label="File, record number or note" value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} sx={{ minWidth: 260, flex: 1 }} />
-        <TextField select label="Record" value={f.ownerType} onChange={(e) => setF({ ...f, ownerType: e.target.value })} sx={{ minWidth: 200 }}>
+        <TextField select label="Record" value={f.ownerType} onChange={(e) => setF({ ...f, ownerType: e.target.value })} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           {(facets.data?.ownerTypes ?? []).map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
         </TextField>
-        <TextField select label="Category" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} sx={{ minWidth: 180 }}>
+        <TextField select label="Category" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} sx={{ minWidth: 180, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           {(facets.data?.categories ?? []).map((c) => <MenuItem key={c} value={c}>{humanise(c)}</MenuItem>)}
         </TextField>
-        <TextField type="date" label="From" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} InputLabelProps={{ shrink: true }} />
-        <TextField type="date" label="To" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} InputLabelProps={{ shrink: true }} />
+        <TextField sx={{ flex: 1 }} type="date" label="From" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} InputLabelProps={{ shrink: true }} />
+        <TextField sx={{ flex: 1 }} type="date" label="To" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} InputLabelProps={{ shrink: true }} />
         <FormControlLabel control={<Switch checked={f.versions} onChange={(e) => setF({ ...f, versions: e.target.checked })} />} label="Earlier versions" />
       </Stack>
       <Paper>

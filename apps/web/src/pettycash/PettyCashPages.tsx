@@ -99,7 +99,7 @@ export function PettyRequestDialog({ onClose }: { onClose(): void }) {
         <TextField select label="Float" value={f.floatId} onChange={(e) => set({ floatId: e.target.value })} required sx={{ flex: 1 }}>
           {(floats.data ?? []).filter((x) => x.isActive).map((x) => <MenuItem key={x.id} value={x.id}>{x.name} (available {formatMoney(x.available ?? x.balance, 'KES')})</MenuItem>)}
         </TextField>
-        <TextField select label="Type" value={f.kind} onChange={(e) => set({ kind: e.target.value as 'PAYMENT' | 'ADVANCE' })} sx={{ minWidth: 200 }}>
+        <TextField select label="Type" value={f.kind} onChange={(e) => set({ kind: e.target.value as 'PAYMENT' | 'ADVANCE' })} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="PAYMENT">Payment</MenuItem>
           <MenuItem value="ADVANCE">Advance / imprest (to retire)</MenuItem>
         </TextField>
@@ -108,7 +108,7 @@ export function PettyRequestDialog({ onClose }: { onClose(): void }) {
       {advance && <Alert severity="info">An advance is paid to you and must be retired with receipts (and any balance returned). No new advance is given while one is open.</Alert>}
       {!advance && (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <TextField select label="Payee" value={f.payeeType} onChange={(e) => set({ payeeType: e.target.value as 'STAFF' | 'VENDOR' })} sx={{ minWidth: 160 }}>
+          <TextField select label="Payee" value={f.payeeType} onChange={(e) => set({ payeeType: e.target.value as 'STAFF' | 'VENDOR' })} sx={{ minWidth: 160, width: 'auto' }}>
             <MenuItem value="VENDOR">Vendor / other</MenuItem>
             <MenuItem value="STAFF">Me (staff)</MenuItem>
           </TextField>
@@ -127,7 +127,7 @@ export function PettyRequestDialog({ onClose }: { onClose(): void }) {
       </Stack>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField label="Amount" type="number" value={f.amount} onChange={(e) => set({ amount: e.target.value })} required slotProps={{ htmlInput: { min: 1, step: '0.01', max: chosen?.perTransactionLimit } }} />
-        <TextField select label="Pay by" value={f.method} onChange={(e) => set({ method: e.target.value as PettyMethod })} sx={{ minWidth: 180 }}>
+        <TextField select label="Pay by" value={f.method} onChange={(e) => set({ method: e.target.value as PettyMethod })} sx={{ minWidth: 180, width: 'auto' }}>
           {PETTY_METHODS.filter((m) => m.value === 'CASH' || chosen?.mpesaEnabled).map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
         </TextField>
         {f.method === 'MPESA_B2C' && <TextField label="Phone" value={f.payeePhone} onChange={(e) => set({ payeePhone: e.target.value })} required />}
@@ -399,7 +399,7 @@ function FloatDialog({ f, onClose }: { f?: PettyFloat; onClose(): void }) {
   return (
     <FormDialog open maxWidth="md" title={f ? `Float ${f.code}` : 'New petty cash float'} onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <Stack direction="row" spacing={2}>
-        <TextField label="Code" value={v.code} onChange={(e) => set({ code: e.target.value.toUpperCase() })} required />
+        <TextField sx={{ flex: 1 }} label="Code" value={v.code} onChange={(e) => set({ code: e.target.value.toUpperCase() })} required />
         <TextField label="Name" value={v.name} onChange={(e) => set({ name: e.target.value })} required sx={{ flex: 1 }} />
       </Stack>
       <Stack direction="row" spacing={2}>

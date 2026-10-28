@@ -92,10 +92,10 @@ export function DepartmentReturnFormPage() {
       <Paper sx={{ p: 2 }}>
         <Stack spacing={2}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <TextField select label="Department / ward" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} sx={{ minWidth: 220 }}>
+            <TextField select label="Department / ward" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
               {(departments.data ?? []).filter((d) => !ownOnly || d.id === user?.departmentId).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
             </TextField>
-            <TextField select label="Return to" value={storeId} onChange={(e) => setStoreId(e.target.value)} sx={{ minWidth: 220 }}>
+            <TextField select label="Return to" value={storeId} onChange={(e) => setStoreId(e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
               {(stores.data ?? []).map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
             </TextField>
           </Stack>
@@ -130,18 +130,18 @@ export function DepartmentReturnFormPage() {
                           <TextField size="small" type="number" value={d?.quantity ?? 0} error={(d?.quantity ?? 0) > l.returnableQty} onChange={(e) => set(l.issueVoucherLineId, { quantity: Math.max(0, Number(e.target.value) || 0) })} slotProps={{ htmlInput: { min: 0, 'aria-label': `Return quantity of ${l.itemName} ${l.batchNo}` } }} sx={{ width: 90 }} />
                         </TableCell>
                         <TableCell>
-                          <TextField select size="small" value={d?.reasonCode ?? ''} onChange={(e) => set(l.issueVoucherLineId, { reasonCode: e.target.value })} sx={{ minWidth: 180 }} slotProps={{ htmlInput: { 'aria-label': 'Reason' } }}>
+                          <TextField select size="small" value={d?.reasonCode ?? ''} onChange={(e) => set(l.issueVoucherLineId, { reasonCode: e.target.value })} sx={{ minWidth: 180, width: 'auto' }} slotProps={{ htmlInput: { 'aria-label': 'Reason' } }}>
                             {(reasons.data ?? []).map((r) => <MenuItem key={r.code} value={r.code}>{r.name}</MenuItem>)}
                           </TextField>
                         </TableCell>
                         <TableCell>
-                          <TextField select size="small" value={d?.condition ?? ReturnCondition.RESALEABLE} onChange={(e) => set(l.issueVoucherLineId, { condition: e.target.value as ReturnCondition })} sx={{ minWidth: 140 }} slotProps={{ htmlInput: { 'aria-label': 'Condition' } }}>
+                          <TextField select size="small" value={d?.condition ?? ReturnCondition.RESALEABLE} onChange={(e) => set(l.issueVoucherLineId, { condition: e.target.value as ReturnCondition })} sx={{ minWidth: 140, width: 'auto' }} slotProps={{ htmlInput: { 'aria-label': 'Condition' } }}>
                             {Object.values(ReturnCondition).map((c) => <MenuItem key={c} value={c}>{humanise(c)}</MenuItem>)}
                           </TextField>
                         </TableCell>
                         {storeUser && (
                           <TableCell>
-                            <TextField select size="small" value={d?.binId ?? ''} disabled={(d?.condition ?? ReturnCondition.RESALEABLE) !== ReturnCondition.RESALEABLE} onChange={(e) => set(l.issueVoucherLineId, { binId: e.target.value })} sx={{ minWidth: 120 }} slotProps={{ htmlInput: { 'aria-label': 'Bin' } }}>
+                            <TextField select size="small" value={d?.binId ?? ''} disabled={(d?.condition ?? ReturnCondition.RESALEABLE) !== ReturnCondition.RESALEABLE} onChange={(e) => set(l.issueVoucherLineId, { binId: e.target.value })} sx={{ minWidth: 120, width: 'auto' }} slotProps={{ htmlInput: { 'aria-label': 'Bin' } }}>
                               <MenuItem value="">No bin</MenuItem>
                               {(bins.data ?? []).filter((b) => b.isActive && !b.isQuarantine).map((b) => <MenuItem key={b.id} value={b.id}>{b.code}</MenuItem>)}
                             </TextField>
@@ -310,11 +310,11 @@ export function SupplierReturnFormPage() {
       <Paper sx={{ p: 2 }}>
         <Stack spacing={2}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <TextField select label="Supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} sx={{ minWidth: 240 }}>
+            <TextField select label="Supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} sx={{ minWidth: 240, width: 'auto' }}>
               {(suppliers.data ?? []).map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
             </TextField>
             <StoreSelect value={storeId} onChange={(v) => { setStoreId(v); setQty({}); }} label="From store" sx={{ minWidth: 220 }} />
-            <TextField select label="Reason" value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} sx={{ minWidth: 220 }}>
+            <TextField select label="Reason" value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
               {(reasons.data ?? []).map((r) => <MenuItem key={r.code} value={r.code}>{r.name}</MenuItem>)}
             </TextField>
           </Stack>

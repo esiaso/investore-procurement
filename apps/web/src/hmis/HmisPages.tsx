@@ -212,14 +212,14 @@ function MessagesTab() {
   return (
     <>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-        <TextField select label="Direction" value={direction} onChange={(e) => setDirection(e.target.value)} sx={{ minWidth: 130 }}>
+        <TextField select label="Direction" value={direction} onChange={(e) => setDirection(e.target.value)} sx={{ minWidth: 130, width: 'auto' }}>
           <MenuItem value="">All</MenuItem><MenuItem value="IN">In</MenuItem><MenuItem value="OUT">Out</MenuItem>
         </TextField>
-        <TextField select label="Type" value={type} onChange={(e) => setType(e.target.value)} sx={{ minWidth: 200 }}>
+        <TextField select label="Type" value={type} onChange={(e) => setType(e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           {['PATIENT', 'ENCOUNTER', 'ALLERGY', 'MEDICATION_REQUEST', 'MEDICATION_DISPENSE', 'CHARGE'].map((t) => <MenuItem key={t} value={t}>{humanise(t)}</MenuItem>)}
         </TextField>
-        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 150 }}>
+        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 150, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           {['PENDING', 'PROCESSED', 'SENT', 'FAILED', 'IGNORED'].map((t) => <MenuItem key={t} value={t}>{humanise(t)}</MenuItem>)}
         </TextField>
@@ -300,7 +300,7 @@ function MappingTab({ prefill, onPrefillUsed }: { prefill: { code: string; displ
   return (
     <Paper sx={{ p: 2 }}>
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
-        <TextField select label="Kind" value={kind} onChange={(e) => setKind(e.target.value as HmisMappingKind)} sx={{ minWidth: 220 }}>
+        <TextField select label="Kind" value={kind} onChange={(e) => setKind(e.target.value as HmisMappingKind)} sx={{ minWidth: 220, width: 'auto' }}>
           {MAPPING_KINDS.map((k) => <MenuItem key={k.kind} value={k.kind}>{k.label}</MenuItem>)}
         </TextField>
         <Typography variant="body2" sx={{ flexGrow: 1 }}>{info.help}</Typography>
@@ -516,10 +516,10 @@ export function EncountersPage() {
       <PageHeader title="Encounters" search={search} onSearch={setSearch} searchPlaceholder="Patient, hospital no., bed or HMIS id" />
       <Typography variant="body2" sx={{ mb: 1 }}>Visits and admissions cached from the HMIS (the HMIS is the register), with what has been dispensed and charged to each.</Typography>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 160 }}>
+        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 160, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>{['ACTIVE', 'FINISHED', 'CANCELLED'].map((s) => <MenuItem key={s} value={s}>{humanise(s)}</MenuItem>)}
         </TextField>
-        <TextField select label="Ward" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} sx={{ minWidth: 220 }}>
+        <TextField select label="Ward" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>{(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
         </TextField>
       </Stack>
@@ -726,7 +726,7 @@ export function WardSupplyPage() {
             <Button size="small" onClick={() => navigate(`/pharmacy/prescriptions/${l.prescriptionId}`)}>Verify first</Button>
           ) : l.due > 0 && p ? (
             <Stack direction="row" spacing={1}>
-              <TextField select size="small" label="Brand" value={p.itemId} onChange={(e) => setPick({ ...pick, [l.prescriptionLineId]: { ...p, itemId: e.target.value } })} sx={{ minWidth: 200 }}>
+              <TextField select size="small" label="Brand" value={p.itemId} onChange={(e) => setPick({ ...pick, [l.prescriptionLineId]: { ...p, itemId: e.target.value } })} sx={{ minWidth: 200, width: 'auto' }}>
                 {brandsOf(l.prescriptionLineId).map((b) => <MenuItem key={b.itemId} value={b.itemId} disabled={b.available <= 0}>{b.name} ({b.available})</MenuItem>)}
               </TextField>
               <TextField size="small" label="Qty" type="number" value={p.quantity} onChange={(e) => setPick({ ...pick, [l.prescriptionLineId]: { ...p, quantity: Number(e.target.value) } })} sx={{ width: 90 }} />
@@ -744,7 +744,7 @@ export function WardSupplyPage() {
       <Typography variant="body2" sx={{ mb: 1 }}>Daily and unit-dose supply for admitted patients: what each line still needs today (daily quantity less what was given today). Batches are taken first-expiry-first-out; charges follow the HMIS billing setting.</Typography>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
         <StoreSelect value={storeId} onChange={setStoreId} label="Inpatient pharmacy" sx={{ minWidth: 240 }} />
-        <TextField select label="Ward" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} sx={{ minWidth: 220 }}>
+        <TextField select label="Ward" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
           <MenuItem value="">All wards</MenuItem>{(departments.data ?? []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
         </TextField>
         <Box sx={{ flexGrow: 1 }} />

@@ -114,7 +114,7 @@ export function PharmacyWorklistPage() {
       <PageHeader title="Pharmacy worklist" search={search} onSearch={setSearch} searchPlaceholder="Rx, patient or hospital no." onNew={can(P.PHARMACY_PRESCRIPTION) ? () => navigate('/pharmacy/new') : undefined} newLabel="New prescription" />
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
         <StoreSelect value={storeId} onChange={setStoreId} label="Outlet" allowAll="All my outlets" sx={{ minWidth: 220 }} />
-        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 220 }}>
+        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 220, width: 'auto' }}>
           <MenuItem value={OPEN}>Open (to verify / dispense)</MenuItem>
           {['RECEIVED', 'VERIFIED', 'PARTIALLY_DISPENSED', 'DISPENSED', 'CANCELLED'].map((s) => (
             <MenuItem key={s} value={s}>{humanise(s)}</MenuItem>
@@ -510,7 +510,7 @@ function DispenseDialog({ rx, onClose }: { rx: Prescription; onClose(): void }) 
       <>
       <Typography variant="body2">Batches are taken first-expiry-first-out. The patient’s payer and co-pay come from the {rx.encounter ? 'visit' : 'patient record'}.</Typography>
       <Stack direction="row" spacing={1}>
-        <TextField select label="Payment" value={mode} onChange={(e) => setMode(e.target.value)} sx={{ minWidth: 180 }}>
+        <TextField select label="Payment" value={mode} onChange={(e) => setMode(e.target.value)} sx={{ minWidth: 180, width: 'auto' }}>
           {(modes.data ?? []).filter((m) => m.isActive).map((m) => <MenuItem key={m.code} value={m.code}>{m.name}</MenuItem>)}
         </TextField>
         <TextField label="Amount tendered" type="number" value={amount} onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))} helperText="Leave empty to put it on account" />
@@ -601,7 +601,7 @@ function PatientDialog({ patient, onClose, onSaved }: { patient?: Patient; onClo
       <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
       <Stack direction="row" spacing={1}>
         <TextField label="Date of birth" type="date" value={f.dateOfBirth} onChange={(e) => setF({ ...f, dateOfBirth: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField select label="Sex" value={f.sex} onChange={(e) => setF({ ...f, sex: e.target.value as Patient['sex'] & string })} sx={{ minWidth: 110 }}>
+        <TextField select label="Sex" value={f.sex} onChange={(e) => setF({ ...f, sex: e.target.value as Patient['sex'] & string })} sx={{ minWidth: 110, width: 'auto' }}>
           <MenuItem value="F">Female</MenuItem>
           <MenuItem value="M">Male</MenuItem>
           <MenuItem value="OTHER">Other</MenuItem>
@@ -615,7 +615,7 @@ function PatientDialog({ patient, onClose, onSaved }: { patient?: Patient; onClo
           <MenuItem value="">Self (cash)</MenuItem>
           {(payers.data ?? []).filter((p) => p.isActive).map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </TextField>
-        <TextField label="Member no." value={f.memberNo} onChange={(e) => setF({ ...f, memberNo: e.target.value })} />
+        <TextField sx={{ flex: 1 }} label="Member no." value={f.memberNo} onChange={(e) => setF({ ...f, memberNo: e.target.value })} />
       </Stack>
       <Stack direction="row" spacing={1}>
         <TextField label="Phone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />

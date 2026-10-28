@@ -73,7 +73,7 @@ export function VoucherDialog({ invoices, onClose }: { invoices: Payable[]; onCl
       )}
       {isMpesa(method) && <Alert severity="info">M-PESA pays whole shillings, from the paying shortcode configured on the server.</Alert>}
       <Stack direction="row" spacing={2}>
-        <TextField label="Pay on" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField sx={{ flex: 1 }} label="Pay on" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="Narrative" value={narrative} onChange={(e) => setNarrative(e.target.value)} sx={{ flex: 1 }} />
       </Stack>
     </FormDialog>

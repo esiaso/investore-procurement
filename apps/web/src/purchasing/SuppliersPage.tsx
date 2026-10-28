@@ -177,7 +177,7 @@ function SupplierDetails({ id, onClose, onEdit }: { id: string; onClose(): void;
           </Paper>
           {manage && (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-              <TextField select label="Change status" value={status.status} onChange={(e) => setStatus({ ...status, status: e.target.value })} sx={{ minWidth: 180 }}>
+              <TextField select label="Change status" value={status.status} onChange={(e) => setStatus({ ...status, status: e.target.value })} sx={{ minWidth: 180, width: 'auto' }}>
                 {Object.values(SupplierStatus).map((v) => <MenuItem key={v} value={v}>{humanise(v)}</MenuItem>)}
               </TextField>
               <TextField label="Reason" value={status.reason} onChange={(e) => setStatus({ ...status, reason: e.target.value })} />
@@ -202,7 +202,7 @@ function SupplierDetails({ id, onClose, onEdit }: { id: string; onClose(): void;
           ))}
           {manage && (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ pt: 1 }}>
-              <TextField select label="Type" value={doc.documentType} onChange={(e) => setDoc({ ...doc, documentType: e.target.value })} sx={{ minWidth: 180 }}>
+              <TextField select label="Type" value={doc.documentType} onChange={(e) => setDoc({ ...doc, documentType: e.target.value })} sx={{ minWidth: 180, width: 'auto' }}>
                 {['PPB_LICENCE', 'BUSINESS_PERMIT', 'TAX_COMPLIANCE', 'CR12', 'KEBS_CERTIFICATE', 'GMP_CERTIFICATE'].map((t) => <MenuItem key={t} value={t}>{humanise(t)}</MenuItem>)}
               </TextField>
               <TextField label="Reference" value={doc.reference} onChange={(e) => setDoc({ ...doc, reference: e.target.value })} />

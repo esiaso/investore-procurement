@@ -13,5 +13,17 @@ export const theme = createTheme({
     MuiFormControl: { defaultProps: { size: 'small', fullWidth: true } },
     MuiButton: { defaultProps: { disableElevation: true } },
     MuiDialog: { defaultProps: { fullWidth: true, maxWidth: 'sm' } },
+    // Side panels (item details, bin card…) open below the fixed app bar, which sits above
+    // drawers (AppLayout), so their header is never hidden. Heights match the Toolbar's.
+    MuiDrawer: {
+      styleOverrides: {
+        paperAnchorRight: ({ theme }) => ({
+          top: 56,
+          height: 'calc(100% - 56px)',
+          [`${theme.breakpoints.up('xs')} and (orientation: landscape)`]: { top: 48, height: 'calc(100% - 48px)' },
+          [theme.breakpoints.up('sm')]: { top: 64, height: 'calc(100% - 64px)' },
+        }),
+      },
+    },
   },
 });

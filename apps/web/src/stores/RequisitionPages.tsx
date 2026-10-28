@@ -137,17 +137,17 @@ export function StoreRequisitionFormPage() {
           <Stack spacing={2}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <Controller control={control} name="departmentId" render={({ field, fieldState }) => (
-                <TextField select label="Department / ward" {...field} error={!!fieldState.error} helperText={fieldState.error?.message} sx={{ minWidth: 220 }}>
+                <TextField select label="Department / ward" {...field} error={!!fieldState.error} helperText={fieldState.error?.message} sx={{ minWidth: 220, width: 'auto' }}>
                   {deptOptions.map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
                 </TextField>
               )} />
               <Controller control={control} name="storeId" render={({ field, fieldState }) => (
-                <TextField select label="Request from" {...field} disabled={!!id} error={!!fieldState.error} helperText={fieldState.error?.message} sx={{ minWidth: 220 }}>
+                <TextField select label="Request from" {...field} disabled={!!id} error={!!fieldState.error} helperText={fieldState.error?.message} sx={{ minWidth: 220, width: 'auto' }}>
                   {(stores.data ?? []).map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
                 </TextField>
               )} />
               <Controller control={control} name="priority" render={({ field }) => (
-                <TextField select label="Priority" {...field} sx={{ minWidth: 150 }}>
+                <TextField select label="Priority" {...field} sx={{ minWidth: 150, width: 'auto' }}>
                   {Object.values(RequisitionPriority).map((p) => <MenuItem key={p} value={p}>{humanise(p)}</MenuItem>)}
                 </TextField>
               )} />

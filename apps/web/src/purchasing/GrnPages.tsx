@@ -156,7 +156,7 @@ export function GrnFormPage() {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField label="Supplier delivery note no." value={deliveryNoteNo} onChange={(e) => setDeliveryNoteNo(e.target.value)} />
             {openShipments.length > 0 && (
-              <TextField select label="Shipment" value={shipmentId} onChange={(e) => setShipmentId(e.target.value)} sx={{ minWidth: 200 }}>
+              <TextField select label="Shipment" value={shipmentId} onChange={(e) => setShipmentId(e.target.value)} sx={{ minWidth: 200, width: 'auto' }}>
                 <MenuItem value="">Not on a notified shipment</MenuItem>
                 {openShipments.map((s) => <MenuItem key={s.id} value={s.id}>{s.number} (expected {s.expectedOn})</MenuItem>)}
               </TextField>
@@ -347,7 +347,7 @@ export function GrnDetailPage() {
               )}
               {grn.isEmergency && grn.status === 'POSTED' && grn.regularisationStatus === 'PENDING' && can(Permissions.PURCHASING_PO) && (
                 <Stack direction="row" spacing={1}>
-                  <TextField select label="Regularise with PO" value={poToLink} onChange={(e) => setPoToLink(e.target.value)} sx={{ minWidth: 260 }}>
+                  <TextField select label="Regularise with PO" value={poToLink} onChange={(e) => setPoToLink(e.target.value)} sx={{ minWidth: 260, width: 'auto' }}>
                     {(pos.data?.items ?? []).map((p) => <MenuItem key={p.id} value={p.id}>{p.number} · {money(p.total)}</MenuItem>)}
                   </TextField>
                   <Button disabled={!poToLink} onClick={() => regularise.mutate()}>Link</Button>

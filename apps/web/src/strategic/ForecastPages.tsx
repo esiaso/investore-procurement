@@ -468,7 +468,7 @@ function ProgrammeDialog({ row, onClose }: { row: Programme | null; onClose(): v
   return (
     <FormDialog open maxWidth="md" title={row ? `Programme ${row.code}` : 'New programme'} onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <Stack direction="row" spacing={2}>
-        <TextField label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
+        <TextField sx={{ flex: 1 }} label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
         <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required sx={{ flex: 1 }} />
       </Stack>
       <TextField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -643,7 +643,7 @@ function FundingDialog({ row, onClose }: { row: FundingSource | null; onClose():
   return (
     <FormDialog open title={row ? `Funding source ${row.code}` : 'New funding source'} onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <Stack direction="row" spacing={2}>
-        <TextField label="Code (as on batches)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required disabled={!!row} />
+        <TextField sx={{ flex: 1 }} label="Code (as on batches)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required disabled={!!row} />
         <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required sx={{ flex: 1 }} />
       </Stack>
       <TextField label="Donor" value={form.donor} onChange={(e) => setForm({ ...form, donor: e.target.value })} />

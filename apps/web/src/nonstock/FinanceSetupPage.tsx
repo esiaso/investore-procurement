@@ -51,7 +51,7 @@ function GlTab() {
   return (
     <Stack spacing={2}>
       <Stack direction="row" spacing={1}>
-        <TextField size="small" placeholder="Code or name" value={search} onChange={(e) => setSearch(e.target.value)} sx={{ minWidth: 260 }} />
+        <TextField size="small" placeholder="Code or name" value={search} onChange={(e) => setSearch(e.target.value)} sx={{ minWidth: 260, width: 'auto' }} />
         {can(P.GL_MANAGE) && <Button variant="outlined" onClick={() => setEdit('new')}>New account</Button>}
         {can(P.GL_MANAGE) && <Button disabled={importQb.isPending} onClick={() => importQb.mutate()}>Import from QuickBooks</Button>}
       </Stack>

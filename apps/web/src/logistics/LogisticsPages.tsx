@@ -56,7 +56,7 @@ function NewRunDialog({ onClose }: { onClose(): void }) {
           <MenuItem value="">No route (stops by name)</MenuItem>
           {(routes.data ?? []).filter((r) => r.fromStoreId === fromStoreId).map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
         </TextField>
-        <TextField label="Date" type="date" value={form.runDate} onChange={(e) => setForm({ ...form, runDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField sx={{ flex: 1 }} label="Date" type="date" value={form.runDate} onChange={(e) => setForm({ ...form, runDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
       </Stack>
       <Stack direction="row" spacing={2}>
         <TextField label="Vehicle" value={form.vehicle} onChange={(e) => setForm({ ...form, vehicle: e.target.value })} sx={{ flex: 1 }} />
@@ -78,7 +78,7 @@ function RouteDialog({ onClose }: { onClose(): void }) {
   return (
     <FormDialog open title="New delivery route" onClose={onClose} submitting={save.isPending} onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
       <Stack direction="row" spacing={2}>
-        <TextField label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
+        <TextField sx={{ flex: 1 }} label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
         <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required sx={{ flex: 1 }} />
       </Stack>
       <StoreSelect value={form.fromStoreId} onChange={(v) => setForm({ ...form, fromStoreId: v })} label="From store" />
@@ -171,7 +171,7 @@ function PodDialog({ run, stop, onClose }: { run: Run; stop: Stop; onClose(): vo
                 <TableCell><TextField size="small" type="number" value={g.receivedQty} onChange={(e) => setGot({ ...got, [a.id]: { ...g, receivedQty: Number(e.target.value) } })} slotProps={{ htmlInput: { min: 0, max: a.dispatchedQty, 'aria-label': `Received ${a.item}` } }} sx={{ width: 100 }} /></TableCell>
                 <TableCell>
                   {g.receivedQty < a.dispatchedQty && (
-                    <TextField select size="small" value={g.reason} onChange={(e) => setGot({ ...got, [a.id]: { ...g, reason: e.target.value } })} sx={{ minWidth: 180 }} slotProps={{ htmlInput: { 'aria-label': `Reason ${a.item}` } }}>
+                    <TextField select size="small" value={g.reason} onChange={(e) => setGot({ ...got, [a.id]: { ...g, reason: e.target.value } })} sx={{ minWidth: 180, width: 'auto' }} slotProps={{ htmlInput: { 'aria-label': `Reason ${a.item}` } }}>
                       {(reasons.data ?? []).filter((r) => r.direction !== 'INCREASE').map((r) => <MenuItem key={r.code} value={r.code}>{r.name}</MenuItem>)}
                     </TextField>
                   )}
@@ -347,7 +347,7 @@ function ShipmentDetailDialog({ id, onClose }: { id: string; onClose(): void }) 
       {s.expectedHistory.length > 0 && <Typography variant="body2">Earlier dates: {s.expectedHistory.map((h) => `${date(h.date)}${h.reason ? ` (${h.reason})` : ''}`).join(' → ')}</Typography>}
       {manage && (
         <Stack direction="row" spacing={2}>
-          <TextField label="Expected on" type="date" value={expectedOn} onChange={(e) => setExpected(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField sx={{ flex: 1 }} label="Expected on" type="date" value={expectedOn} onChange={(e) => setExpected(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label="Reason for the change" value={reason} onChange={(e) => setReason(e.target.value)} sx={{ flex: 1 }} />
         </Stack>
       )}

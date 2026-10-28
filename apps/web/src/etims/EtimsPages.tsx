@@ -150,7 +150,7 @@ function MappingTab() {
       <Paper sx={{ p: 2 }}>
         {can(P.ETIMS_MANAGE) && (
           <Stack direction="row" spacing={1} sx={{ mb: 2 }} component="form" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-            <TextField select label="Kind" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })} sx={{ minWidth: 180 }}>
+            <TextField select label="Kind" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })} sx={{ minWidth: 180, width: 'auto' }}>
               {MAPPING_KINDS.map((k) => <MenuItem key={k} value={k}>{humanise(k)}</MenuItem>)}
             </TextField>
             <TextField label="Local key" value={f.localKey} onChange={(e) => setF({ ...f, localKey: e.target.value })} helperText='Tax category / unit code, or "category:DRUG", "item:ITM000123"' />
@@ -185,7 +185,7 @@ function OutboxTab() {
   return (
     <Paper sx={{ p: 2 }}>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 180 }}>
+        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 180, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           {['PENDING', 'FAILED', 'ACCEPTED'].map((s) => <MenuItem key={s} value={s}>{humanise(s)}</MenuItem>)}
         </TextField>
@@ -246,7 +246,7 @@ function PurchasesTab() {
   return (
     <Paper sx={{ p: 2 }}>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 180 }}>
+        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 180, width: 'auto' }}>
           <MenuItem value="">All</MenuItem>
           {['RECEIVED', 'CONFIRMED', 'REJECTED'].map((s) => <MenuItem key={s} value={s}>{humanise(s)}</MenuItem>)}
         </TextField>
