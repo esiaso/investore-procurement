@@ -23,7 +23,25 @@ node dist/database/seeds/create-admin.js jdoe "Jane Doe" jdoe@hospital.org
 The one-time password is printed once. Sign in, change it, and turn on 2FA (*My account*).
 Then create the other users in the application.
 
-## 2. Users (*Administration → Users*)
+## 2. Hospital details (*Organisation → Hospital details*)
+
+![Hospital details: name and contacts, e-mail sender and letterhead logo](images/10-hospital-details.jpg)
+
+The hospital's **name**, **address**, **phone**, **e-mail** and **KRA PIN** appear on the
+letterhead of every document: orders, RFQs, requisitions, vouchers, certificates, reports
+and receipts. Set them here before go-live.
+
+* **Sender of outgoing e-mail**: the name and address approval e-mails, orders and reports
+  come from, e.g. `Upendo Procurement <procurement@upendo.org>`. Your mail server must
+  accept that address.
+* **Letterhead logo**: *Upload logo* (PNG or JPEG, at most 500 KB; a wide logo about
+  3:2, e.g. 330 × 180 px, prints best). It replaces the LOGO box on every PDF from then on.
+  *Replace logo* and *Remove* change it.
+
+Everyone with *org.read* can see the page; only administrators (*org.manage*) can change it.
+Every change is recorded in the audit log (for the logo: its type, size and fingerprint).
+
+## 3. Users (*Administration → Users*)
 
 *New*: **username** (lower case), **full name**, email (for notifications and approval
 emails), phone, **department** (it decides which department approvals the user receives as
@@ -42,7 +60,7 @@ an *Initial password*.
 * **Department in-charges** need the Department / Ward In-charge role **and** the right
   department. Approvals go to the in-charge of the requester's department.
 
-## 3. Roles (*Administration → Roles*)
+## 4. Roles (*Administration → Roles*)
 
 The built-in roles cover the usual jobs (see the [index](README.md)). You can create new roles
 and tick permissions. Each permission's description says what it allows.
@@ -54,7 +72,7 @@ Guidelines:
 * Give `inventory.handle_controlled` only to staff allowed to handle controlled drugs.
 * Supplier users get only the **Supplier** role and must be linked to their supplier.
 
-## 4. Organisation and catalog
+## 5. Organisation and catalog
 
 * **Stores** and **Bins** (*Organisation*): main store, pharmacies, satellites; parent
   store (who supplies whom); quarantine, controlled-drug and fridge bins.
@@ -65,7 +83,7 @@ Guidelines:
 * **Bulk import** (*Catalog → Bulk import*): CSV / Excel. Validate first, review errors and
   duplicates, then import.
 
-## 5. Settings you may be asked to change
+## 6. Settings you may be asked to change
 
 Business settings are in the database (ask the vendor or a developer where there is no
 screen). Common ones, with their defaults:
@@ -88,7 +106,7 @@ screen). Common ones, with their defaults:
 Approval **workflows** are edited in the application (*Approvals → Workflows*). See
 [Supply chain § 2](08-supply-chain-and-quality.md).
 
-## 6. Background jobs (*Administration → Background jobs*)
+## 7. Background jobs (*Administration → Background jobs*)
 
 Lists every job, its schedule, last run and result, with *run now*. Key jobs:
 
@@ -105,7 +123,7 @@ Lists every job, its schedule, last run and result, with *run now*. Key jobs:
 
 A failed job shows its error. Most are safe to *run now* again.
 
-## 7. Integrations
+## 8. Integrations
 
 * **KRA eTIMS** (*Pharmacy & billing → KRA eTIMS*): one control unit per selling outlet
   (initialise it), code-table sync, **mappings** (items without a mapping can't be invoiced),
@@ -124,7 +142,7 @@ A failed job shows its error. Most are safe to *run now* again.
   (`/api/v1/api-clients`, administrator only; there is no screen yet) with their scopes.
   The key is shown **once** and stored hashed.
 
-## 8. Monitoring and support
+## 9. Monitoring and support
 
 * **Dashboard** integration tiles (eTIMS, HMIS, QuickBooks errors).
 * **Audit log** (*Administration → Audit log*): who changed what and when.
@@ -144,7 +162,7 @@ Common support requests:
 | "Lost my phone (2FA)" | An administrator can't read the secret. Give a new temporary password; if 2FA must be removed, a developer clears it, and the user then sets it up again |
 | "eTIMS PENDING on receipts" | Check the eTIMS outbox and control unit; documents are re-sent automatically |
 
-## 9. Backups
+## 10. Backups
 
 Nightly backups and a weekly restore drill are run by IT with `ops/backup/`. See the
 [Deployment guide § 8](../DEPLOYMENT.md). Keep the encryption keys and the backup

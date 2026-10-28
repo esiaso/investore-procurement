@@ -144,7 +144,8 @@ eTIMS (KRA) and the HMIS link are configured in the application. `SAMPLE_ETIMS_U
 
 4. Start the API replicas, the worker, then the web front end; wait for
    `/api/v1/health` → 200.
-5. In the application: departments, stores and bins, users and roles, approval
+5. In the application: *Organisation → Hospital details* (name, address, contacts, KRA PIN,
+   e-mail sender and the letterhead logo), departments, stores and bins, users and roles, approval
    workflows and bands (*Approvals*), chart of accounts (*Accounts & currencies*),
    QuickBooks connection and mappings (*QuickBooks*), tills (*POS setup*), eTIMS
    devices (*KRA eTIMS*), job schedules (*Background jobs*).

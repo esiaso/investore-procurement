@@ -165,7 +165,7 @@ stock moves (it was issued to the ward already); the patient's bill is charged o
 
 ### Request a payment or an advance
 
-1. *New*: choose the **float** (e.g. your department's or Administration).
+1. *New request*: choose the **float** (e.g. your department's or Administration).
 2. Type:
    * **Payment**: to a staff member or a vendor;
    * **Advance / imprest**: cash to you, which you must account for later.
