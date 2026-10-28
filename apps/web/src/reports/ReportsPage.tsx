@@ -7,6 +7,7 @@ import {
   FormControlLabel,
   IconButton,
   InputAdornment,
+  Link,
   List,
   ListItemButton,
   ListItemText,
@@ -33,7 +34,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SendIcon from '@mui/icons-material/Send';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { Permissions } from '@sil/shared';
 import { api, buildUrl } from '../api/client';
 import { useAll, useApiMutation, useList } from '../api/hooks';
@@ -45,13 +46,26 @@ import { FormDialog } from '../components/FormDialog';
 import { PageHeader } from '../components/PageHeader';
 import { ItemPicker, StoreSelect } from '../inventory/components';
 import { humanise } from '../lib/format';
-import { useDate, useMoney } from '../purchasing/common';
+import { DOC_ROUTES, useDate, useMoney } from '../purchasing/common';
+import { ReportChart } from './ReportChart';
 
 const GROUPS: { key: ReportGroup; label: string }[] = [
   { key: 'INVENTORY', label: 'Inventory' },
   { key: 'PHARMACY', label: 'Pharmacy performance' },
   { key: 'PURCHASING', label: 'Purchasing' },
   { key: 'SUPPLY_CHAIN', label: 'Supply chain' },
+  { key: 'PAYMENTS', label: 'Payments' },
+  { key: 'PETTY_CASH', label: 'Petty cash' },
+  { key: 'AUDIT', label: 'Audit & integration' },
+];
+
+const PAY_METHODS = ['EFT', 'CHEQUE', 'CASH', 'MPESA_PAYBILL', 'MPESA_TILL', 'MPESA_B2C'];
+const BUCKETS = [
+  { value: 'DAY', label: 'Day' },
+  { value: 'WEEK', label: 'Week' },
+  { value: 'MONTH', label: 'Month' },
+  { value: 'QUARTER', label: 'Quarter' },
+  { value: 'YEAR', label: 'Year' },
 ];
 
 const PERIODS: { value: string; label: string }[] = [
@@ -175,6 +189,7 @@ function ReportView({ def }: { def: ReportDef }) {
         </Stack>
       </Paper>
       {result.error && <Alert severity="error">{(result.error as Error).message}</Alert>}
+      {result.data && def.chart && <ReportChart def={def} r={result.data} />}
       {result.data && <ResultTable r={result.data} />}
       {schedule && (
         <ScheduleDialog
@@ -198,6 +213,12 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   days: 'Days',
   limit: 'Show top',
   status: 'Status',
+  projectId: 'Project',
+  userId: 'User',
+  currency: 'Currency',
+  floatId: 'Float',
+  method: 'Method',
+  period: 'Per',
 };
 
 function FilterBar({ def, f, setF }: { def: ReportDef; f: Filters; setF(f: Filters): void }) {
@@ -206,6 +227,10 @@ function FilterBar({ def, f, setF }: { def: ReportDef; f: Filters; setF(f: Filte
   const categories = useList<ItemCategory>('/item-categories', undefined, has('categoryId'));
   const suppliers = useAll<Supplier>('/suppliers', undefined, has('supplierId'));
   const departments = useAll<Department>('/departments', undefined, has('departmentId'));
+  const projects = useQuery({ queryKey: ['/projects'], queryFn: () => api<{ id: string; code: string; name: string }[]>('/projects'), enabled: has('projectId') });
+  const users = useQuery({ queryKey: ['/users/directory'], queryFn: () => api<{ id: string; fullName: string }[]>('/users/directory'), enabled: has('userId') });
+  const currencies = useQuery({ queryKey: ['/currencies'], queryFn: () => api<{ code: string }[]>('/currencies'), enabled: has('currency') });
+  const floats = useQuery({ queryKey: ['/petty-cash/floats'], queryFn: () => api<{ id: string; name: string }[]>('/petty-cash/floats'), enabled: has('floatId') });
   const [item, setItem] = useState<Item | null>(null);
   const set = (k: FilterKey, v: string) => setF({ ...f, [k]: v });
   return (
@@ -241,6 +266,41 @@ function FilterBar({ def, f, setF }: { def: ReportDef; f: Filters; setF(f: Filte
           {def.groupBy.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
         </TextField>
       )}
+      {has('period') && (
+        <TextField select label="Per" value={f.period ?? 'MONTH'} onChange={(e) => set('period', e.target.value)} sx={{ minWidth: 130 }}>
+          {BUCKETS.map((b) => <MenuItem key={b.value} value={b.value}>{b.label}</MenuItem>)}
+        </TextField>
+      )}
+      {has('floatId') && (
+        <TextField select label={req('floatId') ? 'Float *' : 'Float'} value={f.floatId ?? ''} onChange={(e) => set('floatId', e.target.value)} sx={{ minWidth: 200 }}>
+          {!req('floatId') && <MenuItem value="">All floats</MenuItem>}
+          {(floats.data ?? []).map((x) => <MenuItem key={x.id} value={x.id}>{x.name}</MenuItem>)}
+        </TextField>
+      )}
+      {has('projectId') && (
+        <TextField select label="Project" value={f.projectId ?? ''} onChange={(e) => set('projectId', e.target.value)} sx={{ minWidth: 200 }}>
+          <MenuItem value="">All projects</MenuItem>
+          {(projects.data ?? []).map((p) => <MenuItem key={p.id} value={p.id}>{p.code} {p.name}</MenuItem>)}
+        </TextField>
+      )}
+      {has('userId') && (
+        <TextField select label="User" value={f.userId ?? ''} onChange={(e) => set('userId', e.target.value)} sx={{ minWidth: 200 }}>
+          <MenuItem value="">Everyone</MenuItem>
+          {(users.data ?? []).map((u) => <MenuItem key={u.id} value={u.id}>{u.fullName}</MenuItem>)}
+        </TextField>
+      )}
+      {has('currency') && (
+        <TextField select label="Currency" value={f.currency ?? ''} onChange={(e) => set('currency', e.target.value)} sx={{ minWidth: 120 }}>
+          <MenuItem value="">Any</MenuItem>
+          {(currencies.data ?? []).map((x) => <MenuItem key={x.code} value={x.code}>{x.code}</MenuItem>)}
+        </TextField>
+      )}
+      {has('method') && (
+        <TextField select label="Method" value={f.method ?? ''} onChange={(e) => set('method', e.target.value)} sx={{ minWidth: 160 }}>
+          <MenuItem value="">All methods</MenuItem>
+          {PAY_METHODS.map((m) => <MenuItem key={m} value={m}>{humanise(m)}</MenuItem>)}
+        </TextField>
+      )}
       {has('days') && <TextField type="number" label="Days" value={f.days ?? ''} onChange={(e) => set('days', e.target.value)} sx={{ width: 110 }} helperText="Default from settings" />}
       {has('limit') && <TextField type="number" label="Show top" value={f.limit ?? ''} onChange={(e) => set('limit', e.target.value)} sx={{ width: 110 }} placeholder="50" />}
       {has('status') && <TextField label="Status" value={f.status ?? ''} onChange={(e) => set('status', e.target.value.toUpperCase())} sx={{ width: 180 }} placeholder="e.g. POSTED" />}
@@ -271,6 +331,15 @@ export function ResultTable({ r }: { r: ReportResult }) {
     }
   };
   const num = (c: ReportColumn) => ['money', 'qty', 'number', 'percent'].includes(c.type);
+  /** Drill-down: the document the cell names. */
+  const cell = (row: Record<string, unknown>, c: ReportColumn) => {
+    const text = fmt(row[c.key], c);
+    if (!c.link || !text) return text;
+    const type = c.link.docType.startsWith('@') ? String(row[c.link.docType.slice(1)] ?? '') : c.link.docType;
+    const id = row[c.link.idKey];
+    const to = id ? DOC_ROUTES[type]?.(String(id)) : undefined;
+    return to ? <Link component={RouterLink} to={to}>{text}</Link> : text;
+  };
   return (
     <Paper>
       <Stack direction="row" spacing={1} sx={{ p: 1.5 }} flexWrap="wrap" useFlexGap alignItems="center">
@@ -285,7 +354,7 @@ export function ResultTable({ r }: { r: ReportResult }) {
           <TableBody>
             {r.rows.map((row, i) => (
               <TableRow key={i} hover>
-                {r.columns.map((c) => <TableCell key={c.key} align={num(c) ? 'right' : 'left'} sx={{ whiteSpace: num(c) ? 'nowrap' : undefined }}>{fmt(row[c.key], c)}</TableCell>)}
+                {r.columns.map((c) => <TableCell key={c.key} align={num(c) ? 'right' : 'left'} sx={{ whiteSpace: num(c) ? 'nowrap' : undefined }}>{cell(row, c)}</TableCell>)}
               </TableRow>
             ))}
             {r.rows.length === 0 && <TableRow><TableCell colSpan={r.columns.length}>No rows for these filters.</TableCell></TableRow>}

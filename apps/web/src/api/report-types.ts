@@ -1,12 +1,31 @@
 /** Reports, dashboard and documents register (slice 12). */
 export type ColumnType = 'text' | 'number' | 'qty' | 'money' | 'percent' | 'date' | 'datetime';
-export type FilterKey = 'from' | 'to' | 'storeId' | 'categoryId' | 'itemId' | 'supplierId' | 'departmentId' | 'groupBy' | 'days' | 'limit' | 'status';
-export type ReportGroup = 'INVENTORY' | 'PHARMACY' | 'PURCHASING' | 'SUPPLY_CHAIN';
+export type FilterKey =
+  | 'from'
+  | 'to'
+  | 'storeId'
+  | 'categoryId'
+  | 'itemId'
+  | 'supplierId'
+  | 'departmentId'
+  | 'groupBy'
+  | 'days'
+  | 'limit'
+  | 'status'
+  | 'projectId'
+  | 'userId'
+  | 'currency'
+  | 'floatId'
+  | 'method'
+  | 'period';
+export type ReportGroup = 'INVENTORY' | 'PHARMACY' | 'PURCHASING' | 'SUPPLY_CHAIN' | 'PAYMENTS' | 'PETTY_CASH' | 'AUDIT';
 
 export interface ReportColumn {
   key: string;
   label: string;
   type: ColumnType;
+  /** Drill-down: docType is a document code, or "@rowKey" holding it; idKey the row key with the id. */
+  link?: { docType: string; idKey: string };
 }
 
 export interface ReportDef {
@@ -19,6 +38,7 @@ export interface ReportDef {
   groupBy?: { value: string; label: string }[];
   columns: ReportColumn[];
   landscape?: boolean;
+  chart?: { type: 'line' | 'bar'; x: string; series: string[] };
 }
 
 export interface ReportResult {

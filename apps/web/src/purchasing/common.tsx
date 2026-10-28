@@ -12,6 +12,7 @@ import { StatusChip } from '../inventory/components';
 
 /** Front-end route for each document type in the chain. */
 export const DOC_ROUTES: Partial<Record<string, (id: string) => string>> = {
+  REQ: (id) => `/staff-requisitions/${id}`,
   PR: (id) => `/requisitions/${id}`,
   RFQ: (id) => `/rfqs/${id}`,
   PO: (id) => `/purchase-orders/${id}`,
