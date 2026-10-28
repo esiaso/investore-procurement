@@ -2097,6 +2097,94 @@ payments, and foreign-currency transactions.
 * As before, the integration has been exercised against the mock company only. Connect an
   Intuit sandbox company before production.
 
+## Non-stock procurement — phase 7: reports, dashboards, exports and schedules
+
+The 24 reports of the specification are on *Reports* (`apps/api/src/modules/reports/definitions/nonstock.ts`
+plus the existing purchasing reports). They use the slice-12 report engine, so every
+report has:
+* **filters**;
+* **CSV / Excel / PDF export**;
+* **scheduled email delivery** (*Email on a schedule*, the `reports.scheduled` job);
+* the user's store scope.
+
+**Drill-down.** Document numbers link to the document: requisition, purchase request,
+RFQ, order, certificate, invoice, payment voucher, petty cash voucher or replenishment.
+
+**Charts.** Trend reports draw a chart above the table.
+
+**New filters:** project, user, currency, petty cash float, payment method, and the
+period bucket (day / week / month / quarter / year), next to the existing date range,
+store, department / cost centre, supplier, category, status and grouping.
+
+### The reports
+
+**Procurement**
+
+| # | Report | Key |
+|---|---|---|
+| 1 | Pending requisitions: age, approval step and who it waits for | `pending-requisitions` |
+| 2 | Pending purchase requests: status, value, days pending | `pending-prs` |
+| 3 | Open orders / LPOs: not received, partly received, delivery overdue, expiring | `open-lpos` (and `outstanding-pos`) |
+| 4 | RFQ status, evaluation, recommendation, award and justification | `rfq-awards` |
+| 5 | GRN / service acceptance register; received-not-invoiced accruals | `grn-register`, `acceptance-register`, `received-not-invoiced` |
+| 6 | Three-way match exceptions | `match-exceptions` |
+| 7 | **Value of purchases over time**: by day / week / month / quarter / year, by department, supplier, category or GL account, with the previous period and change %, and a trend chart | `purchases-over-time` |
+| 8 | Supplier performance: lead time, on-time %, rejection rate, returns, **price variance %** (new) | `supplier-performance` |
+| 9 | Procurement cycle time: requisition → approval → PR → order → receipt → payment → delivery | `procurement-cycle-time` |
+| 10 | Budget vs committed vs actual vs paid, per budget line / cost centre | `budget-vs-actual` |
+| 11 | Delivered to final users vs outstanding | `delivered-to-users` |
+
+**Payments**
+
+| # | Report | Key |
+|---|---|---|
+| 12 | AP ageing: current, 1–30, 31–60, 61–90, 90+ | `ap-ageing` |
+| 13 | Payments by method (bank, cheque, M-PESA B2B / B2C, cash), per period; petty cash alongside | `payments-by-method` |
+| 14 | Payment schedule / cash requirement by week, with the running total | `payment-schedule` |
+| 15 | M-PESA log and reconciliation: status, receipt, charges, on the statement or not | `mpesa-log` |
+| 16 | Withholding tax and VAT summary, per supplier (KRA PIN) or month | `wht-vat-summary` |
+
+**Petty cash**
+
+| # | Report | Key |
+|---|---|---|
+| 17 | Petty cash book: opening, receipts, disbursements, closing | `petty-cash-book` |
+| 18 | Pending requests by approval level and approver (or custodian, when approved) | `petty-cash-pending` |
+| 19 | Spend by category (GL), department, user or month; advances counted by their receipts | `petty-cash-spend` |
+| 20 | Outstanding advances and overdue retirements | `outstanding-advances` |
+| 21 | Replenishments and cash-count variances | `petty-cash-replenishments` |
+
+**Audit and integration**
+
+| # | Report | Key |
+|---|---|---|
+| 22 | Approval audit trail: who, when, step, decision, delegation (on behalf of), channel, IP | `approval-audit` |
+| 23 | QuickBooks sync status and errors | `quickbooks-sync` |
+| 24 | Payment control exceptions: duplicate payments (an invoice settled more than once; the same petty cash payee and amount within the duplicate window), **possible splits** (several requests by one requester, or orders to one supplier, within 3 days, each under an approval threshold of the matrix and together over it), and payments with nothing received or accepted | `control-exceptions` |
+
+### Dashboard
+
+New tiles, by permission:
+* **Open orders / LPOs (value)**.
+* **Ordered this month**, with the change on last month.
+* **Petty cash in hand**, with floats below their replenishment level.
+* **Advances overdue for retirement**.
+* **M-PESA payments failed or in review**.
+* **Approved invoices to pay**, now pointing at *Payables*.
+
+These sit next to the existing *Waiting for my approval* and *QuickBooks errors* tiles.
+
+### Configuration added
+
+| | |
+|---|---|
+| Report groups | PAYMENTS, PETTY_CASH, AUDIT |
+| Report filters | `projectId`, `userId`, `currency`, `floatId`, `method`, `period` |
+| Report columns | optional `link` (drill-down); report definitions may declare a `chart` |
+| Permissions | each report keeps to its area: purchasing / requisitions, payments, petty cash, `audit.read`, accounting |
+
+Report totals are checked against independent queries in `test/non-stock-phase7.spec.ts`.
+
 ## Known limitations / next slices
 
 * Reports run on the live database (no reporting replica or pre-aggregation); very
