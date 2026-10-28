@@ -16,7 +16,8 @@
     "test": "pnpm build:shared && pnpm --filter @sil/api test && pnpm --filter @sil/web test",
     "test:api": "pnpm build:shared && pnpm --filter @sil/api test",
     "test:web": "pnpm --filter @sil/web test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "docs:pdf": "node scripts/build-manual-pdfs.js"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -30,5 +31,8 @@
       "fast-xml-parser@<5.7.0": "^5.7.0",
       "uuid@>=9 <11.1.1": "^11.1.1"
     }
+  },
+  "devDependencies": {
+    "marked": "12.0.2"
   }
 }

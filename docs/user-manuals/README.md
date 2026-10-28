@@ -4,6 +4,11 @@ User guides for SIL Procurement, Supply Chain & Inventory, one per group of user
 Everyone should read **[Getting started](00-getting-started.md)** first. It covers
 signing in, the menu, notifications and approving documents.
 
+**PDF versions** for printing and sharing are in [`pdf/`](pdf/): one per manual
+(`00-index.pdf` … `11-supplier-portal.pdf`) and all of them in one volume
+(`SIL-user-manuals-complete.pdf`). After changing a manual, regenerate them; see the
+note at the end of this page.
+
 | Manual | For | Built-in role(s) | Sample login* |
 |---|---|---|---|
 | [Getting started](00-getting-started.md) | Everyone | – | – |
@@ -49,3 +54,11 @@ users are created by the administrator.
 The system enforces **segregation of duties**: nobody approves their own request, each
 approval step is by a different person, and the person who prepares a payment cannot
 release it. A blocked attempt is refused and recorded in the audit log.
+
+## Regenerating the PDFs
+
+The PDFs are made from these Markdown files with headless Chrome (the same engine the
+application uses for its PDFs): a cover page, a table of contents, page numbers and
+the screenshots embedded. After editing a manual, run `pnpm docs:pdf` (needs Chrome or
+Chromium; set `CHROMIUM_PATH` if it is not Playwright's own) and commit the PDFs with the change,
+so the PDFs never drift from the text.
