@@ -955,48 +955,47 @@ const controlExceptions: ReportDef = {
     const dupInv = await ctx.ds.query(
       `SELECT i.id, i.number, i.invoice_date::text AS date, s.name AS party, ROUND(i.total, 2)::float AS amount, COUNT(DISTINCT v.id)::int AS vouchers, ROUND(SUM(vl.amount), 2)::float AS settled
          FROM supplier_invoice i JOIN supplier s ON s.id = i.supplier_id JOIN payment_voucher_line vl ON vl.invoice_id = i.id JOIN payment_voucher v ON v.id = vl.voucher_id AND v.status = 'PAID'
-        WHERE v.paid_on BETWEEN $1::date AND $2::date GROUP BY i.id, s.name HAVING SUM(vl.amount) > i.total + 0.01`,
-      [f, t],
+        WHERE v.paid_on BETWEEN $1::date AND $2::date GROUP BY i.id, s.name HAVING SUM(vl.amount) > i.total + 0.01 LIMIT $3`,
+      [f, t, ctx.maxRows],
     );
     for (const r of dupInv) out.push({ kind: 'DUPLICATE_PAYMENT', document: r.number, _docType: 'INV', _docId: r.id, date: r.date, party: r.party, amount: r.amount, detail: `Settled ${r.settled} by ${r.vouchers} voucher(s) against a total of ${r.amount}` });
     // The same supplier invoice number captured twice (different spelling of the number is caught by eye).
     const window = await ctx.settings.get('pettyCash.duplicateWindowDays');
     const dupPetty = await ctx.ds.query(
       `SELECT a.id, a.number, a.disbursed_on::text AS date, a.payee_name AS party, ROUND(a.amount, 2)::float AS amount, b.number AS other
-         FROM petty_cash_request a JOIN petty_cash_request b ON b.id <> a.id AND b.amount = a.amount AND b.disbursed_on IS NOT NULL AND b.created_at < a.created_at
-              AND abs(a.disbursed_on - b.disbursed_on) <= $3::int
+         FROM petty_cash_request a JOIN petty_cash_request b ON b.amount = a.amount AND b.disbursed_on BETWEEN a.disbursed_on - $3::int AND a.disbursed_on + $3::int
+              AND b.id <> a.id AND b.created_at < a.created_at
               AND (lower(a.payee_name) = lower(b.payee_name) OR (a.payee_phone IS NOT NULL AND a.payee_phone = b.payee_phone) OR (a.payee_user_id IS NOT NULL AND a.payee_user_id = b.payee_user_id))
-        WHERE a.disbursed_on BETWEEN $1::date AND $2::date AND a.status::text <> 'REVERSED' AND b.status::text <> 'REVERSED'`,
-      [f, t, window],
+        WHERE a.disbursed_on BETWEEN $1::date AND $2::date AND a.status::text <> 'REVERSED' AND b.status::text <> 'REVERSED' LIMIT $4`,
+      [f, t, window, ctx.maxRows],
     );
     for (const r of dupPetty) out.push({ kind: 'DUPLICATE_PAYMENT', document: r.number, _docType: 'PCV', _docId: r.id, date: r.date, party: r.party, amount: r.amount, detail: `Same payee and amount as ${r.other}` });
     // Splits: requests each under an approval threshold that together cross it (same requester / supplier within 3 days).
+    // One pass per threshold: a window over the qualifying documents counts and sums each one's neighbours within
+    // ±3 days (the period widened by 3 days so neighbours just outside it still count).
     const thresholds: { document_type: string; min_amount: number }[] = await ctx.ds.query(
       `SELECT DISTINCT document_type, min_amount::float AS min_amount FROM approval_workflow WHERE is_active AND min_amount > 0 AND document_type IN ('PCV', 'PO', 'REQ')`,
     );
+    const OPEN = `status::text NOT IN ('CANCELLED', 'REJECTED', 'DRAFT')`;
+    const split = (from: string, amount: string, day: string, partition: string, extra = 'TRUE') =>
+      `WITH c AS (SELECT x.*, ${amount} AS amt, ${day} AS d FROM ${from} x
+                  WHERE x.${OPEN} AND ${amount} < $3 AND ${day} BETWEEN $1::date - 3 AND $2::date + 3 AND ${extra}),
+            w AS (SELECT c.*, COUNT(*) OVER win AS split_n, SUM(c.amt) OVER win AS split_total FROM c
+                  WINDOW win AS (PARTITION BY ${partition} ORDER BY c.d RANGE BETWEEN interval '3 days' PRECEDING AND interval '3 days' FOLLOWING))`;
     for (const th of thresholds) {
       const sql =
         th.document_type === 'PCV'
-          ? `SELECT r.id, r.number, r.created_at::date::text AS date, r.payee_name AS party, r.amount::float AS amount, u.full_name AS who, g.n, g.total
-               FROM petty_cash_request r JOIN app_user u ON u.id = r.requested_by
-               JOIN LATERAL (SELECT COUNT(*)::int AS n, SUM(o.amount)::float AS total FROM petty_cash_request o
-                              WHERE o.requested_by = r.requested_by AND lower(o.payee_name) = lower(r.payee_name) AND o.status::text NOT IN ('CANCELLED', 'REJECTED', 'DRAFT')
-                                AND o.amount < $3 AND abs(o.created_at::date - r.created_at::date) <= 3) g ON true
-              WHERE r.created_at::date BETWEEN $1::date AND $2::date AND r.amount < $3 AND r.status::text NOT IN ('CANCELLED', 'REJECTED', 'DRAFT') AND g.n > 1 AND g.total >= $3`
+          ? `${split('petty_cash_request', 'x.amount', 'x.created_at::date', 'c.requested_by, lower(c.payee_name)', 'x.payee_name IS NOT NULL')}
+             SELECT w.id, w.number, w.d::text AS date, w.payee_name AS party, w.amt::float AS amount, u.full_name AS who, w.split_n::int AS n, w.split_total::float AS total
+               FROM w JOIN app_user u ON u.id = w.requested_by WHERE w.d BETWEEN $1::date AND $2::date AND w.split_n > 1 AND w.split_total >= $3 LIMIT $4`
           : th.document_type === 'PO'
-            ? `SELECT po.id, po.number, po.order_date::text AS date, s.name AS party, COALESCE(NULLIF(po.base_total, 0), po.total)::float AS amount, s.name AS who, g.n, g.total
-                 FROM purchase_order po JOIN supplier s ON s.id = po.supplier_id
-                 JOIN LATERAL (SELECT COUNT(*)::int AS n, SUM(COALESCE(NULLIF(o.base_total, 0), o.total))::float AS total FROM purchase_order o
-                                WHERE o.supplier_id = po.supplier_id AND o.status::text NOT IN ('CANCELLED', 'REJECTED', 'DRAFT') AND COALESCE(NULLIF(o.base_total, 0), o.total) < $3
-                                  AND abs(o.order_date - po.order_date) <= 3) g ON true
-                WHERE po.order_date BETWEEN $1::date AND $2::date AND COALESCE(NULLIF(po.base_total, 0), po.total) < $3 AND po.status::text NOT IN ('CANCELLED', 'REJECTED', 'DRAFT') AND g.n > 1 AND g.total >= $3`
-            : `SELECT r.id, r.number, r.created_at::date::text AS date, u.full_name AS party, r.estimated_total::float AS amount, u.full_name AS who, g.n, g.total
-                 FROM staff_requisition r JOIN app_user u ON u.id = r.requested_by
-                 JOIN LATERAL (SELECT COUNT(*)::int AS n, SUM(o.estimated_total)::float AS total FROM staff_requisition o
-                                WHERE o.requested_by = r.requested_by AND o.status::text NOT IN ('CANCELLED', 'REJECTED', 'DRAFT') AND o.estimated_total < $3
-                                  AND abs(o.created_at::date - r.created_at::date) <= 3) g ON true
-                WHERE r.created_at::date BETWEEN $1::date AND $2::date AND r.estimated_total < $3 AND r.status::text NOT IN ('CANCELLED', 'REJECTED', 'DRAFT') AND g.n > 1 AND g.total >= $3`;
-      for (const r of await ctx.ds.query(sql, [f, t, th.min_amount])) {
+            ? `${split('purchase_order', 'COALESCE(NULLIF(x.base_total, 0), x.total)', 'x.order_date', 'c.supplier_id')}
+               SELECT w.id, w.number, w.d::text AS date, s.name AS party, w.amt::float AS amount, s.name AS who, w.split_n::int AS n, w.split_total::float AS total
+                 FROM w JOIN supplier s ON s.id = w.supplier_id WHERE w.d BETWEEN $1::date AND $2::date AND w.split_n > 1 AND w.split_total >= $3 LIMIT $4`
+            : `${split('staff_requisition', 'x.estimated_total', 'x.created_at::date', 'c.requested_by')}
+               SELECT w.id, w.number, w.d::text AS date, u.full_name AS party, w.amt::float AS amount, u.full_name AS who, w.split_n::int AS n, w.split_total::float AS total
+                 FROM w JOIN app_user u ON u.id = w.requested_by WHERE w.d BETWEEN $1::date AND $2::date AND w.split_n > 1 AND w.split_total >= $3 LIMIT $4`;
+      for (const r of await ctx.ds.query(sql, [f, t, th.min_amount, ctx.maxRows])) {
         out.push({ kind: 'POSSIBLE_SPLIT', document: r.number, _docType: th.document_type, _docId: r.id, date: r.date, party: r.party, amount: r.amount, detail: `${r.n} ${th.document_type} by ${r.who} within 3 days total ${r2(r.total)}, each under the ${th.min_amount} threshold` });
       }
     }
@@ -1005,8 +1004,8 @@ const controlExceptions: ReportDef = {
       `SELECT DISTINCT v.id, v.number, v.paid_on::text AS date, s.name AS party, ROUND(v.amount, 2)::float AS amount, i.number AS invoice
          FROM payment_voucher v JOIN supplier s ON s.id = v.supplier_id JOIN payment_voucher_line vl ON vl.voucher_id = v.id JOIN supplier_invoice i ON i.id = vl.invoice_id
         WHERE v.status = 'PAID' AND v.paid_on BETWEEN $1::date AND $2::date
-          AND NOT EXISTS (SELECT 1 FROM supplier_invoice_line il JOIN purchase_order_line l ON l.id = il.po_line_id WHERE il.invoice_id = i.id AND l.received_base_qty > 0)`,
-      [f, t],
+          AND NOT EXISTS (SELECT 1 FROM supplier_invoice_line il JOIN purchase_order_line l ON l.id = il.po_line_id WHERE il.invoice_id = i.id AND l.received_base_qty > 0) LIMIT $3`,
+      [f, t, ctx.maxRows],
     );
     for (const r of noReceipt) out.push({ kind: 'PAID_WITHOUT_RECEIPT', document: r.number, _docType: 'PV', _docId: r.id, date: r.date, party: r.party, amount: r.amount, detail: `${r.invoice}: nothing received or accepted on its order lines` });
     out.sort((a, b) => String(a.date).localeCompare(String(b.date)));

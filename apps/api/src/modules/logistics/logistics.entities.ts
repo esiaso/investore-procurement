@@ -234,6 +234,7 @@ export class InboundShipmentLine extends AppBaseEntity {
  * delivered (instead of a GRN) and counts as received in the three-way match.
  */
 @Entity('service_certificate')
+@Index(['purchaseOrderId'])
 export class ServiceCertificate extends AppBaseEntity {
   @Column({ type: 'varchar', length: 60, unique: true })
   number: string;
@@ -287,6 +288,8 @@ export class ServiceCertificate extends AppBaseEntity {
 }
 
 @Entity('service_certificate_line')
+@Index(['poLineId'])
+@Index(['certificateId'])
 export class ServiceCertificateLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   certificateId: string;

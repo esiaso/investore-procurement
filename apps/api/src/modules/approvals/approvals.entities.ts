@@ -102,6 +102,7 @@ export class ApprovalStep extends AppBaseEntity {
 
 /** One approval cycle of one document. */
 @Entity('approval_request')
+@Index(['documentId'])
 @Index(['documentType', 'documentId'])
 @Index(['status'])
 export class ApprovalRequest extends AppBaseEntity {
@@ -171,6 +172,7 @@ export class ApprovalRequest extends AppBaseEntity {
 }
 
 @Entity('approval_action')
+@Index(['userId'])
 @Index(['requestId'])
 export class ApprovalAction {
   @PrimaryGeneratedColumn('uuid')

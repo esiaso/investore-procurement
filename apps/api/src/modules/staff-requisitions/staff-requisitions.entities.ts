@@ -13,6 +13,7 @@ import { Department, Store } from '../org/org.entities';
  * expensed) wait for procurement to put them on a purchase requisition.
  */
 @Entity('staff_requisition')
+@Index(['requestedBy', 'createdAt'])
 @Index(['status', 'departmentId'])
 @Index(['requestedBy'])
 export class StaffRequisition extends AppBaseEntity {
@@ -86,6 +87,7 @@ export class StaffRequisition extends AppBaseEntity {
 }
 
 @Entity('staff_requisition_line')
+@Index(['prLineId'])
 @Index(['requisitionId'])
 @Index(['status'])
 export class StaffRequisitionLine extends AppBaseEntity {
@@ -229,6 +231,8 @@ export class Handover extends AppBaseEntity {
 }
 
 @Entity('handover_line')
+@Index(['requisitionLineId'])
+@Index(['handoverId'])
 export class HandoverLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   handoverId: string;

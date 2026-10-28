@@ -69,6 +69,8 @@ export class PettyCashFloat extends AppBaseEntity {
 
 /** Petty cash payment request or advance (printed as the petty cash voucher). */
 @Entity('petty_cash_request')
+@Index(['amount', 'disbursedOn'])
+@Index(['requestedBy', 'createdAt'])
 @Index(['floatId', 'status'])
 @Index(['requestedBy', 'kind', 'status'])
 export class PettyCashRequest extends AppBaseEntity {

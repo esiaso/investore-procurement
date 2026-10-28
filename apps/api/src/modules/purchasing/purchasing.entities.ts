@@ -88,6 +88,7 @@ export class PurchaseRequisition extends AppBaseEntity {
 }
 
 @Entity('purchase_requisition_line')
+@Index(['requisitionId'])
 @Index(['sourceRequisitionLineId'])
 export class PurchaseRequisitionLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
@@ -152,6 +153,7 @@ export class PurchaseRequisitionLine extends AppBaseEntity {
 // ------------------------------------------------------------------ RFQs and quotations
 
 @Entity('rfq')
+@Index(['requisitionId'])
 export class Rfq extends AppBaseEntity {
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 60 })
@@ -220,6 +222,8 @@ export class Rfq extends AppBaseEntity {
 }
 
 @Entity('rfq_line')
+@Index(['requisitionLineId'])
+@Index(['rfqId'])
 export class RfqLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   rfqId: string;
@@ -315,6 +319,7 @@ export class Quotation extends AppBaseEntity {
 }
 
 @Entity('quotation_line')
+@Index(['rfqLineId'])
 @Index(['quotationId', 'rfqLineId'], { unique: true })
 export class QuotationLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
@@ -345,6 +350,9 @@ export class QuotationLine extends AppBaseEntity {
 // ------------------------------------------------------------------ purchase orders
 
 @Entity('purchase_order')
+@Index(['requisitionId'])
+@Index(['rfqId'])
+@Index(['supplierId', 'orderDate'])
 export class PurchaseOrder extends AppBaseEntity {
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 60 })
@@ -470,6 +478,10 @@ export class PurchaseOrder extends AppBaseEntity {
 }
 
 @Entity('purchase_order_line')
+@Index(['rfqLineId'])
+@Index(['requisitionLineId'])
+@Index(['itemId'])
+@Index(['purchaseOrderId'])
 export class PurchaseOrderLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   purchaseOrderId: string;
@@ -584,6 +596,8 @@ export class PurchaseOrderVersion {
 // ------------------------------------------------------------------ goods received notes
 
 @Entity('goods_received_note')
+@Index(['supplierId'])
+@Index(['purchaseOrderId'])
 export class GoodsReceivedNote extends AppBaseEntity {
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 60 })
@@ -658,6 +672,8 @@ export class GoodsReceivedNote extends AppBaseEntity {
 }
 
 @Entity('grn_line')
+@Index(['poLineId'])
+@Index(['grnId'])
 export class GrnLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   grnId: string;
@@ -852,6 +868,7 @@ export class ReturnToSupplierLine extends AppBaseEntity {
 // ------------------------------------------------------------------ invoices and payments
 
 @Entity('supplier_invoice')
+@Index(['purchaseOrderId'])
 @Index(['supplierId', 'supplierInvoiceNo'], { unique: true })
 export class SupplierInvoice extends AppBaseEntity {
   @Index({ unique: true })
@@ -937,6 +954,8 @@ export class SupplierInvoice extends AppBaseEntity {
 }
 
 @Entity('supplier_invoice_line')
+@Index(['poLineId'])
+@Index(['invoiceId'])
 export class SupplierInvoiceLine extends AppBaseEntity {
   @Column({ type: 'uuid' })
   invoiceId: string;
@@ -976,6 +995,7 @@ export class SupplierInvoiceLine extends AppBaseEntity {
  * person who releases it is neither its preparer nor an approver.
  */
 @Entity('payment_voucher')
+@Index(['invoiceId'])
 @Index(['status', 'dueDate'])
 @Index(['supplierId', 'status'])
 export class PaymentVoucher extends AppBaseEntity {
@@ -1065,6 +1085,7 @@ export class PaymentVoucher extends AppBaseEntity {
 }
 
 @Entity('payment_voucher_line')
+@Index(['voucherId'])
 @Index(['invoiceId'])
 export class PaymentVoucherLine extends AppBaseEntity {
   @Column({ type: 'uuid' })

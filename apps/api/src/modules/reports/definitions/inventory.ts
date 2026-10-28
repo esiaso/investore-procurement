@@ -209,7 +209,7 @@ const grnRegister: ReportDef = {
     const rows = await ctx.ds.query(
       `SELECT g.number, g.received_date::text AS date, sup.name AS supplier, s.name AS store, po.number AS po, g.delivery_note_no AS "deliveryNote", g.status,
               CASE WHEN g.is_emergency THEN 'Yes' ELSE '' END AS emergency, (SELECT COUNT(*)::int FROM grn_line l WHERE l.grn_id = g.id) AS lines,
-              ROUND(COALESCE((SELECT SUM(t.value_delta) FROM stock_transaction t WHERE t.source_doc_id = g.id AND t.txn_type = 'RECEIPT'), 0), 2)::float AS value
+              ROUND(COALESCE((SELECT SUM(t.value_delta) FROM stock_transaction t WHERE t.source_doc_type = 'GRN' AND t.source_doc_id = g.id AND t.txn_type = 'RECEIPT'), 0), 2)::float AS value
          FROM goods_received_note g JOIN supplier sup ON sup.id = g.supplier_id JOIN store s ON s.id = g.store_id LEFT JOIN purchase_order po ON po.id = g.purchase_order_id
         WHERE ${q.between('g.received_date', ctx)} AND ${q.store('g.store_id', ctx)} AND ${q.eq('g.supplier_id', ctx.f.supplierId)} AND ${q.eq('g.status::text', ctx.f.status)}
         ORDER BY g.received_date, g.number LIMIT ${q.p(ctx.maxRows)}`,
@@ -268,7 +268,7 @@ const transferRegister: ReportDef = {
     const rows = await ctx.ds.query(
       `SELECT x.number, (x.created_at AT TIME ZONE ${q.p(ctx.tz)})::date::text AS date, fs.name AS "fromStore", ts.name AS "toStore", x.status,
               x.dispatched_at AS "dispatchedAt", x.received_at AS "receivedAt", (SELECT COUNT(*)::int FROM stock_transfer_line l WHERE l.transfer_id = x.id) AS lines,
-              ROUND(COALESCE((SELECT -SUM(t.value_delta) FROM stock_transaction t WHERE t.source_doc_id = x.id AND t.txn_type = 'TRANSFER_DISPATCH'), 0), 2)::float AS value
+              ROUND(COALESCE((SELECT -SUM(t.value_delta) FROM stock_transaction t WHERE t.source_doc_type = 'TRF' AND t.source_doc_id = x.id AND t.txn_type = 'TRANSFER_DISPATCH'), 0), 2)::float AS value
          FROM stock_transfer x JOIN store fs ON fs.id = x.from_store_id JOIN store ts ON ts.id = x.to_store_id
         WHERE ${q.localDate('x.created_at', ctx)} AND ${scope} AND ${q.eq('x.status::text', ctx.f.status)}
         ORDER BY x.created_at LIMIT ${q.p(ctx.maxRows)}`,
