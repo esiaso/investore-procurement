@@ -160,7 +160,7 @@ export class PaymentReconciliationService implements OnModuleInit {
       [range[1]],
     );
     for (const p of pending) exceptions.push({ kind: 'PENDING', receiptNo: null, voucherNo: p.number, note: `${p.number} has no M-PESA result yet (${p.status})` });
-    const balance = await this.payouts.gateway().balance().catch(() => null);
+    const balance = await Promise.resolve().then(() => this.payouts.gateway().balance()).catch(() => null);
     const rec = await this.ds.getRepository(PaymentReconciliation).save({
       dateFrom: from,
       dateTo: to,

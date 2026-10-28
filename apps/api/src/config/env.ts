@@ -32,12 +32,17 @@ export interface Env {
   /**
    * M-PESA payouts (Daraja B2C / B2B, transaction status, reversal). Secrets
    * live here only, never in the database or the code. `mock` = in-process
-   * simulator; `sandbox` / `production` = Daraja.
+   * simulator; `sandbox` / `production` = Daraja; `off` = no
+   * M-PESA payouts (release answers 503).
    */
   /** Requests per minute per IP on the public callback endpoints. */
   callbackRateLimitPerMinute: number;
+  /** Requests per minute per IP on sign-in (login, 2FA) and e-mailed approval links; on top of the per-account lockout. */
+  authRateLimitPerMinute: number;
+  /** Serve the OpenAPI UI and JSON (default: on outside production). */
+  apiDocs: boolean;
   mpesaPayout: {
-    mode: 'mock' | 'sandbox' | 'production';
+    mode: 'off' | 'mock' | 'sandbox' | 'production';
     baseUrl: string | null;
     consumerKey: string | null;
     consumerSecret: string | null;
@@ -107,9 +112,11 @@ const DEV_SECRET = 'dev-only-session-secret-change-me-0123456789';
 const DEV_TOTP_KEY = '0'.repeat(64);
 const DEV_DATA_KEY = 'a'.repeat(64);
 
-function payoutMode(v: string | undefined): 'mock' | 'sandbox' | 'production' {
-  const m = (v || 'mock').toLowerCase();
-  if (m !== 'mock' && m !== 'sandbox' && m !== 'production') throw new Error('MPESA_PAYOUT_MODE must be mock, sandbox or production');
+/** Default: the simulator in development, switched off in production (never simulate real payments). */
+function payoutMode(v: string | undefined, isProd: boolean): Env['mpesaPayout']['mode'] {
+  const m = (v || (isProd ? 'off' : 'mock')).toLowerCase();
+  if (m !== 'off' && m !== 'mock' && m !== 'sandbox' && m !== 'production') throw new Error('MPESA_PAYOUT_MODE must be off, mock, sandbox or production');
+  if (isProd && m === 'mock') throw new Error('MPESA_PAYOUT_MODE=mock is not allowed in production (use off, sandbox or production)');
   return m;
 }
 
@@ -137,7 +144,7 @@ export function loadEnv(): Env {
     throw new Error('Development secrets must not be used in production');
   }
 
-  cached = {
+  const env: Env = {
     nodeEnv,
     port: int(e.PORT, 3000),
     databaseUrl: e.DATABASE_URL ?? 'postgres://silp:silp_dev_password@localhost:5432/silp',
@@ -163,8 +170,10 @@ export function loadEnv(): Env {
     chromiumPath: e.CHROMIUM_PATH || null,
     appPublicUrl: e.APP_PUBLIC_URL || null,
     callbackRateLimitPerMinute: int(e.CALLBACK_RATE_LIMIT_PER_MINUTE, 120),
+    authRateLimitPerMinute: int(e.AUTH_RATE_LIMIT_PER_MINUTE, 60),
+    apiDocs: bool(e.API_DOCS, !isProd),
     mpesaPayout: {
-      mode: payoutMode(e.MPESA_PAYOUT_MODE),
+      mode: payoutMode(e.MPESA_PAYOUT_MODE, isProd),
       baseUrl: e.MPESA_PAYOUT_BASE_URL || null,
       consumerKey: e.MPESA_PAYOUT_CONSUMER_KEY || null,
       consumerSecret: e.MPESA_PAYOUT_CONSUMER_SECRET || null,
@@ -189,7 +198,28 @@ export function loadEnv(): Env {
       localDir: e.STORAGE_LOCAL_DIR || './var/attachments',
     },
   };
+  // Checked before caching: a refused configuration must stay refused on the next call.
+  if (isProd) checkProduction(env);
+  cached = env;
   return cached;
+}
+
+/**
+ * Production start-up checks: refuse settings that would silently weaken
+ * security, rather than discover them later.
+ */
+function checkProduction(env: Env): void {
+  const problems: string[] = [];
+  if (!env.cookieSecure) problems.push('COOKIE_SECURE must be true (HTTPS only)');
+  const insecure = env.corsOrigins.filter((o) => !o.startsWith('https://'));
+  if (insecure.length) problems.push(`CORS_ORIGINS must be https:// origins (got ${insecure.join(', ')})`);
+  if (env.appPublicUrl && !env.appPublicUrl.startsWith('https://')) problems.push('APP_PUBLIC_URL must be https://');
+  const p = env.mpesaPayout;
+  if (p.mode === 'sandbox' || p.mode === 'production') {
+    if (!p.callbackBaseUrl?.startsWith('https://')) problems.push('MPESA_PAYOUT_CALLBACK_BASE_URL must be a public https:// URL');
+    if ((p.callbackToken ?? '').length < 24) problems.push('MPESA_PAYOUT_CALLBACK_TOKEN must be at least 24 random characters');
+  }
+  if (problems.length) throw new Error(`Unsafe production configuration:\n  - ${problems.join('\n  - ')}`);
 }
 
 /** Test helper: forget the cached env so a test can change process.env. */

@@ -67,7 +67,10 @@ export function configureApp(app: NestExpressApplication, env: Env, redis: Redis
   app.use(passport.session());
   app.use(apiKeyMiddleware(app.get(ApiClientsService, { strict: false }), `/${API_PREFIX}/integration/`));
   // Public callbacks (M-PESA, payouts): limited per caller.
-  app.use(`/${API_PREFIX}/callbacks`, rateLimit({ windowMs: 60_000, max: env.callbackRateLimitPerMinute }));
+  app.use(`/${API_PREFIX}/callbacks`, rateLimit({ windowMs: 60_000, max: env.callbackRateLimitPerMinute, redis, prefix: 'silp:rl:callbacks:' }));
+  // Sign-in and approval links: limited per caller (guessing codes / tokens), shared across processes.
+  const authLimit = rateLimit({ windowMs: 60_000, max: env.authRateLimitPerMinute, redis, prefix: 'silp:rl:auth:' });
+  for (const path of ['auth/login', 'auth/2fa/verify', 'approval-links']) app.use(`/${API_PREFIX}/${path}`, authLimit);
   app.use(csrfMiddleware);
   app.use(requestContextMiddleware);
 
@@ -80,6 +83,7 @@ export function configureApp(app: NestExpressApplication, env: Env, redis: Redis
     }),
   );
 
+  if (!env.apiDocs) return;
   const config = new DocumentBuilder()
     .setTitle('SIL Procurement & Inventory API')
     .setDescription(

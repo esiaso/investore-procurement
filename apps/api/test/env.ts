@@ -20,3 +20,6 @@ process.env.S3_BUCKET = process.env.TEST_S3_BUCKET ?? 'silp-test-attachments';
 if (process.env.TEST_S3_ENDPOINT) process.env.S3_ENDPOINT = process.env.TEST_S3_ENDPOINT;
 if (process.env.TEST_S3_ACCESS_KEY) process.env.S3_ACCESS_KEY = process.env.TEST_S3_ACCESS_KEY;
 if (process.env.TEST_S3_SECRET_KEY) process.env.S3_SECRET_KEY = process.env.TEST_S3_SECRET_KEY;
+// Sign-in is rate-limited per IP; every suite logs in many times from 127.0.0.1.
+process.env.AUTH_RATE_LIMIT_PER_MINUTE = '100000';
+process.env.API_DOCS = '';

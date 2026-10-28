@@ -57,8 +57,15 @@ export class AuthService {
   async verifySecondFactor(userId: string, code: string): Promise<boolean> {
     const user = await this.users.findWithSecretsById(userId);
     if (!user?.totpEnabled || !user.totpSecretEnc) return false;
+    // A locked account takes no codes; wrong codes count towards the same lockout as wrong passwords.
+    if (user.lockedUntil && user.lockedUntil > new Date()) return false;
     const ok = this.totp.verify(code, this.totp.decrypt(user.totpSecretEnc));
     if (!ok) {
+      const [maxFailed, lockoutMinutes] = await Promise.all([
+        this.settings.get('security.maxFailedLogins'),
+        this.settings.get('security.lockoutMinutes'),
+      ]);
+      await this.users.recordFailedLogin(user, maxFailed, lockoutMinutes);
       await this.audit.record({
         action: AuditAction.LOGIN_FAILED,
         entityType: 'User',

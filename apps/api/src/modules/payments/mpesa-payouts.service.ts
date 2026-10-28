@@ -65,10 +65,11 @@ export class MpesaPayoutsService implements OnModuleInit {
     return o;
   }
 
-  /** The configured gateway (mock unless MPESA_PAYOUT_MODE is sandbox / production). */
+  /** The configured gateway (MPESA_PAYOUT_MODE: mock simulator, Daraja sandbox / production, or off). */
   gateway(): PaymentGateway {
     if (this.gatewayInstance) return this.gatewayInstance;
     const c = loadEnv().mpesaPayout;
+    if (c.mode === 'off') throw new GatewayConfigError('M-PESA payouts are switched off (MPESA_PAYOUT_MODE=off)');
     if (c.mode === 'mock') return (this.gatewayInstance = sharedMockPayouts);
     const base = `${(c.callbackBaseUrl ?? '').replace(/\/+$/, '')}/api/v1/callbacks/mpesa-payouts`;
     const t = c.callbackToken ?? '';
@@ -81,17 +82,21 @@ export class MpesaPayoutsService implements OnModuleInit {
     return this.gatewayInstance;
   }
 
-  // ------------------------------------------------------------------ dispatch
-
-  /** Sends a document once its owner has checked approvals and segregation of duties. */
-  async dispatch(type: PayoutOwnerType, id: string, actor: SessionUser): Promise<void> {
-    let gateway: PaymentGateway;
+  /** The gateway, or 503 when payouts are switched off or not configured. */
+  private usableGateway(): PaymentGateway {
     try {
-      gateway = this.gateway();
+      return this.gateway();
     } catch (e) {
       if (e instanceof GatewayConfigError) throw new ServiceUnavailableException(e.message);
       throw e;
     }
+  }
+
+  // ------------------------------------------------------------------ dispatch
+
+  /** Sends a document once its owner has checked approvals and segregation of duties. */
+  async dispatch(type: PayoutOwnerType, id: string, actor: SessionUser): Promise<void> {
+    const gateway = this.usableGateway();
     const sent = await this.ds.transaction(async (m) => {
       const doc = (await this.owner(type).claim(m, id, 'release'))!;
       return { doc, payout: await this.newAttempt(m, type, doc, actor.id) };
@@ -269,10 +274,11 @@ export class MpesaPayoutsService implements OnModuleInit {
    * more is sent until someone resolves it).
    */
   async followUp() {
+    const out = { queried: 0, resolved: 0, retried: 0, review: 0 };
+    if (loadEnv().mpesaPayout.mode === 'off') return out;
     const gateway = this.gateway();
     const maxChecks = await this.settings.get('payments.mpesaMaxStatusChecks');
     const due = await this.ds.getRepository(MpesaPayout).find({ where: { nextCheckAt: LessThanOrEqual(new Date()) }, order: { nextCheckAt: 'ASC' }, take: 200 });
-    const out = { queried: 0, resolved: 0, retried: 0, review: 0 };
     for (const p of due) {
       const [type, docId] = ownerOf(p);
       if (p.status === PayoutAttemptStatus.FAILED) {
@@ -351,7 +357,7 @@ export class MpesaPayoutsService implements OnModuleInit {
 
   /** Asks M-PESA to reverse a paid document; the result comes by callback. */
   async reverse(type: PayoutOwnerType, id: string, reason: string, actor: SessionUser): Promise<void> {
-    const gateway = this.gateway();
+    const gateway = this.usableGateway();
     const p = await this.ds.transaction(async (m) => {
       await this.owner(type).assertReversible(m, id);
       const row = await m.findOne(MpesaPayout, { where: { [ownerColumn(type)]: id, status: PayoutAttemptStatus.SUCCESS }, lock: { mode: 'pessimistic_write' } });

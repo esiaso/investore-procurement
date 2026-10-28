@@ -34,6 +34,9 @@ function logIn(req: Request, user: SessionUser): Promise<void> {
   return new Promise((resolve, reject) => req.logIn(user, (err) => (err ? reject(err) : resolve())));
 }
 
+/** Wrong 2FA codes allowed per pending login before the password must be entered again. */
+const MAX_2FA_ATTEMPTS = 5;
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -79,6 +82,12 @@ export class AuthController {
       throw new UnauthorizedException('Login expired; sign in again');
     }
     if (!(await this.auth.verifySecondFactor(pending.userId, dto.code))) {
+      // A pending login takes a few guesses only; then the password must be entered again.
+      pending.attempts = (pending.attempts ?? 0) + 1;
+      if (pending.attempts >= MAX_2FA_ATTEMPTS) {
+        delete req.session.pending2fa;
+        throw new UnauthorizedException('Too many invalid codes; sign in again');
+      }
       throw new UnauthorizedException('Invalid code');
     }
     return this.completeLogin(req, pending.userId);

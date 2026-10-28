@@ -26,10 +26,17 @@ export class AttachmentQueryDto {
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() versions?: boolean;
 }
 
+/** Content-Disposition with an ASCII fallback name and the full UTF-8 name (RFC 6266); no quotes or control characters. */
+export function contentDisposition(fileName: string, inline = false): string {
+  const clean = fileName.replace(/[\x00-\x1f\x7f"\\]/g, '').trim() || 'file';
+  const ascii = clean.replace(/[^\x20-\x7e]/g, '_');
+  return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(clean)}`;
+}
+
 /** Sends a stored file with a safe name. */
 export function sendFile(res: Response, a: { fileName: string; mimeType: string }, body: Buffer, inline = false) {
   res.setHeader('Content-Type', a.mimeType);
-  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${a.fileName.replace(/"/g, '')}"`);
+  res.setHeader('Content-Disposition', contentDisposition(a.fileName, inline));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   return new StreamableFile(body);
 }

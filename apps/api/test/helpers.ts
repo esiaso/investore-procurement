@@ -25,6 +25,8 @@ export async function createTestApp(): Promise<TestContext> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: ['error'] });
   const redis = await createRedisClient(env);
+  // Rate-limit counters live in Redis and are shared across suites; start each suite clean.
+  for await (const k of redis.scanIterator({ MATCH: 'silp:rl:*' })) await redis.del(k);
   configureApp(app, env, redis);
   await app.init();
   return {
