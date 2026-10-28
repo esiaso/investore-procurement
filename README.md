@@ -127,6 +127,10 @@ Other scripts:
 
 ## Environment variables
 
+**User manuals** for each group of users (staff, procurement, stores, pharmacy, cashiers,
+finance, petty cash custodians, supply chain and quality, management and audit, the
+administrator, suppliers) are in **[docs/user-manuals](docs/user-manuals/README.md)**.
+
 For production (TLS, secrets, callbacks, jobs, backups, monitoring, the first
 administrator) follow **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**: with
 `NODE_ENV=production` the API refuses to start with unsafe settings.
